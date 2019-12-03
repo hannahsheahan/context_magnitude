@@ -360,6 +360,8 @@ def main():
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
             test_perf = [test_loss, test_accuracy]
+            print(standard_train_accuracy)
+
             logPerformance(writer, epoch, train_perf, test_perf)
             printProgress(epoch-1, n_epochs)
 
