@@ -10,17 +10,38 @@
 # ---------------------------------------------------------------------------- #
 
 import numpy as np
+import sys
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import torchvision
 import random
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
 from datetime import datetime
 
 from itertools import product  # makes testing and comparing different hyperparams in tensorboard easy
 import argparse                # makes defining the hyperparams and tools for running our network easier from the command line
+
+#--------------------------------------------------#
+
+def printProgress(i, numiter):
+    """
+    This function prints to the screen the optimisation progress (at each iteration i, out of a total of numiter iterations)."""
+
+    j = (i + 1) / numiter
+    sys.stdout.write('\r')
+    sys.stdout.write("[%-20s] %d%% " % ('-'*int(20*j), 100*j))
+    sys.stdout.flush()
+
+#--------------------------------------------------#
+
+def imageBatchToTorch(originalimages):
+    originalimages = originalimages.unsqueeze(1)   # change dim for the convnet
+    originalimages = originalimages.type(torch.FloatTensor)  # convert torch tensor data type
+    return originalimages
 
 # ---------------------------------------------------------------------------- #
 
@@ -32,7 +53,7 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
         optimizer.zero_grad()   # zero the parameter gradients
 
         # provide different inputs for different models
-        inputs, labels = rsn.imageBatchToTorch(data['origimage']), rsn.labelsBatchToInt(data['label']['numerosity'])
+        inputs, labels = imageBatchToTorch(data['input']), imageBatchToTorch(data['label'])
         output = model(inputs)
 
         loss = criterion(output, labels)
@@ -61,15 +82,15 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
     correct = 0
 
     # track class-specific performance too
-    nclasses = 1
-    class_correct = list(0. for i in range(nclasses))
-    class_total = list(0. for i in range(nclasses))
+    #nclasses = 1
+    #class_correct = list(0. for i in range(nclasses))
+    #class_total = list(0. for i in range(nclasses))
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
 
             # provide different inputs for different models
-            inputs, labels = rsn.imageBatchToTorch(data['origimage']), rsn.labelsBatchToInt(data['label']['numerosity'])
+            inputs, labels = imageBatchToTorch(data['input']), imageBatchToTorch(data['label'])
             output = model(inputs)
 
             test_loss += criterion(output, labels).item()
@@ -77,18 +98,42 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
             correct += pred.eq(labels.view_as(pred)).sum().item()
 
             # class-specific analysis
-            c = (pred.squeeze() == labels)
-            for i in range(c.shape[0]):
-                label = labels[i]
-                class_correct[label] += c[i].item()
-                class_total[label] += 1
+            #print('----')
+            #print(pred)
+            #print('----')
+            #print(labels)
+            #c = (pred.squeeze() == labels)
+            #for i in range(c.shape[0]):
+        #        label = labels[i]
+    #            class_correct[label] += c[i].item()
+#                class_total[label] += 1
 
     test_loss /= len(test_loader.dataset)
     accuracy = 100. * correct / len(test_loader.dataset)
-    classperformance = 100 * np.divide(class_correct, class_total)
+    classperformance = 0 #100 * np.divide(class_correct, class_total)  # HRS exclude class performance for now
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
     return test_loss, accuracy, classperformance
+
+#--------------------------------------------------#
+
+def logPerformance(writer, epoch, train_perf, test_perf):
+    """ Write out the training and testing performance for this epoch to tensorboard.
+          - 'writer' is a SummaryWriter instance
+    Note: -  '_standard' means its the typical way people assess training performance vs test, which I think is not a fair comparison,
+          because train performance will be average performance across the epoch while network is optimising/changing, vs test which is performance
+          on the optimised network over that epoch.
+          -  I am logging both this standard train metric and also train performance at the end of the epoch (which is a fairer comparison to test)
+    """
+    standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy = train_perf
+    test_loss, test_accuracy = test_perf
+
+    writer.add_scalar('Loss/training_standard', standard_train_loss, epoch)  # inputs: tag, value, iteration
+    writer.add_scalar('Loss/training_fair', fair_train_loss, epoch)
+    writer.add_scalar('Loss/testing', test_loss, epoch)
+    writer.add_scalar('Accuracy/training_standard', standard_train_accuracy, epoch)
+    writer.add_scalar('Accuracy/training_fair', fair_train_accuracy, epoch)
+    writer.add_scalar('Accuracy/testing', test_accuracy, epoch)
 
 #--------------------------------------------------#
 
@@ -155,7 +200,7 @@ class separateinputMLP(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        x = nn.Sigmoid(x)  # squash to binary output (is input 2 > input 1?  1 = yes; 0 = no)
+        x = nn.Sigmoid()(x)  # squash to binary output (is input 2 > input 1?  1 = yes; 0 = no)
         return x
 
 #--------------------------------------------------#
@@ -168,15 +213,58 @@ def turnOneHot(integer, maxSize):
 
 #--------------------------------------------------#
 
-def createSeparateInputData():
+class createDataset(Dataset):
+    """A class to hold a dataset.
+    - judgementValue i.e. input2
+    - refValue i.e. input1
+    - total concatenate input = [input2,input1]
+    - label
+    """
+
+    def __init__(self, dataset, transform=None):
+        """
+        Args:
+            datafile (string): name of numpy datafile
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+
+        # load all original images too - yes memory intensive but useful. Note that this also removes the efficiency point of using dataloaders
+
+
+        self.index = dataset['index']
+        self.label = dataset['label']
+        self.refValue = dataset['refValue']
+        self.judgementValue = dataset['judgementValue']
+        self.input = dataset['input']
+        self.index = (self.index).astype(int)
+        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input}
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        # for retrieving either a single sample of data, or a subset of data
+
+        # lets us retrieve several items at once - check that this is working correctly HRS
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx]}
+        return sample
+
+#--------------------------------------------------#
+
+def createSeparateInputData(maxOnehotSize):
 
     N = 1000         # how many examples we want to use
     Ntrain = 800     # 8:2 train:test split
 
     minNumerosity = 1
-    maxNumerosity = 5
-    maxOnehotSize = 5
+    maxNumerosity = 5 if maxOnehotSize > 5 else maxOnehotSize
 
+    refValues = np.empty((N,maxOnehotSize))
+    judgementValues = np.empty((N,maxOnehotSize))
     input = np.empty((N,maxOnehotSize*2))
     target = np.empty((N,1))
 
@@ -193,10 +281,19 @@ def createSeparateInputData():
         else:
             target[sample] = 0
 
+        judgementValues[sample] = np.squeeze(input2)
+        refValues[sample] = np.squeeze(input1)
         input[sample] = np.squeeze(np.concatenate((input2,input1)))
 
-    trainset = { 'data':input[0:Ntrain], 'label':target[0:Ntrain] }
-    testset = { 'data':input[Ntrain:], 'label':target[Ntrain:] }
+    trainindices = np.asarray([i for i in range(Ntrain)])
+    testindices = np.asarray([i for i in range(Ntrain,N)])
+
+    trainset = { 'refValue':refValues[0:Ntrain], 'judgementValue':judgementValues[0:Ntrain], 'input':input[0:Ntrain], 'label':target[0:Ntrain], 'index':trainindices }
+    testset = { 'refValue':refValues[Ntrain:], 'judgementValue':judgementValues[Ntrain:], 'input':input[Ntrain:], 'label':target[Ntrain:], 'index':testindices }
+
+    # turn out datasets into pytorch Datasets
+    trainset = createDataset(trainset)
+    testset = createDataset(testset)
 
     return trainset, testset
 
@@ -213,10 +310,7 @@ def main():
     # Load our preglimpsed dataset
 
     # ...a single input example:
-    trainset, testset = createSeparateInputData()
-
-    print('Fraction train set, input2 > input1: ' + str(np.mean(trainset['label'])))
-    print('Fraction test set, input2 > input1: ' + str(np.mean(testset['label'])))
+    trainset, testset = createSeparateInputData(N)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -266,8 +360,8 @@ def main():
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
             test_perf = [test_loss, test_accuracy]
-            rsn.logPerformance(writer, epoch, train_perf, test_perf)
-            rls.printProgress(epoch-1, n_epochs)
+            logPerformance(writer, epoch, train_perf, test_perf)
+            printProgress(epoch-1, n_epochs)
 
         print("Training complete.")
         if args.save_model:
