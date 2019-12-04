@@ -58,9 +58,6 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
         output = model(inputs)
         output = np.squeeze(output, axis=1)
 
-        #print(inputs)
-        #print(output)
-        #print(labels)
         loss = criterion(output, labels)
         loss.backward()         # passes the loss backwards to compute the dE/dW gradients
         optimizer.step()        # update our weights
@@ -75,9 +72,6 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
             else:
                 pred[i] = 0
 
-        #print('----')
-        #print(pred)
-        #print(np.squeeze(np.asarray(labels)))
         tmp = np.squeeze(np.asarray(labels))
         correct += (pred==tmp).sum().item()
 
@@ -186,11 +180,11 @@ def defineHyperparams():
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[48])
-        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
+        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.002])
         parser.add_argument('--batch-size', type=int, default=48, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=48, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
@@ -211,16 +205,12 @@ class separateinputMLP(nn.Module):
     def __init__(self, D_in):
         super(separateinputMLP, self).__init__()
         self.fc1 = nn.Linear(D_in, 100)  # size input, size output
-        self.fc2 = nn.Linear(100, 30)
-        self.fc3 = nn.Linear(30, 1)
+        self.fc2 = nn.Linear(100, 1)
 
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        #binarize = nn.Sigmoid()
-        #x = binarize(x)       # squash to binary output (is input 2 > input 1?  1 = yes; 0 = no)
+        x = self.fc2(x)
         x = torch.sigmoid(x)
         return x
 
@@ -292,7 +282,7 @@ def createSeparateInputData(maxOnehotSize):
     # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
     for sample in range(N):
         judgementValue = random.randint(minNumerosity,maxNumerosity)
-        refValue = 2
+        refValue = random.randint(minNumerosity,maxNumerosity)
         input2 = turnOneHot(judgementValue, maxOnehotSize)
         input1 = turnOneHot(refValue, maxOnehotSize)
 
