@@ -39,7 +39,7 @@ def printProgress(i, numiter):
 #--------------------------------------------------#
 
 def imageBatchToTorch(originalimages):
-    originalimages = originalimages.unsqueeze(1)   # change dim for the convnet
+    #originalimages = originalimages.unsqueeze(1)   # change dim for the convnet
     originalimages = originalimages.type(torch.FloatTensor)  # convert torch tensor data type
     return originalimages
 
@@ -53,17 +53,33 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
         optimizer.zero_grad()   # zero the parameter gradients
 
         # provide different inputs for different models
-        inputs, labels = imageBatchToTorch(data['input']), imageBatchToTorch(data['label'])
+        #print('------------')
+        inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
         output = model(inputs)
+        output = np.squeeze(output, axis=1)
 
+        #print(inputs)
+        #print(output)
+        #print(labels)
         loss = criterion(output, labels)
         loss.backward()         # passes the loss backwards to compute the dE/dW gradients
         optimizer.step()        # update our weights
 
         # evaluate performance
         train_loss += loss.item()
-        pred = output.argmax(dim=1, keepdim=True)
-        correct += pred.eq(labels.view_as(pred)).sum().item()
+
+        pred = np.zeros((output.size()))
+        for i in range((output.size()[0])):
+            if output[i]>0.5:
+                pred[i] = 1
+            else:
+                pred[i] = 0
+
+        #print('----')
+        #print(pred)
+        #print(np.squeeze(np.asarray(labels)))
+        tmp = np.squeeze(np.asarray(labels))
+        correct += (pred==tmp).sum().item()
 
         if batch_idx % args.log_interval == 0:
             if printOutput:
@@ -90,7 +106,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
         for batch_idx, data in enumerate(test_loader):
 
             # provide different inputs for different models
-            inputs, labels = imageBatchToTorch(data['input']), imageBatchToTorch(data['label'])
+            inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
             output = model(inputs)
 
             test_loss += criterion(output, labels).item()
@@ -142,12 +158,12 @@ class argsparser():
         self.batch_size = 64
         self.test_batch_size = 64
         self.epochs = 10
-        self.lr = 0.01
+        self.lr = 0.001
         self.momentum = 0.5
         self.no_cuda = False
         self.seed = 1
         self.log_interval = 1000
-        self.weight_decay = 0.0005
+        self.weight_decay = 0.00
         self.save_model = False
 
 #--------------------------------------------------#
@@ -179,7 +195,7 @@ def defineHyperparams():
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
         parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
-        parser.add_argument('--weight_decay', type=int, default=0.0005, metavar='N', help='weight-decay for l2 regularisation (default: 0.0005)')
+        parser.add_argument('--weight_decay', type=int, default=0.0000, metavar='N', help='weight-decay for l2 regularisation (default: 0)')
         parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
         args = parser.parse_args()
 
@@ -195,12 +211,17 @@ class separateinputMLP(nn.Module):
     def __init__(self, D_in):
         super(separateinputMLP, self).__init__()
         self.fc1 = nn.Linear(D_in, 100)  # size input, size output
-        self.fc2 = nn.Linear(100, 1)
+        self.fc2 = nn.Linear(100, 30)
+        self.fc3 = nn.Linear(30, 1)
+
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        x = nn.Sigmoid()(x)  # squash to binary output (is input 2 > input 1?  1 = yes; 0 = no)
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        #binarize = nn.Sigmoid()
+        #x = binarize(x)       # squash to binary output (is input 2 > input 1?  1 = yes; 0 = no)
+        x = torch.sigmoid(x)
         return x
 
 #--------------------------------------------------#
@@ -307,9 +328,7 @@ def main():
     # Define the training hyperparameters for our network (passed as args when calling main.py from command line)
     args, device, multiparams = defineHyperparams()
 
-    # Load our preglimpsed dataset
-
-    # ...a single input example:
+    # a dataset for us to work with
     trainset, testset = createSeparateInputData(N)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
@@ -323,7 +342,7 @@ def main():
 
         # Define a model for training
         model = separateinputMLP(2*N).to(device)
-        criterion = nn.BCELoss()   # binary cross entropy loss
+        criterion = nn.BCELoss() #nn.CrossEntropyLoss()  #nn.BCELoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
         # Define our dataloaders
@@ -375,3 +394,28 @@ def main():
 # to run from the command line
 if __name__ == '__main__':
     main()
+
+
+
+
+"""
+# define a network which can judge whether inputs of 1-N are greater than X
+N = 4    # range(N) are the numbers for our 'input 2' aka our judgement input
+
+# Define the training hyperparameters for our network (passed as args when calling main.py from command line)
+args, device, multiparams = defineHyperparams()
+
+# a dataset for us to work with
+trainset, testset = createSeparateInputData(N)
+
+trainloader = DataLoader(trainset,batch_size=24, shuffle=True)
+
+for batch_idx, data in enumerate(trainloader):
+    print(batch_idx)
+    print(data)
+    print('--------')
+
+
+    # ok good the data in the dataloader /dataset looks good
+    # why is it not training then? sigmoid or cost function issues perhaps?
+"""
