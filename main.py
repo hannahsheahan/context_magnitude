@@ -102,10 +102,20 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
             # provide different inputs for different models
             inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
             output = model(inputs)
+            output = np.squeeze(output, axis=1)
 
             test_loss += criterion(output, labels).item()
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-            correct += pred.eq(labels.view_as(pred)).sum().item()
+
+            pred = np.zeros((output.size()))
+            for i in range((output.size()[0])):
+                if output[i]>0.5:
+                    pred[i] = 1
+                else:
+                    pred[i] = 0
+
+            tmp = np.squeeze(np.asarray(labels))
+            correct += (pred==tmp).sum().item()
+
 
             # class-specific analysis
             #print('----')
@@ -180,11 +190,11 @@ def defineHyperparams():
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[48])
-        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.002])
+        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=48, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=48, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
@@ -268,8 +278,8 @@ class createDataset(Dataset):
 
 def createSeparateInputData(maxOnehotSize):
 
-    N = 1000         # how many examples we want to use
-    Ntrain = 800     # 8:2 train:test split
+    N = 10000         # how many examples we want to use
+    Ntrain = 8000     # 8:2 train:test split
 
     minNumerosity = 1
     maxNumerosity = 5 if maxOnehotSize > 5 else maxOnehotSize
@@ -369,7 +379,7 @@ def main():
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
             test_perf = [test_loss, test_accuracy]
-            print(standard_train_accuracy)
+            print(standard_train_accuracy, test_accuracy)
 
             logPerformance(writer, epoch, train_perf, test_perf)
             printProgress(epoch-1, n_epochs)
