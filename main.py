@@ -17,6 +17,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision
 import random
+import json
+
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -103,7 +105,6 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
             inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
             output = model(inputs)
             output = np.squeeze(output, axis=1)
-
             test_loss += criterion(output, labels).item()
 
             pred = np.zeros((output.size()))
@@ -116,12 +117,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
             tmp = np.squeeze(np.asarray(labels))
             correct += (pred==tmp).sum().item()
 
-
             # class-specific analysis
-            #print('----')
-            #print(pred)
-            #print('----')
-            #print(labels)
             #c = (pred.squeeze() == labels)
             #for i in range(c.shape[0]):
         #        label = labels[i]
@@ -276,7 +272,7 @@ class createDataset(Dataset):
 
 #--------------------------------------------------#
 
-def createSeparateInputData(maxOnehotSize):
+def createSeparateInputData(maxOnehotSize, fileloc, filename):
 
     N = 10000         # how many examples we want to use
     Ntrain = 8000     # 8:2 train:test split
@@ -312,6 +308,24 @@ def createSeparateInputData(maxOnehotSize):
     trainset = { 'refValue':refValues[0:Ntrain], 'judgementValue':judgementValues[0:Ntrain], 'input':input[0:Ntrain], 'label':target[0:Ntrain], 'index':trainindices }
     testset = { 'refValue':refValues[Ntrain:], 'judgementValue':judgementValues[Ntrain:], 'input':input[Ntrain:], 'label':target[Ntrain:], 'index':testindices }
 
+    # save the dataset so  we can use it again
+    dat = {"trainset":trainset, "testset":testset}
+    np.save(fileloc+filename+'.npy', dat)
+
+    # turn out datasets into pytorch Datasets
+    trainset = createDataset(trainset)
+    testset = createDataset(testset)
+
+    return trainset, testset
+
+#--------------------------------------------------#
+
+def loadInputData(fileloc,datasetname):
+    # load an existing dataset
+    data = np.load(fileloc+datasetname+'.npy', allow_pickle=True)
+    trainset = data.item().get("trainset")
+    testset = data.item().get("testset")
+
     # turn out datasets into pytorch Datasets
     trainset = createDataset(trainset)
     testset = createDataset(testset)
@@ -329,7 +343,13 @@ def main():
     args, device, multiparams = defineHyperparams()
 
     # a dataset for us to work with
-    trainset, testset = createSeparateInputData(N)
+    createNewDataset = False
+    fileloc = 'datasets/'
+    datasetname = 'relmag_min1max5_dataset'
+    if createNewDataset:
+        trainset, testset = createSeparateInputData(N, fileloc, datasetname)
+    else:
+        trainset, testset = loadInputData(fileloc, datasetname)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -390,32 +410,14 @@ def main():
 
     writer.close()
 
+    # save the trained weights so we can easily look at them
+    torch.save(model, 'trained_model.pth')
+
+    # Now lets look at our trained weights
+    for name, param in model.named_parameters():
+        print(name)
+
 
 # to run from the command line
 if __name__ == '__main__':
     main()
-
-
-
-
-"""
-# define a network which can judge whether inputs of 1-N are greater than X
-N = 4    # range(N) are the numbers for our 'input 2' aka our judgement input
-
-# Define the training hyperparameters for our network (passed as args when calling main.py from command line)
-args, device, multiparams = defineHyperparams()
-
-# a dataset for us to work with
-trainset, testset = createSeparateInputData(N)
-
-trainloader = DataLoader(trainset,batch_size=24, shuffle=True)
-
-for batch_idx, data in enumerate(trainloader):
-    print(batch_idx)
-    print(data)
-    print('--------')
-
-
-    # ok good the data in the dataloader /dataset looks good
-    # why is it not training then? sigmoid or cost function issues perhaps?
-"""
