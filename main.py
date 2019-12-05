@@ -9,6 +9,7 @@
 """
 # ---------------------------------------------------------------------------- #
 
+import matplotlib.pyplot as plt
 import numpy as np
 import sys
 import torch
@@ -17,7 +18,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision
 import random
-import json
+from sklearn.manifold import MDS
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -157,8 +158,8 @@ class argsparser():
     def __init__(self):
         self.batch_size = 64
         self.test_batch_size = 64
-        self.epochs = 10
-        self.lr = 0.001
+        self.epochs = 40
+        self.lr = 0.002
         self.momentum = 0.5
         self.no_cuda = False
         self.seed = 1
@@ -189,8 +190,8 @@ def defineHyperparams():
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=48, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=48, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--epochs', type=int, default=40, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
@@ -206,19 +207,22 @@ def defineHyperparams():
 
 class separateinputMLP(nn.Module):
     """
-        This is a simple 3-layer MLP which compares the magnitude of input nodes A to input nodes B
+        This is a simple 3-layer MLP which compares the magnitude of input nodes A (4) to input nodes B (4)
         """
     def __init__(self, D_in):
         super(separateinputMLP, self).__init__()
-        self.fc1 = nn.Linear(D_in, 100)  # size input, size output
-        self.fc2 = nn.Linear(100, 1)
-
+        self.fc1 = nn.Linear(D_in, 60)  # size input, size output
+        self.fc2 = nn.Linear(60, 1)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        x = torch.sigmoid(x)
-        return x
+        self.fc1_activations = F.relu(self.fc1(x))
+        self.fc2_activations = self.fc2(self.fc1_activations)
+        self.output = torch.sigmoid(self.fc2_activations)
+        return self.output
+
+    def get_activations(self, x):
+        self.forward(x)  # update the activations with the particular input
+        return self.fc1_activations, self.fc2_activations, self.output
 
 #--------------------------------------------------#
 
@@ -227,6 +231,13 @@ def turnOneHot(integer, maxSize):
     oneHot = np.zeros((maxSize,1))
     oneHot[integer-1] = 1
     return oneHot
+
+#--------------------------------------------------#
+
+def turnOneHotToInteger(onehot):
+    # this function will take as input a one hot representation and determine the integer interpretation
+    integer = np.nonzero(onehot)[0]
+    return integer+1  # because we are starting counting from 1 not 0
 
 #--------------------------------------------------#
 
@@ -274,8 +285,8 @@ class createDataset(Dataset):
 
 def createSeparateInputData(maxOnehotSize, fileloc, filename):
 
-    N = 10000         # how many examples we want to use
-    Ntrain = 8000     # 8:2 train:test split
+    N = 1000         # how many examples we want to use (remember there are only 16 unique combinations, but we have more here to keep it balanced)
+    Ntrain = 800     # 8:2 train:test split
 
     minNumerosity = 1
     maxNumerosity = 5 if maxOnehotSize > 5 else maxOnehotSize
@@ -414,10 +425,63 @@ def main():
     torch.save(model, 'trained_model.pth')
 
     # Now lets look at our trained weights
-    for name, param in model.named_parameters():
-        print(name)
+
 
 
 # to run from the command line
 if __name__ == '__main__':
     main()
+
+
+#--------------------------------------------------#
+
+# Now lets take a look at our weights and the responses to the inputs in the training set we trained on
+
+trained_model = torch.load('trained_model.pth')
+for name, param in trained_model.named_parameters():
+    print('-----------')
+    print(name)
+    #print(param)
+
+# Now lets see what the hidden layer activation is when we pass in a particular input
+
+# lets load the dataset we used for training the model
+fileloc = 'datasets/'
+datasetname = 'relmag_min1max5_dataset'
+trainset, testset = loadInputData(fileloc, datasetname)
+
+labels_refValues = np.empty((len(trainset),1))
+labels_judgeValues = np.empty((len(trainset),1))
+allinputs = np.empty((len(trainset),8))
+MDSlabels = np.empty((len(trainset),1))
+activations = np.empty(( len(trainset), 60 ))  # ***HRS beware the magic number here which comes from the hidden layer size
+for sample in range(len(trainset)):
+    sample_input = trainset[sample]["input"]
+    sample_label = trainset[sample]["label"]
+
+    labels_refValues[sample] = turnOneHotToInteger(trainset[sample]["refValue"])
+    labels_judgeValues[sample] = turnOneHotToInteger(trainset[sample]["judgementValue"])
+    allinputs[sample] = sample_input
+    MDSlabels[sample] = sample_label
+    # now pass the exapmle input through the netwrk and see what happens to the hidden layer activations
+    h1activations,_,_ = trained_model.get_activations(imageBatchToTorch(torch.from_numpy(sample_input)))
+    activations[sample] = h1activations.detach()
+
+
+# do MDS on the activations for the training set
+print(activations.shape)
+embedding = MDS(n_components=3)
+MDS_activations = embedding.fit_transform(activations)
+print(MDS_activations.shape)
+
+# plot the original data inputs
+
+plt.figure()
+for i in range((MDS_activations.shape[0])):
+    if MDSlabels[i]==0:
+        colour = 'red'
+    else:
+        colour = 'green'
+    plt.scatter(MDS_activations[i, 0], MDS_activations[i, 1], color=colour)
+
+"""
