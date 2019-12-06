@@ -38,12 +38,12 @@ def get_cmap(n, name='hsv'):
 
 #--------------------------------------------------#
 
-def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity=True, saveFig=True):
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity=True, saveFig=True):
     # Plot the hidden activations for the 3 MDS dimensions
     fig,ax = plt.subplots(3,3, figsize=(14,15))
     colours = get_cmap(10, 'viridis')
     diffcolours = get_cmap(20, 'viridis')
-    contextcolours = ['red','black','purple']
+
     for k in range(3):
         for j in range(3):  # 3 MDS dimensions
 
@@ -70,13 +70,10 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     # colour by numerosity
                     if k==0:
                         ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=diffcolours(int(10+labels_judgeValues[i]-labels_refValues[i])), edgecolors=contextcolours[int(labels_contexts[i])-1])
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=diffcolours(int(10+labels_judgeValues[i]-labels_refValues[i])))
                     elif k==1:
                         ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colours(int(labels_refValues[i])-1), edgecolors=contextcolours[int(labels_contexts[i])-1])
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=colours(int(labels_refValues[i])-1))
                     else:
                         im = ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colours(int(labels_judgeValues[i])-1), edgecolors=contextcolours[int(labels_contexts[i])-1])
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=colours(int(labels_judgeValues[i])-1))
                         if j==2:
                             if i == (MDS_activations.shape[0])-1:
                                 cbar = fig.colorbar(im, ticks=[0,1])
@@ -97,41 +94,54 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                 # some titles
                 if k==0:
                     ax[k,j].set_title('value difference')
+                    ax[k,j].axis('equal')
                 elif k==1:
                     ax[k,j].set_title('reference')
                 else:
                     ax[k,j].set_title('judgement')
+                ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
     plt.suptitle('3-MDS of hidden activations: relMagNet')
     if saveFig:
         if labelNumerosity:
-            cbar.ax.set_yticklabels(['1','10'])
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered')
+            cbar.ax.set_yticklabels(['1','15'])
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered.pdf',bbox_inches='tight')
         else:
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet')
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet.pdf',bbox_inches='tight')
 
 #--------------------------------------------------#
 
 def getActivations(trainset,trained_model):
-    labels_refValues = np.empty((len(trainset),1))
-    labels_judgeValues = np.empty((len(trainset),1))
-    contexts = np.empty((len(trainset),1))
-    MDSlabels = np.empty((len(trainset),1))
+    # This will determine the hidden unit activations for each *unique* input in the training set
+    # there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads
+
+    # determine the unique inputs for the training set (there are repeats)
+    unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
+    unique_labels = trainset["label"][uniqueind]
+    unique_context = trainset["context"][uniqueind]
+    unique_refValue = trainset["refValue"][uniqueind]
+    unique_judgementValue = trainset["judgementValue"][uniqueind]
+
+    # preallocate some space...
+    labels_refValues = np.empty((len(uniqueind),1))
+    labels_judgeValues = np.empty((len(uniqueind),1))
+    contexts = np.empty((len(uniqueind),1))
+    MDSlabels = np.empty((len(uniqueind),1))
     hdim = len(list(trained_model.fc1.parameters())[0])
-    print(hdim)
-    activations = np.empty(( len(trainset), hdim ))  # ***HRS beware the magic number here which comes from the hidden layer size
+    activations = np.empty(( len(uniqueind), hdim ))
 
     #  pass each input through the netwrk and see what happens to the hidden layer activations
-    for sample in range(len(trainset)):
-        sample_input = trainset[sample]["input"]
-        sample_label = trainset[sample]["label"]
-        labels_refValues[sample] = turnOneHotToInteger(trainset[sample]["refValue"])
-        labels_judgeValues[sample] = turnOneHotToInteger(trainset[sample]["judgementValue"])
+    for sample in range(len(uniqueind)):
+        sample_input = unique_inputs[sample]
+        sample_label = unique_labels[sample]
+        labels_refValues[sample] = turnOneHotToInteger(unique_refValue[sample])
+        labels_judgeValues[sample] = turnOneHotToInteger(unique_judgementValue[sample])
         MDSlabels[sample] = sample_label
-        contexts[sample] = turnOneHotToInteger(trainset[sample]["context"])
-
+        contexts[sample] = turnOneHotToInteger(unique_context[sample])
+        # get the activations for that input
         h1activations,_,_ = trained_model.get_activations(imageBatchToTorch(torch.from_numpy(sample_input)))
         activations[sample] = h1activations.detach()
+
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts
 
 #--------------------------------------------------#
@@ -414,6 +424,9 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename):
         for sample in range((context-1)*int(N/3),(context)*int(N/3)):
             judgementValue = random.randint(minNumerosity,maxNumerosity)
             refValue = random.randint(minNumerosity,maxNumerosity)
+            while refValue==judgementValue:    # make sure we dont do inputA==inputB
+                refValue = random.randint(minNumerosity,maxNumerosity)
+
             input2 = turnOneHot(judgementValue, totalMaxNumerosity)
             input1 = turnOneHot(refValue, totalMaxNumerosity)
             contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
@@ -453,14 +466,14 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename):
 def loadInputData(fileloc,datasetname):
     # load an existing dataset
     data = np.load(fileloc+datasetname+'.npy', allow_pickle=True)
-    trainset = data.item().get("trainset")
-    testset = data.item().get("testset")
+    numpy_trainset = data.item().get("trainset")
+    numpy_testset = data.item().get("testset")
 
     # turn out datasets into pytorch Datasets
-    trainset = createDataset(trainset)
-    testset = createDataset(testset)
+    trainset = createDataset(numpy_trainset)
+    testset = createDataset(numpy_testset)
 
-    return trainset, testset
+    return trainset, testset, numpy_trainset, numpy_testset
 
 #--------------------------------------------------#
 
@@ -479,7 +492,7 @@ def main():
     if createNewDataset:
         trainset, testset = createSeparateInputData(N, fileloc, datasetname)
     else:
-        trainset, testset = loadInputData(fileloc, datasetname)
+        trainset, testset, _, _ = loadInputData(fileloc, datasetname)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -549,24 +562,64 @@ trained_model = torch.load('trained_model.pth')
 # lets load the dataset we used for training the model
 fileloc = 'datasets/'
 datasetname = 'relmag_3contexts_dataset'
-trainset, testset = loadInputData(fileloc, datasetname)
+trainset, testset, np_trainset, np_testset = loadInputData(fileloc, datasetname)
+loadActivations = True
 
 # pass each input through the model and determine the hidden unit activations
-activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(testset,trained_model)
-plt.plot(labels_contexts)
+activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(np_trainset,trained_model)
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
 MDS_activations = embedding.fit_transform(activations)
-print(MDS_activations.shape)
 
 # plot the MDS of our hidden activations
 saveFig = True
 labelNumerosity = True
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, saveFig)
+contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, saveFig)
 
 labelNumerosity = False
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, saveFig)
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, saveFig)
+
+
+
+# Plot the hidden activations for the 3 MDS dimensions
+fig,ax = plt.subplots(1,3, figsize=(14,5))
+colours = get_cmap(10, 'magma')
+diffcolours = get_cmap(20, 'magma')
+for j in range(3):  # 3 MDS dimensions
+
+    if j==0:
+        dimA = 0
+        dimB = 1
+        ax[j].set_xlabel('dim 1')
+        ax[j].set_ylabel('dim 2')
+    elif j==1:
+        dimA = 0
+        dimB = 2
+        ax[j].set_xlabel('dim 1')
+        ax[j].set_ylabel('dim 3')
+    elif j==2:
+        dimA = 1
+        dimB = 2
+        ax[j].set_xlabel('dim 2')
+        ax[j].set_ylabel('dim 3')
+
+    for i in range((MDS_activations.shape[0])):
+        # colour by context
+        ax[j].set_title('context')
+        ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
+
+    ax[j].axis('equal')
+    ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
+
+plt.suptitle('3-MDS of hidden activations: relMagNet')
+if saveFig:
+    plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts.pdf',bbox_inches='tight')
+
+
+
+
 
 
 """
