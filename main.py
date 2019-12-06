@@ -8,7 +8,6 @@
  Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
-
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -19,6 +18,8 @@ import torch.nn.functional as F
 import torchvision
 import random
 from sklearn.manifold import MDS
+from sklearn.utils import shuffle
+
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -27,6 +28,111 @@ from datetime import datetime
 
 from itertools import product  # makes testing and comparing different hyperparams in tensorboard easy
 import argparse                # makes defining the hyperparams and tools for running our network easier from the command line
+
+#--------------------------------------------------#
+
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return plt.cm.get_cmap(name, n)
+
+#--------------------------------------------------#
+
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity=True, saveFig=True):
+    # Plot the hidden activations for the 3 MDS dimensions
+    fig,ax = plt.subplots(3,3, figsize=(14,15))
+    colours = get_cmap(10, 'viridis')
+    diffcolours = get_cmap(20, 'viridis')
+    contextcolours = ['red','black','purple']
+    for k in range(3):
+        for j in range(3):  # 3 MDS dimensions
+
+
+            if j==0:
+                dimA = 0
+                dimB = 1
+                ax[k,j].set_xlabel('dim 1')
+                ax[k,j].set_ylabel('dim 2')
+            elif j==1:
+                dimA = 0
+                dimB = 2
+                ax[k,j].set_xlabel('dim 1')
+                ax[k,j].set_ylabel('dim 3')
+            elif j==2:
+                dimA = 1
+                dimB = 2
+                ax[k,j].set_xlabel('dim 2')
+                ax[k,j].set_ylabel('dim 3')
+
+            for i in range((MDS_activations.shape[0])):
+                if labelNumerosity:
+
+                    # colour by numerosity
+                    if k==0:
+                        ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=diffcolours(int(10+labels_judgeValues[i]-labels_refValues[i])), edgecolors=contextcolours[int(labels_contexts[i])-1])
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=diffcolours(int(10+labels_judgeValues[i]-labels_refValues[i])))
+                    elif k==1:
+                        ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colours(int(labels_refValues[i])-1), edgecolors=contextcolours[int(labels_contexts[i])-1])
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=colours(int(labels_refValues[i])-1))
+                    else:
+                        im = ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colours(int(labels_judgeValues[i])-1), edgecolors=contextcolours[int(labels_contexts[i])-1])
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_contexts[i][0]), color=colours(int(labels_judgeValues[i])-1))
+                        if j==2:
+                            if i == (MDS_activations.shape[0])-1:
+                                cbar = fig.colorbar(im, ticks=[0,1])
+                else:
+                    # colour by true/false label
+                    if MDSlabels[i]==0:
+                        colour = 'red'
+                    else:
+                        colour = 'green'
+                    ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colour)
+                    if k==0:
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]-labels_refValues[i][0]), color=colour)
+                    elif k==1:
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_refValues[i][0]), color=colour)
+                    else:
+                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]), color=colour)
+
+                # some titles
+                if k==0:
+                    ax[k,j].set_title('value difference')
+                elif k==1:
+                    ax[k,j].set_title('reference')
+                else:
+                    ax[k,j].set_title('judgement')
+
+    plt.suptitle('3-MDS of hidden activations: relMagNet')
+    if saveFig:
+        if labelNumerosity:
+            cbar.ax.set_yticklabels(['1','10'])
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered')
+        else:
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet')
+
+#--------------------------------------------------#
+
+def getActivations(trainset,trained_model):
+    labels_refValues = np.empty((len(trainset),1))
+    labels_judgeValues = np.empty((len(trainset),1))
+    contexts = np.empty((len(trainset),1))
+    MDSlabels = np.empty((len(trainset),1))
+    hdim = len(list(trained_model.fc1.parameters())[0])
+    print(hdim)
+    activations = np.empty(( len(trainset), hdim ))  # ***HRS beware the magic number here which comes from the hidden layer size
+
+    #  pass each input through the netwrk and see what happens to the hidden layer activations
+    for sample in range(len(trainset)):
+        sample_input = trainset[sample]["input"]
+        sample_label = trainset[sample]["label"]
+        labels_refValues[sample] = turnOneHotToInteger(trainset[sample]["refValue"])
+        labels_judgeValues[sample] = turnOneHotToInteger(trainset[sample]["judgementValue"])
+        MDSlabels[sample] = sample_label
+        contexts[sample] = turnOneHotToInteger(trainset[sample]["context"])
+
+        h1activations,_,_ = trained_model.get_activations(imageBatchToTorch(torch.from_numpy(sample_input)))
+        activations[sample] = h1activations.detach()
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts
 
 #--------------------------------------------------#
 
@@ -158,7 +264,7 @@ class argsparser():
     def __init__(self):
         self.batch_size = 64
         self.test_batch_size = 64
-        self.epochs = 40
+        self.epochs = 50
         self.lr = 0.002
         self.momentum = 0.5
         self.no_cuda = False
@@ -190,7 +296,7 @@ def defineHyperparams():
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=48, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=48, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=40, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -257,15 +363,14 @@ class createDataset(Dataset):
         """
 
         # load all original images too - yes memory intensive but useful. Note that this also removes the efficiency point of using dataloaders
-
-
         self.index = dataset['index']
         self.label = dataset['label']
         self.refValue = dataset['refValue']
         self.judgementValue = dataset['judgementValue']
         self.input = dataset['input']
+        self.context = dataset['context']
         self.index = (self.index).astype(int)
-        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input}
+        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input, 'context':self.context}
         self.transform = transform
 
     def __len__(self):
@@ -278,46 +383,60 @@ class createDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx]}
+        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx]}
         return sample
 
 #--------------------------------------------------#
 
-def createSeparateInputData(maxOnehotSize, fileloc, filename):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename):
 
-    N = 1000         # how many examples we want to use (remember there are only 16 unique combinations, but we have more here to keep it balanced)
-    Ntrain = 800     # 8:2 train:test split
+    N = 15000         # how many examples we want to use
+    Ntrain = 12000     # 8:2 train:test split
 
-    minNumerosity = 1
-    maxNumerosity = 5 if maxOnehotSize > 5 else maxOnehotSize
-
-    refValues = np.empty((N,maxOnehotSize))
-    judgementValues = np.empty((N,maxOnehotSize))
-    input = np.empty((N,maxOnehotSize*2))
+    refValues = np.empty((N,totalMaxNumerosity))
+    judgementValues = np.empty((N,totalMaxNumerosity))
+    input = np.empty((N,totalMaxNumerosity*2+3))
     target = np.empty((N,1))
+    contexts = np.empty((N,3))
 
-    # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
-    for sample in range(N):
-        judgementValue = random.randint(minNumerosity,maxNumerosity)
-        refValue = random.randint(minNumerosity,maxNumerosity)
-        input2 = turnOneHot(judgementValue, maxOnehotSize)
-        input1 = turnOneHot(refValue, maxOnehotSize)
+    for context in range(1,4):
+        if context==1:    # context A
+            minNumerosity = 1
+            maxNumerosity = 15
+        elif context==2:  # context B
+            minNumerosity = 1
+            maxNumerosity = 10
+        else:             # context C
+            minNumerosity = 5
+            maxNumerosity = 15
 
-        # determine the correct rel magnitude judgement
-        if judgementValue > refValue:
-            target[sample] = 1
-        else:
-            target[sample] = 0
+        # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
+        for sample in range((context-1)*int(N/3),(context)*int(N/3)):
+            judgementValue = random.randint(minNumerosity,maxNumerosity)
+            refValue = random.randint(minNumerosity,maxNumerosity)
+            input2 = turnOneHot(judgementValue, totalMaxNumerosity)
+            input1 = turnOneHot(refValue, totalMaxNumerosity)
+            contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
 
-        judgementValues[sample] = np.squeeze(input2)
-        refValues[sample] = np.squeeze(input1)
-        input[sample] = np.squeeze(np.concatenate((input2,input1)))
+            # determine the correct rel magnitude judgement
+            if judgementValue > refValue:
+                target[sample] = 1
+            else:
+                target[sample] = 0
+
+            judgementValues[sample] = np.squeeze(input2)
+            refValues[sample] = np.squeeze(input1)
+            contexts[sample] = np.squeeze(contextinput)
+            input[sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
+
+    # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
+    input, refValues, judgementValues, target, contexts = shuffle(input, refValues, judgementValues, target, contexts, random_state=0)
 
     trainindices = np.asarray([i for i in range(Ntrain)])
     testindices = np.asarray([i for i in range(Ntrain,N)])
 
-    trainset = { 'refValue':refValues[0:Ntrain], 'judgementValue':judgementValues[0:Ntrain], 'input':input[0:Ntrain], 'label':target[0:Ntrain], 'index':trainindices }
-    testset = { 'refValue':refValues[Ntrain:], 'judgementValue':judgementValues[Ntrain:], 'input':input[Ntrain:], 'label':target[Ntrain:], 'index':testindices }
+    trainset = { 'refValue':refValues[0:Ntrain], 'judgementValue':judgementValues[0:Ntrain], 'input':input[0:Ntrain], 'label':target[0:Ntrain], 'index':trainindices, 'context':contexts[0:Ntrain] }
+    testset = { 'refValue':refValues[Ntrain:], 'judgementValue':judgementValues[Ntrain:], 'input':input[Ntrain:], 'label':target[Ntrain:], 'index':testindices, 'context':contexts[Ntrain:] }
 
     # save the dataset so  we can use it again
     dat = {"trainset":trainset, "testset":testset}
@@ -348,7 +467,7 @@ def loadInputData(fileloc,datasetname):
 def main():
 
     # define a network which can judge whether inputs of 1-N are greater than X
-    N = 4    # range(N) are the numbers for our 'input 2' aka our judgement input
+    N = 15    # total max numerosity for the greatest range we deal with
 
     # Define the training hyperparameters for our network (passed as args when calling main.py from command line)
     args, device, multiparams = defineHyperparams()
@@ -356,7 +475,7 @@ def main():
     # a dataset for us to work with
     createNewDataset = False
     fileloc = 'datasets/'
-    datasetname = 'relmag_min1max5_dataset'
+    datasetname = 'relmag_3contexts_dataset'
     if createNewDataset:
         trainset, testset = createSeparateInputData(N, fileloc, datasetname)
     else:
@@ -372,7 +491,7 @@ def main():
         print("\n")
 
         # Define a model for training
-        model = separateinputMLP(2*N).to(device)
+        model = separateinputMLP(2*N+3).to(device)
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()  #nn.BCELoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
@@ -386,12 +505,6 @@ def main():
         comment = "_batch_size-{}_lr-{}_epochs-{}_wdecay-{}".format(args.batch_size, args.lr, args.epochs, args.weight_decay)
         writer = SummaryWriter(log_dir='results/runs/' + '_separateInputDataModel_'+ args.modeltype + date + comment)
         print("Open tensorboard in another shell to monitor network training (hannahsheahan$  tensorboard --logdir=runs)")
-
-        # Show an example sample batch of training data...
-        #showRandomBatch(trainloader)
-
-        # Optionally save some figures etc to tensorboard about the network and inputs, input low-D embeddings etc
-        #saveTbMetadata(trainloader, writer)
 
         # Train/test loop
         n_epochs = args.epochs
@@ -416,16 +529,11 @@ def main():
             printProgress(epoch-1, n_epochs)
 
         print("Training complete.")
-        if args.save_model:
-            torch.save(model.state_dict(), "omniglot_original_cnn.pt")
 
     writer.close()
 
     # save the trained weights so we can easily look at them
     torch.save(model, 'trained_model.pth')
-
-    # Now lets look at our trained weights
-
 
 
 # to run from the command line
@@ -436,52 +544,29 @@ if __name__ == '__main__':
 #--------------------------------------------------#
 
 # Now lets take a look at our weights and the responses to the inputs in the training set we trained on
-
 trained_model = torch.load('trained_model.pth')
-for name, param in trained_model.named_parameters():
-    print('-----------')
-    print(name)
-    #print(param)
-
-# Now lets see what the hidden layer activation is when we pass in a particular input
 
 # lets load the dataset we used for training the model
 fileloc = 'datasets/'
-datasetname = 'relmag_min1max5_dataset'
+datasetname = 'relmag_3contexts_dataset'
 trainset, testset = loadInputData(fileloc, datasetname)
 
-labels_refValues = np.empty((len(trainset),1))
-labels_judgeValues = np.empty((len(trainset),1))
-allinputs = np.empty((len(trainset),8))
-MDSlabels = np.empty((len(trainset),1))
-activations = np.empty(( len(trainset), 60 ))  # ***HRS beware the magic number here which comes from the hidden layer size
-for sample in range(len(trainset)):
-    sample_input = trainset[sample]["input"]
-    sample_label = trainset[sample]["label"]
-
-    labels_refValues[sample] = turnOneHotToInteger(trainset[sample]["refValue"])
-    labels_judgeValues[sample] = turnOneHotToInteger(trainset[sample]["judgementValue"])
-    allinputs[sample] = sample_input
-    MDSlabels[sample] = sample_label
-    # now pass the exapmle input through the netwrk and see what happens to the hidden layer activations
-    h1activations,_,_ = trained_model.get_activations(imageBatchToTorch(torch.from_numpy(sample_input)))
-    activations[sample] = h1activations.detach()
-
+# pass each input through the model and determine the hidden unit activations
+activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(testset,trained_model)
+plt.plot(labels_contexts)
 
 # do MDS on the activations for the training set
-print(activations.shape)
 embedding = MDS(n_components=3)
 MDS_activations = embedding.fit_transform(activations)
 print(MDS_activations.shape)
 
-# plot the original data inputs
+# plot the MDS of our hidden activations
+saveFig = True
+labelNumerosity = True
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, saveFig)
 
-plt.figure()
-for i in range((MDS_activations.shape[0])):
-    if MDSlabels[i]==0:
-        colour = 'red'
-    else:
-        colour = 'green'
-    plt.scatter(MDS_activations[i, 0], MDS_activations[i, 1], color=colour)
+labelNumerosity = False
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, saveFig)
+
 
 """
