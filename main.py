@@ -454,7 +454,26 @@ class createDataset(Dataset):
 
 #--------------------------------------------------#
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining, sequentialABTraining):
+def flattenAllFirstDimArrays(*allarrays):
+    """This function will flatten the first dimension of a series of input numpy arrays"""
+    flatarrays = []
+    for array in allarrays:
+        array = flattenFirstDim(array)
+        flatarrays.append(array)
+    return  flatarrays
+
+#--------------------------------------------------#
+
+def flattenFirstDim(array):
+    """This function with return a numpy array which flattens the first two dimensions together. Only works for 3d np arrays."""
+    if len(array.shape) != 3:
+        print('Error: the array you are trying to partially flatten is not the correct shape.')
+    else:
+        return array.reshape(array.shape[0]*array.shape[1], array.shape[2])
+
+#--------------------------------------------------#
+
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -476,10 +495,14 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
         print('- training chooses random A and B at each time step')
 
     totalN = 15000         # how many examples we want to use
-    Ntrain = 12000     # 8:2 train:test split
+    Ntrain = 12000       # 8:2 train:test split
+    Ntest = totalN - Ntrain
+    Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
+    trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
+    testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
-    trainindices = np.asarray([i for i in range(Ntrain)])
-    testindices = np.asarray([i for i in range(Ntrain,totalN)])
+    print(trainindices.shape)
+    print(testindices.shape)
     Ncontexts = 3
 
     for phase in ['train','test']:   # this method should balance context instances in train and test phases
@@ -488,30 +511,42 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
         else:
             N = totalN - Ntrain
 
-        refValues = np.empty((N,totalMaxNumerosity))
-        judgementValues = np.empty((N,totalMaxNumerosity))
-        input = np.empty((N,totalMaxNumerosity*2+Ncontexts))
-        target = np.empty((N,1))
-        contexts = np.empty((N,Ncontexts))
-        contextdigits = np.empty((N,1))
+        #refValues = np.empty((N,totalMaxNumerosity))
+        #judgementValues = np.empty((N,totalMaxNumerosity))
+        #input = np.empty((N,totalMaxNumerosity*2+Ncontexts))
+        #target = np.empty((N,1))
+        #contexts = np.empty((N,Ncontexts))
+        #contextdigits = np.empty((N,1))
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
+        refValues = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity))
+        judgementValues = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity))
+        input = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity*2+Ncontexts))
+        target = np.empty((Mblocks, int(N/Mblocks),1))
+        contexts = np.empty((Mblocks, int(N/Mblocks),Ncontexts))
+        contextdigits = np.empty((Mblocks, int(N/Mblocks),1))
+        blocks = np.empty((Mblocks, int(N/Mblocks),1))
 
+        for block in range(Mblocks):
 
-        for context in range(1,Ncontexts+1):  # ***HRS this needs to become something that we randomly permute in the context order
-            if context==1:    # context A
+            # divide the blocks evenly across the 3 contexts
+            if block < Mblocks/Ncontexts:        # 0-7     # context A
+                context = 1
                 minNumerosity = 1
                 maxNumerosity = 15
-            elif context==2:  # context B
+
+            elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
+                context = 2
                 minNumerosity = 1
                 maxNumerosity = 10
-            else:             # context C
+            else:                                # 16-23   # context C
+                context = 3
                 minNumerosity = 5
                 maxNumerosity = 15
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
             judgementValue = None              # reset the sequentialAB structure for each new context
-            for sample in range((context-1)*int(N/3),(context)*int(N/3)):
+            for sample in range(int(N/Mblocks)):
                 if sequentialABTraining:
                     if judgementValue == None: # the first trial in a given context
                         refValue = random.randint(minNumerosity,maxNumerosity)
@@ -530,23 +565,51 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
 
                 # determine the correct rel magnitude judgement
                 if judgementValue > refValue:
-                    target[sample] = 1
+                    target[block, sample] = 1
                 else:
-                    target[sample] = 0
+                    target[block, sample] = 0
 
-                contextdigits[sample] = context
-                judgementValues[sample] = np.squeeze(input2)
-                refValues[sample] = np.squeeze(input1)
-                contexts[sample] = np.squeeze(contextinput)
-                input[sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
-
+                contextdigits[block, sample] = context
+                judgementValues[block, sample] = np.squeeze(input2)
+                refValues[block, sample] = np.squeeze(input1)
+                contexts[block, sample] = np.squeeze(contextinput)
+                input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
+                blocks[block, sample] = block
 
         if phase=='train':
-            # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
-            if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
-                input, refValues, judgementValues, target, contexts, contextdigits, trainindices = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, random_state=0)
+
+            # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
+            input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, random_state=0)
+
+            # now flatten across the first dim of the structure
+            input = flattenFirstDim(input)
+            refValues = flattenFirstDim(refValues)
+            judgementValues = flattenFirstDim(judgementValues)
+            target = flattenFirstDim(target)
+            contexts = flattenFirstDim(contexts)
+            contextdigits = flattenFirstDim(contextdigits)
+            trainindices = flattenFirstDim(trainindices)
+            blocks = flattenFirstDim(blocks)
+
+            # if you want to destroy the trial by trial sequential context and all other structure, then shuffle again across the trial order
+            if not blockedTraining:
+                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, random_state=0)
             trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits }
         else:
+
+            # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
+            input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, random_state=0)
+
+            # now flatten across the first dim of the structure
+            input = flattenFirstDim(input)
+            refValues = flattenFirstDim(refValues)
+            judgementValues = flattenFirstDim(judgementValues)
+            target = flattenFirstDim(target)
+            contexts = flattenFirstDim(contexts)
+            contextdigits = flattenFirstDim(contextdigits)
+            testindices = flattenFirstDim(testindices)
+            blocks = flattenFirstDim(blocks)
+
             # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
             if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
                 input, refValues, judgementValues, target, contexts, contextdigits, testindices = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, random_state=0)
@@ -589,6 +652,7 @@ def main():
     # a dataset for us to work with
     createNewDataset = True
     fileloc = 'datasets/'
+
     blockedTraining = True           # this variable determines whether to block the training by context
     sequentialABTraining = True      # this variable determines whether the is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
     if not blockedTraining:
@@ -659,19 +723,21 @@ def main():
     writer.close()
 
     # save the trained weights so we can easily look at them
-    #torch.save(model, 'trained_model_sequentialcontexts_ABtraining.pth')
+    torch.save(model, 'trained_model_blockedsequentialcontexts.pth')
 
 
 #--------------------------------------------------#
 
 # Some interactive mode plotting code...
-
+"""
 # Now lets take a look at our weights and the responses to the inputs in the training set we trained on
 blockedTraining = True
 sequentialABTraining = True
 
-
 if blockedTraining:
+    if sequentialABTraining:
+        trained_model = torch.load('trained_model_blockedsequentialcontexts.pth')
+        datasetname = 'relmag_3contexts_blockedsequential_dataset'
     trained_model = torch.load('trained_model_sequentialcontexts.pth')
     datasetname = 'relmag_3contexts_sequential_dataset'
 else:
