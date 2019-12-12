@@ -752,8 +752,9 @@ if blockedTraining:
     if sequentialABTraining:
         trained_model = torch.load('trained_model_blockedsequentialcontexts.pth')
         datasetname = 'relmag_3contexts_blockedsequential_dataset'
-    trained_model = torch.load('trained_model_sequentialcontexts.pth')
-    datasetname = 'relmag_3contexts_sequential_dataset'
+    else:
+        trained_model = torch.load('trained_model_sequentialcontexts.pth')
+        datasetname = 'relmag_3contexts_sequential_dataset'
 else:
     trained_model = torch.load('trained_model_intermingledcontexts.pth')
     datasetname = 'relmag_3contexts_dataset'
@@ -766,16 +767,22 @@ loadActivations = True
 # pass each input through the model and determine the hidden unit activations ***HRS remember that this looks for the unique inputs in 'input' so when context stops being an actual input it will lose this unless careful
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(np_trainset,trained_model)
 
+print(np.max(activations))
+print(np.min(activations))
+
 # prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
-import warnings
 flattenIrrelevant = True
-dimFlatten = 'reference'
+dimKeep = 'reference'
 uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
-flat_activations = np.empty((3,len(uniqueValues),activations.shape[1]))
+flat_activations = np.zeros((3,len(uniqueValues),activations.shape[1]))
+flat_values = np.zeros((3,len(uniqueValues),1))
+flat_outcomes = np.empty((3,len(uniqueValues),1))
+flat_contexts = np.empty((3,len(uniqueValues),1))
+
 divisor = np.zeros((3,len(uniqueValues)))
 
-# which label to flatten over (we keep whichever dimension is dimFlatten, and average over the other)
-if dimFlatten == 'reference':
+# which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
+if dimKeep == 'reference':
     flattenValues = labels_refValues
 else:
     flattenValues = labels_judgeValues
@@ -788,36 +795,45 @@ if flattenIrrelevant:
                 if labels_contexts[i] == context+1:  # remember to preserve the context structure
                     if flattenValues[i] == value:
                         flat_activations[context, value-1,:] += activations[i]
+                        flat_contexts[context,value-1] = context
+                        flat_values[context,value-1] = value
+                        flat_outcomes[context,value-1] = MDSlabels[i]
                         divisor[context,value-1] +=1
 
             # take the mean i.e. normalise by the number of instances that met that condition
             if int(divisor[context,value-1]) == 0:
-                print('bad')
-                print(divisor[context,value-1])
-                print(context)
-                print(value)
-                print('-----')
                 flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
             else:
-                print('good')
-                print(divisor[context,value-1])
-                print(context)
-                print(value)
-                print('-----')
                 flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
 
-
-print(flat_activations)
-
 # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
-activations = np.empty(35,60)
 flat_activations = flattenFirstDim(flat_activations)
+flat_contexts = flattenFirstDim(flat_contexts)
+flat_values = flattenFirstDim(flat_values)
+flat_outcomes = flattenFirstDim(flat_outcomes)
+activations = []
+labels_refValues = []
+labels_judgeValues = []
+labels_contexts = []
+MDSlabels = []
 for i in range(flat_activations.shape[0]):
+    checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
+    if (checknan).all():
+        pass
+    else:
+        print(flat_activations[i])
+        activations.append(flat_activations[i])
+        labels_contexts.append(flat_contexts[i])
+        MDSlabels.append(flat_outcomes[i])
 
-    if flat_activations[i] != np.full_like(flat_activations[i], np.nan):
-        activations[i] = flat_activations[i]
+        if dimKeep == 'reference':
+            labels_refValues.append(flat_values)
+            labels_judgeValues.append(0)
+        else:
+            labels_refValues.append(0)
+            labels_judgeValues.append(flat_values)
 
-print(activations)
+#---
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
