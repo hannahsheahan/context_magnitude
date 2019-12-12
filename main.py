@@ -38,7 +38,7 @@ def get_cmap(n, name='hsv'):
 
 #--------------------------------------------------#
 
-def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig):
+def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
     fig,ax = plt.subplots(1,3, figsize=(14,5))
@@ -62,27 +62,40 @@ def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeV
             ax[j].set_xlabel('dim 2')
             ax[j].set_ylabel('dim 3')
 
+        ax[j].set_title('context')
         for i in range((MDS_activations.shape[0])):
             # colour by context
-            ax[j].set_title('context')
             ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
 
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
+
+    # automatic save file title details
     if blockedTraining:
-        plt.suptitle('3-MDS of hidden activations: sequential relMagNet')
-        if saveFig:
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts_sequential.pdf',bbox_inches='tight')
+        blockedtext = '_blocked'
     else:
-        plt.suptitle('3-MDS of hidden activations: relMagNet')
-        if saveFig:
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts.pdf',bbox_inches='tight')
+        blockedtext = ''
+
+    if sequentialABTraining:
+        seqtext = '_sequential'
+    else:
+        seqtext = ''
+    if labelNumerosity:
+        cbar.ax.set_yticklabels(['1','15'])
+        labeltext = '_numerosity'
+    else:
+        labeltext = '_contexts'
+
+    if saveFig:
+        plt.savefig('figures/3MDS_60hiddenactivations_contexts'+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
+
 
 #--------------------------------------------------#
 
-def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig=True):
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
+
     # Plot the hidden activations for the 3 MDS dimensions
     fig,ax = plt.subplots(3,3, figsize=(14,15))
     colours = get_cmap(10, 'viridis')
@@ -128,12 +141,12 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     else:
                         colour = 'green'
                     ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=colour)
-                    if k==0:
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]-labels_refValues[i][0]), color=colour)
-                    elif k==1:
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_refValues[i][0]), color=colour)
-                    else:
-                        ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]), color=colour)
+                    #if k==0:
+                    #    ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]-labels_refValues[i][0]), color=colour)
+                    #elif k==1:
+                    #    ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_refValues[i][0]), color=colour)
+                    #else:
+                    #    ax[k,j].text(MDS_activations[i, dimA], MDS_activations[i, dimB]+0.05, str(labels_judgeValues[i][0]), color=colour)
 
                 # some titles
                 if k==0:
@@ -145,23 +158,24 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     ax[k,j].set_title('judgement')
                 ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
-    if blockedTraining:
-        plt.suptitle('3-MDS of hidden activations: sequential relMagNet')
-        if saveFig:
-            if labelNumerosity:
-                cbar.ax.set_yticklabels(['1','15'])
-                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered_sequential.pdf',bbox_inches='tight')
-            else:
-                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_sequential.pdf',bbox_inches='tight')
 
+    # automatic save file title details
+    if blockedTraining:
+        blockedtext = '_blocked'
     else:
-        plt.suptitle('3-MDS of hidden activations: relMagNet')
-        if saveFig:
-            if labelNumerosity:
-                cbar.ax.set_yticklabels(['1','15'])
-                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered.pdf',bbox_inches='tight')
-            else:
-                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet.pdf',bbox_inches='tight')
+        blockedtext = ''
+    if sequentialABTraining:
+        seqtext = '_sequential'
+    else:
+        seqtext = ''
+    if labelNumerosity:
+        labeltext = '_numerosity'
+        cbar.ax.set_yticklabels(['1','15'])
+    else:
+        labeltext = '_outcomes'
+
+    if saveFig:
+        plt.savefig('figures/3MDS_60hiddenactivations'+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
 
 #--------------------------------------------------#
 
@@ -541,7 +555,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 maxNumerosity = 10
             else:                                # 16-23   # context C
                 context = 3
-                minNumerosity = 5
+                minNumerosity = 6
                 maxNumerosity = 15
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
@@ -729,7 +743,7 @@ def main():
 #--------------------------------------------------#
 
 # Some interactive mode plotting code...
-"""
+
 # Now lets take a look at our weights and the responses to the inputs in the training set we trained on
 blockedTraining = True
 sequentialABTraining = True
@@ -749,8 +763,61 @@ fileloc = 'datasets/'
 trainset, testset, np_trainset, np_testset = loadInputData(fileloc, datasetname)
 loadActivations = True
 
-# pass each input through the model and determine the hidden unit activations
+# pass each input through the model and determine the hidden unit activations ***HRS remember that this looks for the unique inputs in 'input' so when context stops being an actual input it will lose this unless careful
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(np_trainset,trained_model)
+
+# prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
+import warnings
+flattenIrrelevant = True
+dimFlatten = 'reference'
+uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
+flat_activations = np.empty((3,len(uniqueValues),activations.shape[1]))
+divisor = np.zeros((3,len(uniqueValues)))
+
+# which label to flatten over (we keep whichever dimension is dimFlatten, and average over the other)
+if dimFlatten == 'reference':
+    flattenValues = labels_refValues
+else:
+    flattenValues = labels_judgeValues
+
+# pick out all the activations that meet this condition for each context and then average over them
+if flattenIrrelevant:
+    for context in range(3):
+        for value in uniqueValues:
+            for i in range(labels_judgeValues.shape[0]):
+                if labels_contexts[i] == context+1:  # remember to preserve the context structure
+                    if flattenValues[i] == value:
+                        flat_activations[context, value-1,:] += activations[i]
+                        divisor[context,value-1] +=1
+
+            # take the mean i.e. normalise by the number of instances that met that condition
+            if int(divisor[context,value-1]) == 0:
+                print('bad')
+                print(divisor[context,value-1])
+                print(context)
+                print(value)
+                print('-----')
+                flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
+            else:
+                print('good')
+                print(divisor[context,value-1])
+                print(context)
+                print(value)
+                print('-----')
+                flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
+
+
+print(flat_activations)
+
+# now cast out all the null instances e.g 1-5, 10-15 in certain contexts
+activations = np.empty(35,60)
+flat_activations = flattenFirstDim(flat_activations)
+for i in range(flat_activations.shape[0]):
+
+    if flat_activations[i] != np.full_like(flat_activations[i], np.nan):
+        activations[i] = flat_activations[i]
+
+print(activations)
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
@@ -761,14 +828,19 @@ saveFig = True
 labelNumerosity = True
 contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
 # plot the MDS with number labels
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+
+# plot the MDS with number labels but flatten across the other factor
+
+plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+
 
 # plot the MDS with output labels (true/false labels)
 labelNumerosity = False
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
 
 # plot the MDS with context labels
-plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
+plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
 
 """
 
