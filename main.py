@@ -8,6 +8,7 @@
  Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -35,6 +36,62 @@ def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
+
+#--------------------------------------------------#
+
+def autoSaveFigure(basetitle, blockedTraining, sequentialABTraining, labelNumerosity, saveFig):
+    """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
+    # automatic save file title details
+    if blockedTraining:
+        blockedtext = '_blocked'
+    else:
+        blockedtext = ''
+
+    if sequentialABTraining:
+        seqtext = '_sequential'
+    else:
+        seqtext = ''
+    if labelNumerosity:
+        cbar.ax.set_yticklabels(['1','15'])
+        labeltext = '_numerosity'
+    else:
+        labeltext = '_contexts'
+
+    if saveFig:
+        plt.savefig(basetitle+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
+
+#--------------------------------------------------#
+
+def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+    """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
+    """
+    fig,ax = plt.subplots(1,3, figsize=(14,5))
+    colours = get_cmap(10, 'magma')
+    diffcolours = get_cmap(20, 'magma')
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        ax[j].set_title('context')
+        for i in range((MDS_activations.shape[0])):
+            # colour by context
+            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
+
+        ax[j].axis('equal')
+        ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
 
 #--------------------------------------------------#
 
@@ -70,26 +127,7 @@ def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeV
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-
-    # automatic save file title details
-    if blockedTraining:
-        blockedtext = '_blocked'
-    else:
-        blockedtext = ''
-
-    if sequentialABTraining:
-        seqtext = '_sequential'
-    else:
-        seqtext = ''
-    if labelNumerosity:
-        cbar.ax.set_yticklabels(['1','15'])
-        labeltext = '_numerosity'
-    else:
-        labeltext = '_contexts'
-
-    if saveFig:
-        plt.savefig('figures/3MDS_60hiddenactivations_contexts'+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
-
+    autoSaveFigure('figures/3MDS_60hiddenactivations_contexts', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
 
 #--------------------------------------------------#
 
@@ -103,8 +141,6 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
 
     for k in range(3):
         for j in range(3):  # 3 MDS dimensions
-
-
             if j==0:
                 dimA = 0
                 dimB = 1
@@ -158,24 +194,7 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     ax[k,j].set_title('judgement')
                 ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
-
-    # automatic save file title details
-    if blockedTraining:
-        blockedtext = '_blocked'
-    else:
-        blockedtext = ''
-    if sequentialABTraining:
-        seqtext = '_sequential'
-    else:
-        seqtext = ''
-    if labelNumerosity:
-        labeltext = '_numerosity'
-        cbar.ax.set_yticklabels(['1','15'])
-    else:
-        labeltext = '_outcomes'
-
-    if saveFig:
-        plt.savefig('figures/3MDS_60hiddenactivations'+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
+    autoSaveFigure('figures/3MDS_60hiddenactivations', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
 
 #--------------------------------------------------#
 
@@ -515,8 +534,6 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
-    print(trainindices.shape)
-    print(testindices.shape)
     Ncontexts = 3
 
     for phase in ['train','test']:   # this method should balance context instances in train and test phases
@@ -655,13 +672,12 @@ def loadInputData(fileloc,datasetname):
 
 #--------------------------------------------------#
 
-def averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_judgeValues, labels_contexts, MDSlabels):
+def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels):
     """This function will average the hidden unit activations over one of the two numbers involved in the representation:
     either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
      which are averaged over the previously presented number (input B).
      - dimKeep = 'reference' or 'judgement'
     """
-
     # prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
     uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
     flat_activations = np.zeros((3,len(uniqueValues),activations.shape[1]))
@@ -700,9 +716,9 @@ def averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_
     flat_values = flattenFirstDim(flat_values)
     flat_outcomes = flattenFirstDim(flat_outcomes)
     singlelabel_activations = []
-    singlelabel_labels_refValues = []
-    singlelabel_labels_judgeValues = []
-    singlelabel_labels_contexts = []
+    singlelabel_refValues = []
+    singlelabel_judgeValues = []
+    singlelabel_contexts = []
     singlelabel_MDSlabels = []
     for i in range(flat_activations.shape[0]):
         checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
@@ -710,17 +726,29 @@ def averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_
             pass
         else:
             singlelabel_activations.append(flat_activations[i])
-            singlelabel_labels_contexts.append(flat_contexts[i])
+            singlelabel_contexts.append(flat_contexts[i])
             singlelabel_MDSlabels.append(flat_outcomes[i])
 
             if dimKeep == 'reference':
-                singlelabel_labels_refValues.append(flat_values)
-                singlelabel_labels_judgeValues.append(0)
+                singlelabel_refValues.append(flat_values[i])
+                singlelabel_judgeValues.append(0)
             else:
-                singlelabel_labels_refValues.append(0)
-                singlelabel_labels_judgeValues.append(flat_values)
+                singlelabel_refValues.append(0)
+                singlelabel_judgeValues.append(flat_values[i])
 
-    return singlelabel_activations, singlelabel_labels_contexts, singlelabel_MDSlabels, singlelabel_labels_refValues, singlelabel_labels_judgeValues
+    # finally, reshape the outputs so that they match our inputs nicely
+    singlelabel_activations = np.asarray(singlelabel_activations)
+    singlelabel_refValues = np.asarray(singlelabel_refValues)
+    singlelabel_judgeValues = np.asarray(singlelabel_judgeValues)
+    singlelabel_contexts = np.asarray(singlelabel_contexts)
+    singlelabel_MDSlabels = np.asarray(singlelabel_MDSlabels)
+
+    if dimKeep == 'reference':
+        singlelabel_judgeValues = np.expand_dims(singlelabel_judgeValues, axis=1)
+    else:
+        singlelabel_refValues = np.expand_dims(singlelabel_refValues, axis=1)
+
+    return singlelabel_activations, singlelabel_contexts, singlelabel_MDSlabels, singlelabel_refValues, singlelabel_judgeValues
 
 #--------------------------------------------------#
 
@@ -837,7 +865,7 @@ loadActivations = True
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(np_trainset,trained_model)
 
 dimKeep = 'judgement'  # this is what Fabrice's plots show (representation of the currently presented number)
-sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_judgeValues, labels_contexts, MDSlabels):
+sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels)
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
@@ -849,7 +877,7 @@ labelNumerosity = True
 contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
 
 # plot the MDS with number labels but flatten across the other factor
-plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+plot3MDSMean(sl_activations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
 
 # plot the MDS with number labels
 plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
