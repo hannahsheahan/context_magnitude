@@ -3,7 +3,7 @@
  i.e. the network will be trained to answer the question: is input 2 > input 1?
 
  Author: Hannah Sheahan
- Date: 03/12/2019
+ Date: 04/12/2019
  Notes: N/A
  Issues: N/A
 """
@@ -19,7 +19,7 @@ import torchvision
 import random
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
-
+import copy
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -38,7 +38,51 @@ def get_cmap(n, name='hsv'):
 
 #--------------------------------------------------#
 
-def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity=True, saveFig=True):
+def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig):
+    """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
+
+    fig,ax = plt.subplots(1,3, figsize=(14,5))
+    colours = get_cmap(10, 'magma')
+    diffcolours = get_cmap(20, 'magma')
+    for j in range(3):  # 3 MDS dimensions
+
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        for i in range((MDS_activations.shape[0])):
+            # colour by context
+            ax[j].set_title('context')
+            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
+
+        ax[j].axis('equal')
+        ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
+
+    if blockedTraining:
+        plt.suptitle('3-MDS of hidden activations: sequential relMagNet')
+        if saveFig:
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts_sequential.pdf',bbox_inches='tight')
+    else:
+        plt.suptitle('3-MDS of hidden activations: relMagNet')
+        if saveFig:
+            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts.pdf',bbox_inches='tight')
+
+#--------------------------------------------------#
+
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig=True):
+    """This is a function to plot the MDS of activations and label according to numerosity and context"""
     # Plot the hidden activations for the 3 MDS dimensions
     fig,ax = plt.subplots(3,3, figsize=(14,15))
     colours = get_cmap(10, 'viridis')
@@ -101,19 +145,29 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     ax[k,j].set_title('judgement')
                 ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
-    plt.suptitle('3-MDS of hidden activations: relMagNet')
-    if saveFig:
-        if labelNumerosity:
-            cbar.ax.set_yticklabels(['1','15'])
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered.pdf',bbox_inches='tight')
-        else:
-            plt.savefig('figures/3MDS_60hiddenactivations_relMagnet.pdf',bbox_inches='tight')
+    if blockedTraining:
+        plt.suptitle('3-MDS of hidden activations: sequential relMagNet')
+        if saveFig:
+            if labelNumerosity:
+                cbar.ax.set_yticklabels(['1','15'])
+                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered_sequential.pdf',bbox_inches='tight')
+            else:
+                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_sequential.pdf',bbox_inches='tight')
+
+    else:
+        plt.suptitle('3-MDS of hidden activations: relMagNet')
+        if saveFig:
+            if labelNumerosity:
+                cbar.ax.set_yticklabels(['1','15'])
+                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_numbered.pdf',bbox_inches='tight')
+            else:
+                plt.savefig('figures/3MDS_60hiddenactivations_relMagnet.pdf',bbox_inches='tight')
 
 #--------------------------------------------------#
 
 def getActivations(trainset,trained_model):
-    # This will determine the hidden unit activations for each *unique* input in the training set
-    # there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads
+    """ This will determine the hidden unit activations for each *unique* input in the training set
+     there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads."""
 
     # determine the unique inputs for the training set (there are repeats)
     unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
@@ -139,7 +193,7 @@ def getActivations(trainset,trained_model):
         MDSlabels[sample] = sample_label
         contexts[sample] = turnOneHotToInteger(unique_context[sample])
         # get the activations for that input
-        h1activations,_,_ = trained_model.get_activations(imageBatchToTorch(torch.from_numpy(sample_input)))
+        h1activations,_,_ = trained_model.get_activations(batchToTorch(torch.from_numpy(sample_input)))
         activations[sample] = h1activations.detach()
 
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts
@@ -147,9 +201,7 @@ def getActivations(trainset,trained_model):
 #--------------------------------------------------#
 
 def printProgress(i, numiter):
-    """
-    This function prints to the screen the optimisation progress (at each iteration i, out of a total of numiter iterations)."""
-
+    """This function prints to the screen the optimisation progress (at each iteration i, out of a total of numiter iterations)."""
     j = (i + 1) / numiter
     sys.stdout.write('\r')
     sys.stdout.write("[%-20s] %d%% " % ('-'*int(20*j), 100*j))
@@ -157,7 +209,8 @@ def printProgress(i, numiter):
 
 #--------------------------------------------------#
 
-def imageBatchToTorch(originalimages):
+def batchToTorch(originalimages):
+    """Convert the input batch to a torch tensor"""
     #originalimages = originalimages.unsqueeze(1)   # change dim for the convnet
     originalimages = originalimages.type(torch.FloatTensor)  # convert torch tensor data type
     return originalimages
@@ -165,6 +218,7 @@ def imageBatchToTorch(originalimages):
 # ---------------------------------------------------------------------------- #
 
 def train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
+    """ Train a neural network on the training set """
     model.train()
     train_loss = 0
     correct = 0
@@ -173,7 +227,7 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
 
         # provide different inputs for different models
         #print('------------')
-        inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+        inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
         output = model(inputs)
         output = np.squeeze(output, axis=1)
 
@@ -206,6 +260,7 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
 #--------------------------------------------------#
 
 def test(args, model, device, test_loader, criterion, printOutput=True):
+    """Test a neural network on the test set. """
     model.eval()
     test_loss = 0
     correct = 0
@@ -219,7 +274,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
         for batch_idx, data in enumerate(test_loader):
 
             # provide different inputs for different models
-            inputs, labels = imageBatchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+            inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
             output = model(inputs)
             output = np.squeeze(output, axis=1)
             test_loss += criterion(output, labels).item()
@@ -271,6 +326,7 @@ def logPerformance(writer, epoch, train_perf, test_perf):
 #--------------------------------------------------#
 
 class argsparser():
+    """For holding network training arguments, usually entered via command line"""
     def __init__(self):
         self.batch_size = 64
         self.test_batch_size = 64
@@ -343,7 +399,7 @@ class separateinputMLP(nn.Module):
 #--------------------------------------------------#
 
 def turnOneHot(integer, maxSize):
-    # this function will take as input an interger and output a one hot representation of that integer up to a max of maxSize
+    """This function will take as input an interger and output a one hot representation of that integer up to a max of maxSize."""
     oneHot = np.zeros((maxSize,1))
     oneHot[integer-1] = 1
     return oneHot
@@ -351,7 +407,7 @@ def turnOneHot(integer, maxSize):
 #--------------------------------------------------#
 
 def turnOneHotToInteger(onehot):
-    # this function will take as input a one hot representation and determine the integer interpretation
+    """This function will take as input a one hot representation and determine the integer interpretation"""
     integer = np.nonzero(onehot)[0]
     return integer+1  # because we are starting counting from 1 not 0
 
@@ -398,58 +454,103 @@ class createDataset(Dataset):
 
 #--------------------------------------------------#
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining, sequentialABTraining):
+    """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
+    - There are 3 contexts.
+    - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
+    """
 
-    N = 15000         # how many examples we want to use
+    # note that if there is no context blocking, we can't have sequential AB training structure.
+    # Double Check this:
+    if not blockedTraining:
+        sequentialABTraining = False
+
+    print('Generating dataset...')
+    if blockedTraining:
+        print('- training is blocked by context')
+    else:
+        print('- training is temporally intermingled across contexts')
+    if sequentialABTraining:
+        print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
+    else:
+        print('- training chooses random A and B at each time step')
+
+    totalN = 15000         # how many examples we want to use
     Ntrain = 12000     # 8:2 train:test split
 
-    refValues = np.empty((N,totalMaxNumerosity))
-    judgementValues = np.empty((N,totalMaxNumerosity))
-    input = np.empty((N,totalMaxNumerosity*2+3))
-    target = np.empty((N,1))
-    contexts = np.empty((N,3))
-
-    for context in range(1,4):
-        if context==1:    # context A
-            minNumerosity = 1
-            maxNumerosity = 15
-        elif context==2:  # context B
-            minNumerosity = 1
-            maxNumerosity = 10
-        else:             # context C
-            minNumerosity = 5
-            maxNumerosity = 15
-
-        # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
-        for sample in range((context-1)*int(N/3),(context)*int(N/3)):
-            judgementValue = random.randint(minNumerosity,maxNumerosity)
-            refValue = random.randint(minNumerosity,maxNumerosity)
-            while refValue==judgementValue:    # make sure we dont do inputA==inputB
-                refValue = random.randint(minNumerosity,maxNumerosity)
-
-            input2 = turnOneHot(judgementValue, totalMaxNumerosity)
-            input1 = turnOneHot(refValue, totalMaxNumerosity)
-            contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
-
-            # determine the correct rel magnitude judgement
-            if judgementValue > refValue:
-                target[sample] = 1
-            else:
-                target[sample] = 0
-
-            judgementValues[sample] = np.squeeze(input2)
-            refValues[sample] = np.squeeze(input1)
-            contexts[sample] = np.squeeze(contextinput)
-            input[sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
-
-    # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
-    input, refValues, judgementValues, target, contexts = shuffle(input, refValues, judgementValues, target, contexts, random_state=0)
-
     trainindices = np.asarray([i for i in range(Ntrain)])
-    testindices = np.asarray([i for i in range(Ntrain,N)])
+    testindices = np.asarray([i for i in range(Ntrain,totalN)])
+    Ncontexts = 3
 
-    trainset = { 'refValue':refValues[0:Ntrain], 'judgementValue':judgementValues[0:Ntrain], 'input':input[0:Ntrain], 'label':target[0:Ntrain], 'index':trainindices, 'context':contexts[0:Ntrain] }
-    testset = { 'refValue':refValues[Ntrain:], 'judgementValue':judgementValues[Ntrain:], 'input':input[Ntrain:], 'label':target[Ntrain:], 'index':testindices, 'context':contexts[Ntrain:] }
+    for phase in ['train','test']:   # this method should balance context instances in train and test phases
+        if phase == 'train':
+            N = Ntrain
+        else:
+            N = totalN - Ntrain
+
+        refValues = np.empty((N,totalMaxNumerosity))
+        judgementValues = np.empty((N,totalMaxNumerosity))
+        input = np.empty((N,totalMaxNumerosity*2+Ncontexts))
+        target = np.empty((N,1))
+        contexts = np.empty((N,Ncontexts))
+        contextdigits = np.empty((N,1))
+
+        # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
+
+
+        for context in range(1,Ncontexts+1):  # ***HRS this needs to become something that we randomly permute in the context order
+            if context==1:    # context A
+                minNumerosity = 1
+                maxNumerosity = 15
+            elif context==2:  # context B
+                minNumerosity = 1
+                maxNumerosity = 10
+            else:             # context C
+                minNumerosity = 5
+                maxNumerosity = 15
+
+            # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
+            judgementValue = None              # reset the sequentialAB structure for each new context
+            for sample in range((context-1)*int(N/3),(context)*int(N/3)):
+                if sequentialABTraining:
+                    if judgementValue == None: # the first trial in a given context
+                        refValue = random.randint(minNumerosity,maxNumerosity)
+                    else:
+                        refValue = copy.deepcopy(judgementValue)  # make sure its a copy not a reference to same piece of memory
+                else:
+                    refValue = random.randint(minNumerosity,maxNumerosity)
+
+                judgementValue = random.randint(minNumerosity,maxNumerosity)
+                while refValue==judgementValue:    # make sure we dont do inputA==inputB
+                    judgementValue = random.randint(minNumerosity,maxNumerosity)
+
+                input2 = turnOneHot(judgementValue, totalMaxNumerosity)
+                input1 = turnOneHot(refValue, totalMaxNumerosity)
+                contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
+
+                # determine the correct rel magnitude judgement
+                if judgementValue > refValue:
+                    target[sample] = 1
+                else:
+                    target[sample] = 0
+
+                contextdigits[sample] = context
+                judgementValues[sample] = np.squeeze(input2)
+                refValues[sample] = np.squeeze(input1)
+                contexts[sample] = np.squeeze(contextinput)
+                input[sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
+
+
+        if phase=='train':
+            # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
+            if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
+                input, refValues, judgementValues, target, contexts, contextdigits, trainindices = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, random_state=0)
+            trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits }
+        else:
+            # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
+            if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
+                input, refValues, judgementValues, target, contexts, contextdigits, testindices = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, random_state=0)
+            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits }
 
     # save the dataset so  we can use it again
     dat = {"trainset":trainset, "testset":testset}
@@ -486,11 +587,23 @@ def main():
     args, device, multiparams = defineHyperparams()
 
     # a dataset for us to work with
-    createNewDataset = False
+    createNewDataset = True
     fileloc = 'datasets/'
-    datasetname = 'relmag_3contexts_dataset'
+    blockedTraining = True           # this variable determines whether to block the training by context
+    sequentialABTraining = True      # this variable determines whether the is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
+    if not blockedTraining:
+        sequentialABTraining = False   # we cant have sequential AB training structure if contexts are intermingled
+
+    if blockedTraining:
+        if sequentialABTraining:
+            datasetname = 'relmag_3contexts_blockedsequential_dataset'
+        else:
+            datasetname = 'relmag_3contexts_blockedonly_dataset'
+    else:
+        datasetname = 'relmag_3contexts_intermingledcontexts_dataset'
+
     if createNewDataset:
-        trainset, testset = createSeparateInputData(N, fileloc, datasetname)
+        trainset, testset = createSeparateInputData(N, fileloc, datasetname, blockedTraining, sequentialABTraining)
     else:
         trainset, testset, _, _ = loadInputData(fileloc, datasetname)
 
@@ -509,8 +622,8 @@ def main():
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
         # Define our dataloaders
-        trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)
-        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=True)
+        trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False)
+        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
         # Log the model on TensorBoard and label it with the date/time and some other naming string
         now = datetime.now()
@@ -546,22 +659,27 @@ def main():
     writer.close()
 
     # save the trained weights so we can easily look at them
-    torch.save(model, 'trained_model.pth')
-
-
-# to run from the command line
-if __name__ == '__main__':
-    main()
+    #torch.save(model, 'trained_model_sequentialcontexts_ABtraining.pth')
 
 
 #--------------------------------------------------#
 
+# Some interactive mode plotting code...
+
 # Now lets take a look at our weights and the responses to the inputs in the training set we trained on
-trained_model = torch.load('trained_model.pth')
+blockedTraining = True
+sequentialABTraining = True
+
+
+if blockedTraining:
+    trained_model = torch.load('trained_model_sequentialcontexts.pth')
+    datasetname = 'relmag_3contexts_sequential_dataset'
+else:
+    trained_model = torch.load('trained_model_intermingledcontexts.pth')
+    datasetname = 'relmag_3contexts_dataset'
 
 # lets load the dataset we used for training the model
 fileloc = 'datasets/'
-datasetname = 'relmag_3contexts_dataset'
 trainset, testset, np_trainset, np_testset = loadInputData(fileloc, datasetname)
 loadActivations = True
 
@@ -576,50 +694,20 @@ MDS_activations = embedding.fit_transform(activations)
 saveFig = True
 labelNumerosity = True
 contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, saveFig)
+# plot the MDS with number labels
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
 
+# plot the MDS with output labels (true/false labels)
 labelNumerosity = False
-plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, saveFig)
+plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
 
-
-
-# Plot the hidden activations for the 3 MDS dimensions
-fig,ax = plt.subplots(1,3, figsize=(14,5))
-colours = get_cmap(10, 'magma')
-diffcolours = get_cmap(20, 'magma')
-for j in range(3):  # 3 MDS dimensions
-
-    if j==0:
-        dimA = 0
-        dimB = 1
-        ax[j].set_xlabel('dim 1')
-        ax[j].set_ylabel('dim 2')
-    elif j==1:
-        dimA = 0
-        dimB = 2
-        ax[j].set_xlabel('dim 1')
-        ax[j].set_ylabel('dim 3')
-    elif j==2:
-        dimA = 1
-        dimB = 2
-        ax[j].set_xlabel('dim 2')
-        ax[j].set_ylabel('dim 3')
-
-    for i in range((MDS_activations.shape[0])):
-        # colour by context
-        ax[j].set_title('context')
-        ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
-
-    ax[j].axis('equal')
-    ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
-
-plt.suptitle('3-MDS of hidden activations: relMagNet')
-if saveFig:
-    plt.savefig('figures/3MDS_60hiddenactivations_relMagnet_contexts.pdf',bbox_inches='tight')
-
-
-
-
-
+# plot the MDS with context labels
+plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, saveFig)
 
 """
+
+#--------------------------------------------------#
+
+# to run from the command line
+if __name__ == '__main__':
+    main()
