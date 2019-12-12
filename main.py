@@ -655,6 +655,75 @@ def loadInputData(fileloc,datasetname):
 
 #--------------------------------------------------#
 
+def averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_judgeValues, labels_contexts, MDSlabels):
+    """This function will average the hidden unit activations over one of the two numbers involved in the representation:
+    either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
+     which are averaged over the previously presented number (input B).
+     - dimKeep = 'reference' or 'judgement'
+    """
+
+    # prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
+    uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
+    flat_activations = np.zeros((3,len(uniqueValues),activations.shape[1]))
+    flat_values = np.zeros((3,len(uniqueValues),1))
+    flat_outcomes = np.empty((3,len(uniqueValues),1))
+    flat_contexts = np.empty((3,len(uniqueValues),1))
+    divisor = np.zeros((3,len(uniqueValues)))
+
+    # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
+    if dimKeep == 'reference':
+        flattenValues = labels_refValues
+    else:
+        flattenValues = labels_judgeValues
+
+    # pick out all the activations that meet this condition for each context and then average over them
+    for context in range(3):
+        for value in uniqueValues:
+            for i in range(labels_judgeValues.shape[0]):
+                if labels_contexts[i] == context+1:  # remember to preserve the context structure
+                    if flattenValues[i] == value:
+                        flat_activations[context, value-1,:] += activations[i]
+                        flat_contexts[context,value-1] = context
+                        flat_values[context,value-1] = value
+                        flat_outcomes[context,value-1] = MDSlabels[i]
+                        divisor[context,value-1] +=1
+
+            # take the mean i.e. normalise by the number of instances that met that condition
+            if int(divisor[context,value-1]) == 0:
+                flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
+            else:
+                flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
+
+    # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
+    flat_activations = flattenFirstDim(flat_activations)
+    flat_contexts = flattenFirstDim(flat_contexts)
+    flat_values = flattenFirstDim(flat_values)
+    flat_outcomes = flattenFirstDim(flat_outcomes)
+    singlelabel_activations = []
+    singlelabel_labels_refValues = []
+    singlelabel_labels_judgeValues = []
+    singlelabel_labels_contexts = []
+    singlelabel_MDSlabels = []
+    for i in range(flat_activations.shape[0]):
+        checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
+        if (checknan).all():
+            pass
+        else:
+            singlelabel_activations.append(flat_activations[i])
+            singlelabel_labels_contexts.append(flat_contexts[i])
+            singlelabel_MDSlabels.append(flat_outcomes[i])
+
+            if dimKeep == 'reference':
+                singlelabel_labels_refValues.append(flat_values)
+                singlelabel_labels_judgeValues.append(0)
+            else:
+                singlelabel_labels_refValues.append(0)
+                singlelabel_labels_judgeValues.append(flat_values)
+
+    return singlelabel_activations, singlelabel_labels_contexts, singlelabel_MDSlabels, singlelabel_labels_refValues, singlelabel_labels_judgeValues
+
+#--------------------------------------------------#
+
 def main():
 
     # define a network which can judge whether inputs of 1-N are greater than X
@@ -767,73 +836,8 @@ loadActivations = True
 # pass each input through the model and determine the hidden unit activations ***HRS remember that this looks for the unique inputs in 'input' so when context stops being an actual input it will lose this unless careful
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = getActivations(np_trainset,trained_model)
 
-print(np.max(activations))
-print(np.min(activations))
-
-# prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
-flattenIrrelevant = True
-dimKeep = 'reference'
-uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
-flat_activations = np.zeros((3,len(uniqueValues),activations.shape[1]))
-flat_values = np.zeros((3,len(uniqueValues),1))
-flat_outcomes = np.empty((3,len(uniqueValues),1))
-flat_contexts = np.empty((3,len(uniqueValues),1))
-
-divisor = np.zeros((3,len(uniqueValues)))
-
-# which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
-if dimKeep == 'reference':
-    flattenValues = labels_refValues
-else:
-    flattenValues = labels_judgeValues
-
-# pick out all the activations that meet this condition for each context and then average over them
-if flattenIrrelevant:
-    for context in range(3):
-        for value in uniqueValues:
-            for i in range(labels_judgeValues.shape[0]):
-                if labels_contexts[i] == context+1:  # remember to preserve the context structure
-                    if flattenValues[i] == value:
-                        flat_activations[context, value-1,:] += activations[i]
-                        flat_contexts[context,value-1] = context
-                        flat_values[context,value-1] = value
-                        flat_outcomes[context,value-1] = MDSlabels[i]
-                        divisor[context,value-1] +=1
-
-            # take the mean i.e. normalise by the number of instances that met that condition
-            if int(divisor[context,value-1]) == 0:
-                flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
-            else:
-                flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
-
-# now cast out all the null instances e.g 1-5, 10-15 in certain contexts
-flat_activations = flattenFirstDim(flat_activations)
-flat_contexts = flattenFirstDim(flat_contexts)
-flat_values = flattenFirstDim(flat_values)
-flat_outcomes = flattenFirstDim(flat_outcomes)
-activations = []
-labels_refValues = []
-labels_judgeValues = []
-labels_contexts = []
-MDSlabels = []
-for i in range(flat_activations.shape[0]):
-    checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
-    if (checknan).all():
-        pass
-    else:
-        print(flat_activations[i])
-        activations.append(flat_activations[i])
-        labels_contexts.append(flat_contexts[i])
-        MDSlabels.append(flat_outcomes[i])
-
-        if dimKeep == 'reference':
-            labels_refValues.append(flat_values)
-            labels_judgeValues.append(0)
-        else:
-            labels_refValues.append(0)
-            labels_judgeValues.append(flat_values)
-
-#---
+dimKeep = 'judgement'  # this is what Fabrice's plots show (representation of the currently presented number)
+sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = averageReferenceNumerosity(dimKeep, activations, labels_judgeValues, labels_judgeValues, labels_contexts, MDSlabels):
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
@@ -843,12 +847,13 @@ MDS_activations = embedding.fit_transform(activations)
 saveFig = True
 labelNumerosity = True
 contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
+
+# plot the MDS with number labels but flatten across the other factor
+plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+
 # plot the MDS with number labels
 plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
 
-# plot the MDS with number labels but flatten across the other factor
-
-plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
 
 
 # plot the MDS with output labels (true/false labels)
