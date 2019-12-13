@@ -9,7 +9,7 @@ Notes: N/A
 Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
-
+import define_dataset as dset
 import matplotlib.pyplot as plt
 import numpy as np
 import copy
@@ -118,6 +118,62 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
     return test_loss, accuracy
 
+
+# ---------------------------------------------------------------------------- #
+
+def getActivations(trainset,trained_model):
+    """ This will determine the hidden unit activations for each *unique* input in the training set
+     there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads."""
+
+    # determine the unique inputs for the training set (there are repeats)
+    unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
+    unique_labels = trainset["label"][uniqueind]
+    unique_context = trainset["context"][uniqueind]
+    unique_refValue = trainset["refValue"][uniqueind]
+    unique_judgementValue = trainset["judgementValue"][uniqueind]
+
+    # preallocate some space...
+    labels_refValues = np.empty((len(uniqueind),1))
+    labels_judgeValues = np.empty((len(uniqueind),1))
+    contexts = np.empty((len(uniqueind),1))
+    MDSlabels = np.empty((len(uniqueind),1))
+    hdim = len(list(trained_model.fc1.parameters())[0])
+    activations = np.empty(( len(uniqueind), hdim ))
+
+    #  pass each input through the netwrk and see what happens to the hidden layer activations
+    for sample in range(len(uniqueind)):
+        sample_input = unique_inputs[sample]
+        sample_label = unique_labels[sample]
+        labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
+        labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
+        MDSlabels[sample] = sample_label
+        contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
+
+        # get the activations for that input
+        h1activations,_,_ = trained_model.get_activations(batchToTorch(torch.from_numpy(sample_input)))
+        activations[sample] = h1activations.detach()
+
+    # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
+
+    # sort all variables first by context order
+    context_ind = np.argsort(contexts, axis=0)
+    contexts = np.take_along_axis(contexts, context_ind, axis=0)
+    activations = np.take_along_axis(activations, context_ind, axis=0)
+    MDSlabels = np.take_along_axis(MDSlabels, context_ind, axis=0)
+    labels_refValues = np.take_along_axis(labels_refValues, context_ind, axis=0)
+    labels_judgeValues = np.take_along_axis(labels_judgeValues, context_ind, axis=0)
+
+    # within each context, sort according to numerosity of the judgement value
+    for context in range(1,4):
+        ind = [i for i in range(contexts.shape[0]) if contexts[i]==context]
+        numerosity_ind = np.argsort(labels_judgeValues[ind], axis=0) + ind[0]
+        labels_judgeValues[ind] = np.take_along_axis(labels_judgeValues, numerosity_ind, axis=0)
+        labels_refValues[ind] = np.take_along_axis(labels_refValues, numerosity_ind, axis=0)
+        contexts[ind] = np.take_along_axis(contexts, numerosity_ind, axis=0)
+        MDSlabels[ind] = np.take_along_axis(MDSlabels, numerosity_ind, axis=0)
+        activations[ind] = np.take_along_axis(activations, numerosity_ind, axis=0)
+
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts
 
 # ---------------------------------------------------------------------------- #
 

@@ -108,7 +108,7 @@ class createDataset(Dataset):
 # ---------------------------------------------------------------------------- #
 
 def loadInputData(fileloc,datasetname):
-    print('Loading dataset: ' + datasetname + '.npy ...')
+    print('Loading dataset: ' + datasetname + '.npy')
     # load an existing dataset
     data = np.load(fileloc+datasetname+'.npy', allow_pickle=True)
     numpy_trainset = data.item().get("trainset")
