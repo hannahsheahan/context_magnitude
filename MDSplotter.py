@@ -14,8 +14,12 @@ import copy
 import sys
 import random
 
+from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
+
+# generic plotting settings
+contextcolours = ['gold', 'dodgerblue', 'orangered']   # 1-15, 1-10, 5-15 like fabrices colours
 
 # ---------------------------------------------------------------------------- #
 
@@ -48,7 +52,25 @@ def autoSaveFigure(basetitle, blockedTraining, sequentialABTraining, labelNumero
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def activationRDMs(activations, sl_activations):
+    """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
+    Context order:  1-15, 1-10, 5-15
+    """
+    fig, ax = plt.subplots(1,2)
+    D = pairwise_distances(activations)  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
+    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
+    fig.colorbar(im, ax=ax[0])
+    ax[0].set_title('All activations')
+
+    # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
+    D = pairwise_distances(sl_activations)
+    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
+    fig.colorbar(im, ax=ax[1])
+    ax[1].set_title('Averaged activations')
+
+# ---------------------------------------------------------------------------- #
+
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     # Plot the hidden activations for the 3 MDS dimensions
@@ -112,7 +134,7 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
     fig,ax = plt.subplots(1,3, figsize=(14,5))
@@ -148,7 +170,7 @@ def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeV
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     """
     fig,ax = plt.subplots(1,3, figsize=(14,5))

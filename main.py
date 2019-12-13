@@ -9,7 +9,7 @@
 """
 # ---------------------------------------------------------------------------- #
  # my project-specific namespaces
-import mag_network as mnet
+import magnitude_network as mnet
 import define_dataset as dset
 import MDSplotter as MDSplt
 
@@ -20,7 +20,6 @@ import random
 import copy
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
-from sklearn.metrics import pairwise_distances
 from importlib import reload
 
 # network stuff
@@ -45,11 +44,12 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     """
     # prior to performing the MDS we want to know whether to flatten over a particular value i.e. if plotting for reference value, flatten over the judgement value and vice versa
     uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
-    flat_activations = np.zeros((3,len(uniqueValues),activations.shape[1]))
-    flat_values = np.zeros((3,len(uniqueValues),1))
-    flat_outcomes = np.empty((3,len(uniqueValues),1))
-    flat_contexts = np.empty((3,len(uniqueValues),1))
-    divisor = np.zeros((3,len(uniqueValues)))
+    Ncontexts = 3
+    flat_activations = np.zeros((Ncontexts,len(uniqueValues),activations.shape[1]))
+    flat_values = np.zeros((Ncontexts,len(uniqueValues),1))
+    flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
+    flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
+    divisor = np.zeros((Ncontexts,len(uniqueValues)))
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     if dimKeep == 'reference':
@@ -58,7 +58,7 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
         flattenValues = labels_judgeValues
 
     # pick out all the activations that meet this condition for each context and then average over them
-    for context in range(3):
+    for context in range(Ncontexts):
         for value in uniqueValues:
             for i in range(labels_judgeValues.shape[0]):
                 if labels_contexts[i] == context+1:  # remember to preserve the context structure
@@ -126,16 +126,16 @@ def main():
     createNewDataset = True
     fileloc = 'datasets/'
 
-    blockedTraining = True            # whether to block the training by context
-    sequentialABTraining = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    if not blockedTraining:
-        sequentialABTraining = False   # we cant have sequential AB training structure if contexts are intermingled
+    blockTrain = True            # whether to block the training by context
+    seqTrain = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
+    if not blockTrain:
+        seqTrain = False   # we cant have sequential AB training structure if contexts are intermingled
 
-    datasetname, trained_modelname = mnet.setDatasetName(blockedTraining, sequentialABTraining)
+    datasetname, trained_modelname = mnet.setDatasetName(blockTrain, seqTrain)
 
     if createNewDataset:
         N = 15                         # total max numerosity for the greatest range we deal with
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockedTraining, sequentialABTraining)
+        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
@@ -150,60 +150,48 @@ def main():
 # Some interactive mode plotting code...
 reload(MDSplt)
 reload(mnet)
-# Now lets take a look at our weights and the responses to the inputs in the training set we trained on
-blockedTraining = True
-sequentialABTraining = True
-datasetname, trained_model = mnet.getDatasetName(blockedTraining, sequentialABTraining)
 
-# lets load the dataset we used for training the model
+# load the trained model and the datasets it was trained/tested on
+blockTrain = True
+seqTrain = True
+datasetname, trained_model = mnet.getDatasetName(blockTrain, seqTrain)
 fileloc = 'datasets/'
 trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
 
 # pass each input through the model and determine the hidden unit activations
 # ***HRS remember that this looks for the unique inputs in 'input' so when context stops being an actual input it will lose this unless careful
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset,trained_model)
-
-dimKeep = 'judgement'  # this is what Fabrice's plots show (representation of the currently presented number)
+dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
 sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels)
 
 # do MDS on the activations for the training set
 embedding = MDS(n_components=3)
 MDS_activations = embedding.fit_transform(activations)
-
 sl_embedding = MDS(n_components=3)
 MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+
 # plot the MDS of our hidden activations
 saveFig = True
 labelNumerosity = True
-contextcolours = ['gold','dodgerblue', 'orangered']  #1-15, 1-10, 5-15 like fabrices colours
 
 # they are both quite sparse activations
 plt.hist(activations)
-plt.hist(sl_activations)
 
 # Take a look at the activations RSA
-D = pairwise_distances(activations)  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
-plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
-plt.colorbar();
-
-# this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
-D = pairwise_distances(sl_activations)
-plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
-plt.colorbar();
-
+MDSplt.activationRDMs(activations, sl_activations)
 
 # plot the MDS with number labels but flatten across the other factor
-MDSplt.plot3MDSMean(MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+MDSplt.plot3MDSMean(MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
 # plot the MDS with number labels
-MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
 # plot the MDS with output labels (true/false labels)
 labelNumerosity = False
-MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
 # plot the MDS with context labels
-MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, contextcolours, labelNumerosity, blockedTraining, sequentialABTraining, saveFig)
+MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
 """
 
