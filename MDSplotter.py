@@ -7,7 +7,7 @@ Notes: N/A
 Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
-
+import define_dataset as dset
 import matplotlib.pyplot as plt
 import numpy as np
 import copy
@@ -172,8 +172,9 @@ def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeV
 
 def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
+    Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
     """
-    fig,ax = plt.subplots(1,3, figsize=(14,5))
+    fig,ax = plt.subplots(1,3, figsize=(18,5))
     colours = get_cmap(10, 'magma')
     diffcolours = get_cmap(20, 'magma')
     for j in range(3):  # 3 MDS dimensions
@@ -194,13 +195,99 @@ def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValue
             ax[j].set_ylabel('dim 3')
 
         ax[j].set_title('context')
+
+        # perhaps draw a coloured line between adjacent numbers
+        contextA = range(15)
+        contextB = range(15,25)
+        contextC = range(25, 35)
+        ax[j].plot(MDS_activations[contextA, dimA], MDS_activations[contextA, dimB], color=contextcolours[2])
+        ax[j].plot(MDS_activations[contextB, dimA], MDS_activations[contextB, dimB], color=contextcolours[0])
+        ax[j].plot(MDS_activations[contextC, dimA], MDS_activations[contextC, dimB], color=contextcolours[1])
+
         for i in range((MDS_activations.shape[0])):
             # colour by context
-            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
+            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1], s=80)
+
+            # label numerosity in white inside the marker
+            ax[j].text(MDS_activations[i, dimA], MDS_activations[i, dimB], str(int(labels_judgeValues[i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
+
 
         ax[j].axis('equal')
-        ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
+        ax[j].set(xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
 
     autoSaveFigure('figures/3MDS60_meanJudgement_', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
+
+# ---------------------------------------------------------------------------- #
+
+def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels):
+    """This function will average the hidden unit activations over one of the two numbers involved in the representation:
+    either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
+     which are averaged over the previously presented number (input B).
+    Prior to performing the MDS we want to know whether to flatten over a particular value
+    i.e. if plotting for reference value, flatten over the judgement value and vice versa.
+     - dimKeep = 'reference' or 'judgement'
+    """
+
+    # initializing
+    uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
+    Ncontexts = 3
+    flat_activations = np.zeros((Ncontexts,len(uniqueValues),activations.shape[1]))
+    flat_values = np.zeros((Ncontexts,len(uniqueValues),1))
+    flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
+    flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
+    divisor = np.zeros((Ncontexts,len(uniqueValues)))
+
+    # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
+    if dimKeep == 'reference':
+        flattenValues = labels_refValues
+    else:
+        flattenValues = labels_judgeValues
+
+    # pick out all the activations that meet this condition for each context and then average over them
+    for context in range(Ncontexts):
+        for value in uniqueValues:
+            for i in range(labels_judgeValues.shape[0]):
+                if labels_contexts[i] == context+1:  # remember to preserve the context structure
+                    if flattenValues[i] == value:
+                        flat_activations[context, value-1,:] += activations[i]
+                        flat_contexts[context,value-1] = context
+                        flat_values[context,value-1] = value
+                        flat_outcomes[context,value-1] = MDSlabels[i]
+                        divisor[context,value-1] +=1
+
+            # take the mean i.e. normalise by the number of instances that met that condition
+            if int(divisor[context,value-1]) == 0:
+                flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
+            else:
+                flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
+
+    # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
+    flat_activations, flat_contexts, flat_values, flat_outcomes = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes]]
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels = [[] for i in range(5)]
+
+    for i in range(flat_activations.shape[0]):
+        checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
+        if (checknan).all():
+            pass
+        else:
+            sl_activations.append(flat_activations[i])
+            sl_contexts.append(flat_contexts[i])
+            sl_MDSlabels.append(flat_outcomes[i])
+
+            if dimKeep == 'reference':
+                sl_refValues.append(flat_values[i])
+                sl_judgeValues.append(0)
+            else:
+                sl_refValues.append(0)
+                sl_judgeValues.append(flat_values[i])
+
+    # finally, reshape the outputs so that they match our inputs nicely
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels = [np.asarray(i) for i in [sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels]]
+    if dimKeep == 'reference':
+        sl_judgeValues = np.expand_dims(sl_judgeValues, axis=1)
+    else:
+        sl_refValues = np.expand_dims(sl_refValues, axis=1)
+
+    return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues
 
 # ---------------------------------------------------------------------------- #
