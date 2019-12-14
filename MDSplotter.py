@@ -2,17 +2,19 @@
 This is a selection of functions for plotting MDS projections of relative magnitude-trained networks.
 
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
-Date: 13/12/2019
+Date: 14/12/2019
 Notes: N/A
 Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
 import define_dataset as dset
-import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
 import numpy as np
 import copy
 import sys
 import random
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
@@ -52,21 +54,40 @@ def autoSaveFigure(basetitle, blockedTraining, sequentialABTraining, labelNumero
 
 # ---------------------------------------------------------------------------- #
 
-def activationRDMs(activations, sl_activations):
+def activationRDMs(activations, sl_activations, blockTrain, seqTrain, saveFig):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-15, 1-10, 5-15
     """
-    fig, ax = plt.subplots(1,2)
+    fig, ax = plt.subplots(1,2, figsize=(10,3))
     D = pairwise_distances(activations)  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
     im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
-    fig.colorbar(im, ax=ax[0])
+
+    divider = make_axes_locatable(ax[0])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.set_label('disimilarity')
     ax[0].set_title('All activations')
+    ax[0].set_xticks([0,210,300])
+    ax[0].set_xticklabels(['1-15', '1-10', '5-15'])
+    ax[0].set_yticks([0,210,300])
+    ax[0].set_yticklabels(['1-15', '1-10', '5-15'])
 
     # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
     D = pairwise_distances(sl_activations)
     im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
-    fig.colorbar(im, ax=ax[1])
+
+    divider = make_axes_locatable(ax[1])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.set_label('disimilarity')
     ax[1].set_title('Averaged activations')
+    ax[1].set_xticks([0,15,25])
+    ax[1].set_xticklabels(['1-15', '1-10', '5-15'])
+    ax[1].set_yticks([0,15,25])
+    ax[1].set_yticklabels(['1-15', '1-10', '5-15'])
+
+
+    autoSaveFigure('figures/RDM_', blockTrain, seqTrain, False, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -213,7 +234,7 @@ def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValue
 
 
         ax[j].axis('equal')
-        ax[j].set(xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
+        ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
 
     autoSaveFigure('figures/3MDS60_meanJudgement_', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
 
@@ -289,5 +310,46 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
         sl_refValues = np.expand_dims(sl_refValues, axis=1)
 
     return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues
+
+# ---------------------------------------------------------------------------- #
+
+def animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig):
+    """ This function will plot the numerosity labeled, context-marked MDS projections
+     of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
+     from different angles and optionally save it as a mp4 file.
+     """
+    fig = plt.figure()
+    ax = mplot3d.Axes3D(fig)
+
+    # which MDS points correspond to which contexts
+    contextA = range(15)
+    contextB = range(15,25)
+    contextC = range(25, 35)
+
+    def init():
+        points = [contextA, contextB, contextC]
+        for i in range(3):
+            ax.scatter(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=colours[i])
+            ax.plot(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=colours[i])
+            for j in range(len(points[i])):
+                label = str(int(sl_judgeValues[points[i][j]]))
+                ax.text(MDS_slactivations[points[i][j], 0], MDS_slactivations[points[i][j], 1], MDS_slactivations[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
+        ax.set_xlabel('MDS dim 1')
+        ax.set_ylabel('MDS dim 2')
+        ax.set_zlabel('MDS dim 3')
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=10., azim=i)
+        return fig,
+
+    # Animate.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=360, interval=20, blit=True)
+
+    # save the animation as an mp4.
+    if saveFig:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        anim.save('MDS_3Danimation.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #

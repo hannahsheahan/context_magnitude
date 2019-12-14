@@ -4,7 +4,8 @@
 
  Author: Hannah Sheahan, sheahan.hannah@gmail.com
  Date: 04/12/2019
- Notes: N/A
+ Notes:
+ - requires ffmpeg for 3D animation generation
  Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
@@ -21,6 +22,8 @@ import copy
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
 from importlib import reload
+from mpl_toolkits import mplot3d
+from matplotlib import animation
 
 # network stuff
 import torch
@@ -34,9 +37,13 @@ from itertools import product
 from datetime import datetime
 import argparse
 
+#from plotly import offline as py
+#import plotly.tools as tls
+#py.init_notebook_mode()
+
 # ---------------------------------------------------------------------------- #
 
-def main():
+def trainAndSaveANetwork():
 
     # Define the training hyperparameters for our network (passed as args when calling main.py from command line)
     args, device, multiparams = mnet.defineHyperparams()
@@ -44,7 +51,6 @@ def main():
     # a dataset for us to work with
     createNewDataset = True
     fileloc = 'datasets/'
-
     blockTrain = True            # whether to block the training by context
     seqTrain = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
     if not blockTrain:
@@ -64,11 +70,11 @@ def main():
     # save the trained weights so we can easily look at them
     torch.save(model, trained_modelname)
 
+
 # ---------------------------------------------------------------------------- #
 
 # Some interactive mode plotting code...
-reload(MDSplt)
-#reload(mnet)
+#reload(MDSplt)
 
 # load the trained model and the datasets it was trained/tested on
 blockTrain = True
@@ -93,14 +99,13 @@ MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 saveFig = True
 labelNumerosity = True
 
-# they are both quite sparse activations
-n = plt.hist(activations)
+# they are both quite sparse activations? (but we dont really care that much)
+#n = plt.hist(activations)
 
 # Take a look at the activations RSA
-MDSplt.activationRDMs(activations, sl_activations)
+MDSplt.activationRDMs(activations, sl_activations, blockTrain, seqTrain, saveFig)
 
 # plot the MDS with number labels but flatten across the other factor
-reload(MDSplt)
 MDSplt.plot3MDSMean(MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
 # plot the MDS with number labels
@@ -113,9 +118,10 @@ MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues
 # plot the MDS with context labels
 MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
 
-"""
+# plot a 3D version of the MDS constructions
+MDSplt.animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-if __name__ == '__main__':
-    main()
+#if __name__ == '__main__':
+#    main()
