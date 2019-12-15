@@ -46,7 +46,7 @@ def trainAndSaveANetwork():
     N = 15                         # total max numerosity for the greatest range we deal with
 
     # a dataset for us to work with
-    networkStyle = 'recurrent'  # 'MLP'
+    networkStyle = 'recurrent' #'recurrent'  # 'MLP'
     createNewDataset = False
     fileloc = 'datasets/'
     blockTrain = True            # whether to block the training by context

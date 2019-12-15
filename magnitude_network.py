@@ -84,7 +84,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
         # evaluate performance
         train_loss += loss.item()
-
+        output = np.squeeze(output, axis=1)
         pred = np.zeros((output.size()))
         for i in range((output.size()[0])):
             if output[i]>0.5:
@@ -136,6 +136,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
             test_loss += criterion(output, labels).item()
 
+            output = np.squeeze(output, axis=1)
             pred = np.zeros((output.size()))
             for i in range((output.size()[0])):
                 if output[i]>0.5:
