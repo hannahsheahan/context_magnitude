@@ -55,7 +55,7 @@ def trainAndSaveANetwork():
     if not blockTrain:
         seqTrain = False   # we cant have sequential AB training structure if contexts are intermingled
 
-    datasetname, trained_modelname = mnet.setDatasetName(blockTrain, seqTrain, labelContext)
+    datasetname, trained_modelname = mnet.setDatasetName(networkStyle, blockTrain, seqTrain, labelContext)
 
     if createNewDataset:
         trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
@@ -64,13 +64,14 @@ def trainAndSaveANetwork():
 
     # define and train a neural network model, log performance and output trained model
     if networkStyle == 'recurrent':
+        args.epochs = args.epochs * 2  # the recurrent network needs more training time
         model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N)
     else:
         model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
 
     # save the trained weights so we can easily look at them
     print(trained_modelname)
-    #torch.save(model, trained_modelname)
+    torch.save(model, trained_modelname)
 
 
 # ---------------------------------------------------------------------------- #

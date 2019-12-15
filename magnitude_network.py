@@ -428,31 +428,31 @@ def getDatasetName(blockedTraining, sequentialABTraining, labelContext):
 
 # ---------------------------------------------------------------------------- #
 
-def setDatasetName(blockedTraining, sequentialABTraining, labelContext):
+def setDatasetName(networkStyle, blockedTraining, sequentialABTraining, labelContext):
     """Make sure we are always naming appropriately for the input training
     conditions and model name."""
     if not labelContext:
         if blockedTraining:
             if sequentialABTraining:
                 datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
-                trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_blockedsequential.pth'
+                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedsequential.pth'
             else:
                 datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
-                trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_blockedonly.pth'
+                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedonly.pth'
         else:
             datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
-            trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth'
+            trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth'
     else:
         if blockedTraining:
             if sequentialABTraining:
                 datasetname = 'dataset_3contexts_blockedsequential'
-                trained_modelname = 'models/trainedmodel_3contexts_blockedsequential.pth'
+                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_blockedsequential.pth'
             else:
                 datasetname = 'dataset_3contexts_blockedonly'
-                trained_modelname = 'models/trainedmodel_3contexts_blockedonly.pth'
+                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_blockedonly.pth'
         else:
             datasetname = 'dataset_3contexts_intermingledcontexts'
-            trained_modelname = 'models/trainedmodel_3contexts_intermingledcontexts.pth'
+            trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_intermingledcontexts.pth'
 
     return datasetname, trained_modelname
 
