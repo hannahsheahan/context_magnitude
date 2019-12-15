@@ -37,10 +37,6 @@ from itertools import product
 from datetime import datetime
 import argparse
 
-#from plotly import offline as py
-#import plotly.tools as tls
-#py.init_notebook_mode()
-
 # ---------------------------------------------------------------------------- #
 
 def trainAndSaveANetwork():
@@ -53,14 +49,15 @@ def trainAndSaveANetwork():
     fileloc = 'datasets/'
     blockTrain = True            # whether to block the training by context
     seqTrain = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
+    labelContext = False
     if not blockTrain:
         seqTrain = False   # we cant have sequential AB training structure if contexts are intermingled
 
-    datasetname, trained_modelname = mnet.setDatasetName(blockTrain, seqTrain)
+    datasetname, trained_modelname = mnet.setDatasetName(blockTrain, seqTrain, labelContext)
 
     if createNewDataset:
         N = 15                         # total max numerosity for the greatest range we deal with
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain)
+        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
@@ -79,20 +76,21 @@ def trainAndSaveANetwork():
 # load the trained model and the datasets it was trained/tested on
 blockTrain = True
 seqTrain = True
-datasetname, trained_model = mnet.getDatasetName(blockTrain, seqTrain)
+labelContext = True
+datasetname, trained_model = mnet.getDatasetName(blockTrain, seqTrain, labelContext)
 fileloc = 'datasets/'
 trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
 
 # pass each input through the model and determine the hidden unit activations
-# ***HRS remember that this looks for the unique inputs in 'input' so when context stops being an actual input it will lose this unless careful
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset,trained_model)
 dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels)
+sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
 # do MDS on the activations for the training set
-embedding = MDS(n_components=3)
+randseed = 2 # so that we get the same MDS each time
+embedding = MDS(n_components=3, random_state=randseed)
 MDS_activations = embedding.fit_transform(activations)
-sl_embedding = MDS(n_components=3)
+sl_embedding = MDS(n_components=3, random_state=randseed)
 MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 
 # plot the MDS of our hidden activations
@@ -103,25 +101,27 @@ labelNumerosity = True
 #n = plt.hist(activations)
 
 # Take a look at the activations RSA
-MDSplt.activationRDMs(activations, sl_activations, blockTrain, seqTrain, saveFig)
+MDSplt.activationRDMs(activations, sl_activations, blockTrain, seqTrain, labelContext, saveFig)
 
 # plot the MDS with number labels but flatten across the other factor
-MDSplt.plot3MDSMean(MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
+MDSplt.plot3MDSMean(MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
 
 # plot the MDS with number labels
-MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
+labelNumerosity = True
+MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
 
 # plot the MDS with output labels (true/false labels)
 labelNumerosity = False
-MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
+MDSplt.plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
 
 # plot the MDS with context labels
-MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, saveFig)
+MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
 
 # plot a 3D version of the MDS constructions
-MDSplt.animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig)
+MDSplt.animate3DMDS(MDS_slactivations, sl_judgeValues, blockTrain, seqTrain, labelContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
 #if __name__ == '__main__':
-#    main()
+    #main()
+#    trainAndSaveANetwork()

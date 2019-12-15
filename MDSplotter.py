@@ -15,6 +15,7 @@ import sys
 import random
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib import animation
 
 from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
@@ -32,29 +33,41 @@ def get_cmap(n, name='hsv'):
 
 # ---------------------------------------------------------------------------- #
 
-def autoSaveFigure(basetitle, blockedTraining, sequentialABTraining, labelNumerosity, saveFig):
+def autoSaveFigure(basetitle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, saveFig):
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
     # automatic save file title details
-    if blockedTraining:
+    if blockTrain:
         blockedtext = '_blocked'
     else:
         blockedtext = ''
 
-    if sequentialABTraining:
+    if seqTrain:
         seqtext = '_sequential'
     else:
         seqtext = ''
+
     if labelNumerosity:
         labeltext = '_numerosity'
     else:
-        labeltext = '_contexts'
+        labeltext = '_outcomes'
+
+    if labelContexts:
+        contexts = '_contexts'
+    else:
+        contexts = ''
+
+    if givenContext:
+        contextlabelledtext = '_contextlabelled'
+    else:
+        contextlabelledtext = '_nocontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+blockedtext+seqtext+labeltext+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+'.pdf',bbox_inches='tight')
+    return basetitle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts
 
 # ---------------------------------------------------------------------------- #
 
-def activationRDMs(activations, sl_activations, blockTrain, seqTrain, saveFig):
+def activationRDMs(activations, sl_activations, blockTrain, seqTrain, givenContext, saveFig):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-15, 1-10, 5-15
     """
@@ -86,18 +99,20 @@ def activationRDMs(activations, sl_activations, blockTrain, seqTrain, saveFig):
     ax[1].set_yticks([0,15,25])
     ax[1].set_yticklabels(['1-15', '1-10', '5-15'])
 
-
-    autoSaveFigure('figures/RDM_', blockTrain, seqTrain, False, saveFig)
+    n = autoSaveFigure('figures/RDM_', blockTrain, seqTrain, False, givenContext, False, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, givenContext, saveFig):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     # Plot the hidden activations for the 3 MDS dimensions
     fig,ax = plt.subplots(3,3, figsize=(14,15))
     colours = get_cmap(10, 'viridis')
     diffcolours = get_cmap(20, 'viridis')
+
+    if not givenContext:
+        labels_contexts = np.full_like(labels_contexts, 1)
 
     for k in range(3):
         for j in range(3):  # 3 MDS dimensions
@@ -119,7 +134,6 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
 
             for i in range((MDS_activations.shape[0])):
                 if labelNumerosity:
-
                     # colour by numerosity
                     if k==0:
                         ax[k,j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=diffcolours(int(10+labels_judgeValues[i]-labels_refValues[i])), edgecolors=contextcolours[int(labels_contexts[i])-1])
@@ -151,12 +165,15 @@ def plot3MDS(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, l
                     ax[k,j].set_title('judgement')
                 ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
-    autoSaveFigure('figures/3MDS60_', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
+    n = autoSaveFigure('figures/3MDS60_', blockTrain, seqTrain, labelNumerosity, givenContext, False, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, givenContext, saveFig):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
+
+    if not givenContext:
+        labels_contexts = np.full_like(labels_contexts, 1)
 
     fig,ax = plt.subplots(1,3, figsize=(14,5))
     colours = get_cmap(10, 'magma')
@@ -187,11 +204,11 @@ def plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_judgeV
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    autoSaveFigure('figures/3MDS60_contexts_', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
+    n = autoSaveFigure('figures/3MDS60_', blockTrain, seqTrain, labelNumerosity, givenContext, True, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockedTraining, sequentialABTraining, saveFig):
+def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, givenContext, saveFig):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
     """
@@ -221,13 +238,14 @@ def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValue
         contextA = range(15)
         contextB = range(15,25)
         contextC = range(25, 35)
-        ax[j].plot(MDS_activations[contextA, dimA], MDS_activations[contextA, dimB], color=contextcolours[2])
-        ax[j].plot(MDS_activations[contextB, dimA], MDS_activations[contextB, dimB], color=contextcolours[0])
-        ax[j].plot(MDS_activations[contextC, dimA], MDS_activations[contextC, dimB], color=contextcolours[1])
+        ax[j].plot(MDS_activations[contextA, dimA], MDS_activations[contextA, dimB], color=contextcolours[0])
+        if givenContext:
+            ax[j].plot(MDS_activations[contextB, dimA], MDS_activations[contextB, dimB], color=contextcolours[1])
+            ax[j].plot(MDS_activations[contextC, dimA], MDS_activations[contextC, dimB], color=contextcolours[2])
 
         for i in range((MDS_activations.shape[0])):
             # colour by context
-            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])-1], s=80)
+            ax[j].scatter(MDS_activations[i, dimA], MDS_activations[i, dimB], color=contextcolours[int(labels_contexts[i])], s=80)
 
             # label numerosity in white inside the marker
             ax[j].text(MDS_activations[i, dimA], MDS_activations[i, dimB], str(int(labels_judgeValues[i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
@@ -236,11 +254,11 @@ def plot3MDSMean(MDS_activations, MDSlabels, labels_refValues, labels_judgeValue
         ax[j].axis('equal')
         ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
 
-    autoSaveFigure('figures/3MDS60_meanJudgement_', blockedTraining, sequentialABTraining, labelNumerosity, saveFig)
+    n = autoSaveFigure('figures/3MDS60_meanJudgement_', blockTrain, seqTrain, labelNumerosity, givenContext, True, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels):
+def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext):
     """This function will average the hidden unit activations over one of the two numbers involved in the representation:
     either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
      which are averaged over the previously presented number (input B).
@@ -257,6 +275,11 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
     flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
     divisor = np.zeros((Ncontexts,len(uniqueValues)))
+
+    # if the dataset did not label context during training, we cant fish this out at test on the hidden units either
+    if not givenContext:
+        labels_contexts = np.full_like(labels_contexts, 1)
+
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     if dimKeep == 'reference':
@@ -313,7 +336,7 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig):
+def animate3DMDS(MDS_slactivations, sl_judgeValues, blockTrain, seqTrain, givenContext, saveFig):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -327,10 +350,15 @@ def animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig):
     contextC = range(25, 35)
 
     def init():
-        points = [contextA, contextB, contextC]
-        for i in range(3):
-            ax.scatter(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=colours[i])
-            ax.plot(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=colours[i])
+
+        if givenContext:
+            points = [contextA, contextB, contextC]
+        else:
+            points = [contextA]
+
+        for i in range(len(points)):
+            ax.scatter(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=contextcolours[i])
+            ax.plot(MDS_slactivations[points[i], 0], MDS_slactivations[points[i], 1], MDS_slactivations[points[i], 2], color=contextcolours[i])
             for j in range(len(points[i])):
                 label = str(int(sl_judgeValues[points[i][j]]))
                 ax.text(MDS_slactivations[points[i][j], 0], MDS_slactivations[points[i][j], 1], MDS_slactivations[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
@@ -350,6 +378,7 @@ def animate3DMDS(MDS_slactivations, sl_judgeValues, colours, saveFig):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        anim.save('MDS_3Danimation.mp4', writer=writer)
+        strng = autoSaveFigure('animations/MDS_3Danimation_', blockTrain, seqTrain, True, givenContext, True, False)
+        anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #

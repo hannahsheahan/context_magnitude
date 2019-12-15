@@ -123,7 +123,8 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 def getActivations(trainset,trained_model):
     """ This will determine the hidden unit activations for each *unique* input in the training set
-     there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads."""
+     there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads.
+     """
 
     # determine the unique inputs for the training set (there are repeats)
     unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
@@ -270,36 +271,59 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(blockedTraining, sequentialABTraining):
-    if blockedTraining:
-        if sequentialABTraining:
-            trained_model = torch.load('models/trainedmodel_3contexts_blockedsequential.pth')
-            datasetname = 'dataset_3contexts_blockedsequential'
+def getDatasetName(blockedTraining, sequentialABTraining, labelContext):
+    if not labelContext:
+        if blockedTraining:
+            if sequentialABTraining:
+                trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_blockedsequential.pth')
+                datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
+            else:
+                trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_blockedonly.pth')
+                datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
         else:
-            trained_model = torch.load('models/trainedmodel_3contexts_blockedonly.pth')
-            datasetname = 'dataset_3contexts_blockedonly'
+            trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth')
+            datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
     else:
-        trained_model = torch.load('models/trainedmodel_3contexts_intermingledcontexts.pth')
-        datasetname = 'dataset_3contexts_intermingledcontexts'
+        if blockedTraining:
+            if sequentialABTraining:
+                trained_model = torch.load('models/trainedmodel_3contexts_blockedsequential.pth')
+                datasetname = 'dataset_3contexts_blockedsequential'
+            else:
+                trained_model = torch.load('models/trainedmodel_3contexts_blockedonly.pth')
+                datasetname = 'dataset_3contexts_blockedonly'
+        else:
+            trained_model = torch.load('models/trainedmodel_3contexts_intermingledcontexts.pth')
+            datasetname = 'dataset_3contexts_intermingledcontexts'
 
     return datasetname, trained_model
 
 # ---------------------------------------------------------------------------- #
 
-def setDatasetName(blockedTraining, sequentialABTraining):
+def setDatasetName(blockedTraining, sequentialABTraining, labelContext):
     """Make sure we are always naming appropriately for the input training
     conditions and model name."""
-
-    if blockedTraining:
-        if sequentialABTraining:
-            datasetname = 'dataset_3contexts_blockedsequential'
-            trained_modelname = 'models/trainedmodel_3contexts_blockedsequential.pth'
+    if not labelContext:
+        if blockedTraining:
+            if sequentialABTraining:
+                datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
+                trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_blockedsequential.pth'
+            else:
+                datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
+                trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_blockedonly.pth'
         else:
-            datasetname = 'dataset_3contexts_blockedonly'
-            trained_modelname = 'models/trainedmodel_3contexts_blockedonly.pth'
+            datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
+            trained_modelname = 'models/trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth'
     else:
-        datasetname = 'dataset_3contexts_intermingledcontexts'
-        trained_modelname = 'models/trainedmodel_3contexts_intermingledcontexts.pth'
+        if blockedTraining:
+            if sequentialABTraining:
+                datasetname = 'dataset_3contexts_blockedsequential'
+                trained_modelname = 'models/trainedmodel_3contexts_blockedsequential.pth'
+            else:
+                datasetname = 'dataset_3contexts_blockedonly'
+                trained_modelname = 'models/trainedmodel_3contexts_blockedonly.pth'
+        else:
+            datasetname = 'dataset_3contexts_intermingledcontexts'
+            trained_modelname = 'models/trainedmodel_3contexts_intermingledcontexts.pth'
 
     return datasetname, trained_modelname
 

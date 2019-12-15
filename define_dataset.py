@@ -122,7 +122,7 @@ def loadInputData(fileloc,datasetname):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True, labelContext=True):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -134,6 +134,10 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
         sequentialABTraining = False
 
     print('Generating dataset...')
+    if labelContext:
+        print('- network has explicit context nodes')
+    else:
+        print('- network does NOT have context explicitly indicated')   # ***HRS have not written this yet though
     if blockedTraining:
         print('- training is blocked by context')
     else:
@@ -147,23 +151,16 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     Ntrain = 12000       # 8:2 train:test split
     Ntest = totalN - Ntrain
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
+    Ncontexts = 3
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
-    Ncontexts = 3
 
     for phase in ['train','test']:   # this method should balance context instances in train and test phases
         if phase == 'train':
             N = Ntrain
         else:
             N = totalN - Ntrain
-
-        #refValues = np.empty((N,totalMaxNumerosity))
-        #judgementValues = np.empty((N,totalMaxNumerosity))
-        #input = np.empty((N,totalMaxNumerosity*2+Ncontexts))
-        #target = np.empty((N,1))
-        #contexts = np.empty((N,Ncontexts))
-        #contextdigits = np.empty((N,1))
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
         refValues = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity))
@@ -208,7 +205,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
 
                 input2 = turnOneHot(judgementValue, totalMaxNumerosity)
                 input1 = turnOneHot(refValue, totalMaxNumerosity)
-                contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
+
+                if labelContext:
+                    contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
+                else:
+                    contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                 # determine the correct rel magnitude judgement
                 if judgementValue > refValue:
@@ -219,7 +220,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 contextdigits[block, sample] = context
                 judgementValues[block, sample] = np.squeeze(input2)
                 refValues[block, sample] = np.squeeze(input1)
-                contexts[block, sample] = np.squeeze(contextinput)
+                contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
                 input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
                 blocks[block, sample] = block
 
