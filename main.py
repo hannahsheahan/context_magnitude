@@ -43,9 +43,11 @@ def trainAndSaveANetwork():
 
     # Define the training hyperparameters for our network (passed as args when calling main.py from command line)
     args, device, multiparams = mnet.defineHyperparams()
+    N = 15                         # total max numerosity for the greatest range we deal with
 
     # a dataset for us to work with
-    createNewDataset = True
+    networkStyle = 'recurrent'  # 'MLP'
+    createNewDataset = False
     fileloc = 'datasets/'
     blockTrain = True            # whether to block the training by context
     seqTrain = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
@@ -56,23 +58,26 @@ def trainAndSaveANetwork():
     datasetname, trained_modelname = mnet.setDatasetName(blockTrain, seqTrain, labelContext)
 
     if createNewDataset:
-        N = 15                         # total max numerosity for the greatest range we deal with
         trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
     # define and train a neural network model, log performance and output trained model
-    model = mnet.trainNetwork(args, device, multiparams, trainset, testset, N)
+    if networkStyle == 'recurrent':
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N)
+    else:
+        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
 
     # save the trained weights so we can easily look at them
-    torch.save(model, trained_modelname)
+    print(trained_modelname)
+    #torch.save(model, trained_modelname)
 
 
 # ---------------------------------------------------------------------------- #
 
 # Some interactive mode plotting code...
 #reload(MDSplt)
-
+"""
 # load the trained model and the datasets it was trained/tested on
 blockTrain = True
 seqTrain = True
@@ -119,9 +124,8 @@ MDSplt.plot3MDSContexts(MDS_activations, MDSlabels, labels_refValues, labels_jud
 
 # plot a 3D version of the MDS constructions
 MDSplt.animate3DMDS(MDS_slactivations, sl_judgeValues, blockTrain, seqTrain, labelContext, saveFig)
-
+"""
 # ---------------------------------------------------------------------------- #
 
-#if __name__ == '__main__':
-    #main()
-#    trainAndSaveANetwork()
+if __name__ == '__main__':
+    trainAndSaveANetwork()
