@@ -87,7 +87,7 @@ dimKeep = 'judgement'                      # representation of the currently pre
 sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
 # do MDS on the activations for the training set
-randseed = 2 # so that we get the same MDS each time
+randseed = 3 # so that we get the same MDS each time
 embedding = MDS(n_components=3, random_state=randseed)
 MDS_activations = embedding.fit_transform(activations)
 sl_embedding = MDS(n_components=3, random_state=randseed)
@@ -97,7 +97,7 @@ MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 saveFig = True
 labelNumerosity = True
 
-# they are both quite sparse activations? (but we dont really care that much)
+# they are quite sparse activations? (but we dont really care that much)
 #n = plt.hist(activations)
 
 # Take a look at the activations RSA
