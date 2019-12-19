@@ -73,9 +73,14 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
         # reset hidden recurrent weights
         hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
+        noise_std = 0.02  # about 10% of activation std
 
         # perform a two-step recurrence
         for i in range(2):
+            # inject some noise ~= forgetting of the previous number
+            if i ==1:
+                noise = torch.from_numpy(np.reshape(np.random.normal(0, noise_std, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                hidden += noise
             output, hidden = model(recurrentinputs[i], hidden)
 
         loss = criterion(output, labels)
@@ -129,9 +134,13 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
             # reset hidden recurrent weights
             hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
-
+            noise_std = 0.02  # about 10% of activation std
             # perform a two-step recurrence
             for i in range(2):
+                # inject some noise ~= forgetting of the previous number
+                if i ==1:
+                    noise = torch.from_numpy(np.reshape(np.random.normal(0, noise_std, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                    hidden += noise
                 output, hidden = model(recurrentinputs[i], hidden)
 
             test_loss += criterion(output, labels).item()
@@ -226,11 +235,14 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(trainset,trained_model):
+def getActivations(trainset,trained_model,networkStyle):
     """ This will determine the hidden unit activations for each *unique* input in the training set
      there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads.
      """
-
+    # how to extract our paired inputs and context from our dataset
+    Arange = range(15)
+    Brange = range(15,30)
+    contextrange = range(30,33)
     # determine the unique inputs for the training set (there are repeats)
     unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
     unique_labels = trainset["label"][uniqueind]
@@ -243,12 +255,12 @@ def getActivations(trainset,trained_model):
     labels_judgeValues = np.empty((len(uniqueind),1))
     contexts = np.empty((len(uniqueind),1))
     MDSlabels = np.empty((len(uniqueind),1))
-    hdim = len(list(trained_model.fc1.parameters())[0])
-    activations = np.empty(( len(uniqueind), hdim ))
+    hdim = 60 #trained_model.hidden_size
+    activations = np.empty((len(uniqueind), hdim))
 
     #  pass each input through the netwrk and see what happens to the hidden layer activations
     for sample in range(len(uniqueind)):
-        sample_input = unique_inputs[sample]
+        sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
         sample_label = unique_labels[sample]
         labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
         labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
@@ -256,8 +268,21 @@ def getActivations(trainset,trained_model):
         contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
 
         # get the activations for that input
-        h1activations,_,_ = trained_model.get_activations(batchToTorch(torch.from_numpy(sample_input)))
-        activations[sample] = h1activations.detach()
+        if networkStyle=='mlp':
+            h1activations,h2activations,_ = trained_model.get_activations(sample_input)
+        elif networkStyle=='recurrent':
+            # reformat the paired input so that it works for our recurrent model
+            context = sample_input[contextrange]
+            inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
+            inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
+            recurrentinputs = [inputA, inputB]
+            h1activations = torch.zeros(1,60) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+
+            # pass inputs through the recurrent network
+            for i in range(2):
+                h1activations,h2activations,_ = trained_model.get_activations(recurrentinputs[i], h1activations)
+
+        activations[sample] = h1activations.detach() #h1activations.detach()
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
 
@@ -289,8 +314,9 @@ class separateinputMLP(nn.Module):
         """
     def __init__(self, D_in):
         super(separateinputMLP, self).__init__()
-        self.fc1 = nn.Linear(D_in, 60)  # size input, size output
-        self.fc2 = nn.Linear(60, 1)
+        self.hidden_size = 60
+        self.fc1 = nn.Linear(D_in, self.hidden_size)  # size input, size output
+        self.fc2 = nn.Linear(self.hidden_size, 1)
 
     def forward(self, x):
         self.fc1_activations = F.relu(self.fc1(x))
@@ -315,16 +341,19 @@ class OneStepRNN(nn.Module):
     def __init__(self, D_in, batch_size, D_out):
         super(OneStepRNN, self).__init__()
         self.hidden_size = 60
-
         self.input2output = nn.Linear(D_in + self.hidden_size, D_out)  # size input, size output
         self.input2hidden = nn.Linear(D_in + self.hidden_size, self.hidden_size)
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
         self.hidden = F.relu(self.input2hidden(combined))
-        self.output = F.relu(self.input2output(combined))
-        self.output = torch.sigmoid(self.output)
+        self.output_presigmoid = F.relu(self.input2output(combined))
+        self.output = torch.sigmoid(self.output_presigmoid)
         return self.output, self.hidden
+
+    def get_activations(self, x, hidden):
+        self.forward(x, hidden)  # update the activations with the particular input
+        return self.hidden, self.output_presigmoid, self.output
 
 # ---------------------------------------------------------------------------- #
 
@@ -400,28 +429,28 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(blockedTraining, sequentialABTraining, labelContext):
+def getDatasetName(networkStyle, blockedTraining, sequentialABTraining, labelContext):
     if not labelContext:
         if blockedTraining:
             if sequentialABTraining:
-                trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_blockedsequential.pth')
+                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedsequential.pth')
                 datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
             else:
-                trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_blockedonly.pth')
+                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedonly.pth')
                 datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
         else:
-            trained_model = torch.load('models/trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth')
+            trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth')
             datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
     else:
         if blockedTraining:
             if sequentialABTraining:
-                trained_model = torch.load('models/trainedmodel_3contexts_blockedsequential.pth')
+                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_blockedsequential.pth')
                 datasetname = 'dataset_3contexts_blockedsequential'
             else:
-                trained_model = torch.load('models/trainedmodel_3contexts_blockedonly.pth')
+                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_blockedonly.pth')
                 datasetname = 'dataset_3contexts_blockedonly'
         else:
-            trained_model = torch.load('models/trainedmodel_3contexts_intermingledcontexts.pth')
+            trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_intermingledcontexts.pth')
             datasetname = 'dataset_3contexts_intermingledcontexts'
 
     return datasetname, trained_model
