@@ -73,14 +73,12 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
         # reset hidden recurrent weights
         hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
-        noise_std = 0.02  # about 10% of activation std
 
         # perform a two-step recurrence
         for i in range(2):
-            # inject some noise ~= forgetting of the previous number
-            if i ==1:
-                noise = torch.from_numpy(np.reshape(np.random.normal(0, noise_std, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
-                hidden += noise
+            # inject some noise ~= forgetting of the previous number and starting state
+            noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+            hidden.add_(noise)
             output, hidden = model(recurrentinputs[i], hidden)
 
         loss = criterion(output, labels)
@@ -134,13 +132,11 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
             # reset hidden recurrent weights
             hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
-            noise_std = 0.02  # about 10% of activation std
             # perform a two-step recurrence
             for i in range(2):
                 # inject some noise ~= forgetting of the previous number
-                if i ==1:
-                    noise = torch.from_numpy(np.reshape(np.random.normal(0, noise_std, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
-                    hidden += noise
+                noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                hidden.add_(noise)
                 output, hidden = model(recurrentinputs[i], hidden)
 
             test_loss += criterion(output, labels).item()
@@ -282,6 +278,7 @@ def getActivations(trainset,trained_model,networkStyle):
             for i in range(2):
                 h1activations,h2activations,_ = trained_model.get_activations(recurrentinputs[i], h1activations)
 
+
         activations[sample] = h1activations.detach() #h1activations.detach()
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
@@ -338,9 +335,10 @@ class OneStepRNN(nn.Module):
     input_size = 15 + 3 for context
     Reference: https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
     """
-    def __init__(self, D_in, batch_size, D_out):
+    def __init__(self, D_in, batch_size, D_out, noise_std):
         super(OneStepRNN, self).__init__()
         self.hidden_size = 60
+        self.hidden_noise = noise_std
         self.input2output = nn.Linear(D_in + self.hidden_size, D_out)  # size input, size output
         self.input2hidden = nn.Linear(D_in + self.hidden_size, self.hidden_size)
 
@@ -354,6 +352,9 @@ class OneStepRNN(nn.Module):
     def get_activations(self, x, hidden):
         self.forward(x, hidden)  # update the activations with the particular input
         return self.hidden, self.output_presigmoid, self.output
+
+    def get_noise(self):
+        return self.hidden_noise
 
 # ---------------------------------------------------------------------------- #
 
@@ -375,7 +376,7 @@ def defineHyperparams():
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[24])
-        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
+        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.003])
         parser.add_argument('--batch-size', type=int, default=24, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=24, metavar='N', help='input batch size for testing (default: 48)')
         parser.add_argument('--epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
@@ -429,59 +430,26 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(networkStyle, blockedTraining, sequentialABTraining, labelContext):
-    if not labelContext:
-        if blockedTraining:
-            if sequentialABTraining:
-                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedsequential.pth')
-                datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
-            else:
-                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedonly.pth')
-                datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
-        else:
-            trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth')
-            datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
+def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext):
+
+    if blockTrain:
+        blockedtext = '_blocked'
     else:
-        if blockedTraining:
-            if sequentialABTraining:
-                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_blockedsequential.pth')
-                datasetname = 'dataset_3contexts_blockedsequential'
-            else:
-                trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_blockedonly.pth')
-                datasetname = 'dataset_3contexts_blockedonly'
-        else:
-            trained_model = torch.load('models/'+networkStyle+'_trainedmodel_3contexts_intermingledcontexts.pth')
-            datasetname = 'dataset_3contexts_intermingledcontexts'
-
-    return datasetname, trained_model
-
-# ---------------------------------------------------------------------------- #
-
-def setDatasetName(networkStyle, blockedTraining, sequentialABTraining, labelContext):
-    """Make sure we are always naming appropriately for the input training
-    conditions and model name."""
-    if not labelContext:
-        if blockedTraining:
-            if sequentialABTraining:
-                datasetname = 'dataset_3contexts_nocontextmarker_blockedsequential'
-                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedsequential.pth'
-            else:
-                datasetname = 'dataset_3contexts_nocontextmarker_blockedonly'
-                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_blockedonly.pth'
-        else:
-            datasetname = 'dataset_3contexts_nocontextmarker_intermingledcontexts'
-            trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_nocontextmarker_intermingledcontexts.pth'
+        blockedtext = ''
+    if seqTrain:
+        seqtext = '_sequential'
     else:
-        if blockedTraining:
-            if sequentialABTraining:
-                datasetname = 'dataset_3contexts_blockedsequential'
-                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_blockedsequential.pth'
-            else:
-                datasetname = 'dataset_3contexts_blockedonly'
-                trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_blockedonly.pth'
-        else:
-            datasetname = 'dataset_3contexts_intermingledcontexts'
-            trained_modelname = 'models/'+networkStyle+'_trainedmodel_3contexts_intermingledcontexts.pth'
+        seqtext = ''
+    if labelContext:
+        contextlabelledtext = '_contextlabelled'
+    else:
+        contextlabelledtext = '_nocontextlabel'
+
+    datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
+    if networkStyle=='recurrent':
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+'_'+str(noise_std)+'.pth'
+    else:
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+'.pth'
 
     return datasetname, trained_modelname
 
@@ -546,7 +514,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N):
 
 # ---------------------------------------------------------------------------- #
 
-def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N):
+def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std):
     """This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
      - Train/test performance is logged with a SummaryWriter
@@ -563,7 +531,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N):
         print("\n")
 
         # Define a model for training
-        model = OneStepRNN(N+3, args.batch_size, 1).to(device)
+        model = OneStepRNN(N+3, args.batch_size, 1, noise_std).to(device)
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 

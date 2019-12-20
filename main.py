@@ -46,16 +46,20 @@ def trainAndSaveANetwork():
     N = 15                         # total max numerosity for the greatest range we deal with
 
     # a dataset for us to work with
-    networkStyle = 'recurrent' #'recurrent'  # 'mlp'
     createNewDataset = False
     fileloc = 'datasets/'
+
+    networkStyle = 'recurrent' #'recurrent'  # 'mlp'
+    noise_std = 1.2
     blockTrain = True            # whether to block the training by context
     seqTrain = True        # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
     labelContext = True
     if not blockTrain:
         seqTrain = False   # we cant have sequential AB training structure if contexts are intermingled
 
-    datasetname, trained_modelname = mnet.setDatasetName(networkStyle, blockTrain, seqTrain, labelContext)
+    params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+
+    datasetname, trained_modelname = mnet.getDatasetName(*params)
 
     if createNewDataset:
         trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
@@ -65,7 +69,7 @@ def trainAndSaveANetwork():
     # define and train a neural network model, log performance and output trained model
     if networkStyle == 'recurrent':
         args.epochs = args.epochs * 2  # the recurrent network needs more training time
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N)
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std)
     else:
         model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
 
@@ -74,24 +78,27 @@ def trainAndSaveANetwork():
     torch.save(model, trained_modelname)
 
 # ---------------------------------------------------------------------------- #
-"""
+
 # Some interactive mode plotting code...
 reload(mnet)
 reload(MDSplt)
 
-# load the trained model and the datasets it was trained/tested on
+# which model / trained dataset we want to look at
 networkStyle = 'recurrent' #'recurrent'  #'mlp'
+noise_std = 1.2
 blockTrain = True
 seqTrain = True
 labelContext = True
-datasetname, trained_model = mnet.getDatasetName(networkStyle, blockTrain, seqTrain, labelContext)
+params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+
+# load the trained model and the datasets it was trained/tested on
+datasetname, trained_modelname = mnet.getDatasetName(*params)
+trained_model = torch.load(trained_modelname)
 fileloc = 'datasets/'
 trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
 
 # pass each input through the model and determine the hidden unit activations
 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset,trained_model, networkStyle)
-
-
 dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
 sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
@@ -102,34 +109,43 @@ MDS_activations = embedding.fit_transform(activations)
 sl_embedding = MDS(n_components=3, random_state=randseed)
 MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 
-# plot the MDS of our hidden activations
+MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels,\
+            "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues,\
+            "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
+            "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues}
+
+# ---------------------------------------------------------------------------- #
+# Plot stuff
 saveFig = True
-labelNumerosity = True
+params.append(saveFig)
 
 # they are quite sparse activations? (but we dont really care that much)
 #n = plt.hist(activations)
 
 # Take a look at the activations RSA
-MDSplt.activationRDMs(networkStyle, activations, sl_activations, blockTrain, seqTrain, labelContext, saveFig)
+MDSplt.activationRDMs(MDS_dict, params)
 
-# plot the MDS with number labels but flatten across the other factor
-MDSplt.plot3MDSMean(networkStyle, MDS_slactivations, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
+# # plot the MDS of our hidden activations, with number labels but flatten across the other factor
+labelNumerosity = True
+MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
 
 # plot the MDS with number labels
 labelNumerosity = True
-MDSplt.plot3MDS(networkStyle, MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
+MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
 # plot the MDS with output labels (true/false labels)
 labelNumerosity = False
-MDSplt.plot3MDS(networkStyle, MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
+MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
 # plot the MDS with context labels
-MDSplt.plot3MDSContexts(networkStyle, MDS_activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, labelNumerosity, blockTrain, seqTrain, labelContext, saveFig)
+MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
 # plot a 3D version of the MDS constructions
-MDSplt.animate3DMDS(networkStyle, MDS_slactivations, sl_judgeValues, blockTrain, seqTrain, labelContext, saveFig)
+MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 """
+
 if __name__ == '__main__':
     trainAndSaveANetwork()
+"""
