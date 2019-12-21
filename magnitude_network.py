@@ -272,11 +272,11 @@ def getActivations(trainset,trained_model,networkStyle):
             inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
             inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
             recurrentinputs = [inputA, inputB]
-            h1activations = torch.zeros(1,60) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+            h0activations = torch.zeros(1,60) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
 
             # pass inputs through the recurrent network
             for i in range(2):
-                h1activations,h2activations,_ = trained_model.get_activations(recurrentinputs[i], h1activations)
+                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
 
 
         activations[sample] = h1activations.detach() #h1activations.detach()
