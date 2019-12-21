@@ -72,7 +72,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         recurrentinputs = [inputA, inputB]
 
         # reset hidden recurrent weights
-        hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
+        hidden = torch.zeros(args.batch_size, model.recurrent_size) # ***HRS hardcoding of hidden unit size for now
 
         # perform a two-step recurrence
         for i in range(2):
@@ -131,7 +131,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
             recurrentinputs = [inputA, inputB]
 
             # reset hidden recurrent weights
-            hidden = torch.zeros(args.batch_size, 60) # ***HRS hardcoding of hidden unit size for now
+            hidden = torch.zeros(args.batch_size, model.recurrent_size)
             # perform a two-step recurrence
             for i in range(2):
                 # inject some noise ~= forgetting of the previous number
@@ -337,12 +337,12 @@ class OneStepRNN(nn.Module):
     """
     def __init__(self, D_in, batch_size, D_out, noise_std):
         super(OneStepRNN, self).__init__()
+        self.recurrent_size = 33  # to match to the parallel MLP
         self.hidden_size = 60
-        self.fc1size = 60
         self.hidden_noise = noise_std
-        self.input2hidden = nn.Linear(D_in + self.hidden_size, self.hidden_size)
-        self.input2fc1 = nn.Linear(D_in + self.hidden_size, self.fc1size)  # size input, size output
-        self.fc1tooutput = nn.Linear(self.fc1size, 1)
+        self.input2hidden = nn.Linear(D_in + self.recurrent_size, self.recurrent_size)
+        self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
+        self.fc1tooutput = nn.Linear(self.hidden_size, 1)
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
@@ -378,11 +378,11 @@ def defineHyperparams():
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[24])
-        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.003])
+        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.002])
         parser.add_argument('--batch-size', type=int, default=24, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=24, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.003, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
