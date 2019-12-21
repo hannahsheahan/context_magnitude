@@ -57,28 +57,32 @@ def trainAndSaveANetwork():
     if not blockTrain:
         seqTrain = False   # we cant have sequential AB training structure if contexts are intermingled
 
-    params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+    # Let's do a grid search over different noise levels in the recurrent network (which has structured training and context labels)
+    # (25 noise levels to test, see what happens to relative representation of context and normalisation of magnitude line)
+    noiselevels = np.linspace(0, 2.5, 25)
 
-    datasetname, trained_modelname = mnet.getDatasetName(*params)
+    for noise_std in noiselevels:
+        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+        datasetname, trained_modelname = mnet.getDatasetName(*params)
 
-    if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
-    else:
-        trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+        if createNewDataset:
+            trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
+        else:
+            trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
-    # define and train a neural network model, log performance and output trained model
-    if networkStyle == 'recurrent':
-        args.epochs = args.epochs * 2  # the recurrent network needs more training time
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std)
-    else:
-        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
+        # define and train a neural network model, log performance and output trained model
+        if networkStyle == 'recurrent':
+            args.epochs = args.epochs * 2  # the recurrent network needs more training time
+            model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std)
+        else:
+            model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
 
-    # save the trained weights so we can easily look at them
-    print(trained_modelname)
-    torch.save(model, trained_modelname)
+        # save the trained weights so we can easily look at them
+        print(trained_modelname)
+        torch.save(model, trained_modelname)
 
 # ---------------------------------------------------------------------------- #
-
+"""
 # Some interactive mode plotting code...
 reload(mnet)
 reload(MDSplt)
@@ -148,4 +152,3 @@ MDSplt.animate3DMDS(MDS_dict, params)
 
 if __name__ == '__main__':
     trainAndSaveANetwork()
-"""

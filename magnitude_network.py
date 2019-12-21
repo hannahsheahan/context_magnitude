@@ -338,20 +338,22 @@ class OneStepRNN(nn.Module):
     def __init__(self, D_in, batch_size, D_out, noise_std):
         super(OneStepRNN, self).__init__()
         self.hidden_size = 60
+        self.fc1size = 60
         self.hidden_noise = noise_std
-        self.input2output = nn.Linear(D_in + self.hidden_size, D_out)  # size input, size output
         self.input2hidden = nn.Linear(D_in + self.hidden_size, self.hidden_size)
+        self.input2fc1 = nn.Linear(D_in + self.hidden_size, self.fc1size)  # size input, size output
+        self.fc1tooutput = nn.Linear(self.fc1size, 1)
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
         self.hidden = F.relu(self.input2hidden(combined))
-        self.output_presigmoid = F.relu(self.input2output(combined))
-        self.output = torch.sigmoid(self.output_presigmoid)
+        self.fc1_activations = F.relu(self.input2fc1(combined))
+        self.output = torch.sigmoid(self.fc1tooutput(self.fc1_activations))
         return self.output, self.hidden
 
     def get_activations(self, x, hidden):
         self.forward(x, hidden)  # update the activations with the particular input
-        return self.hidden, self.output_presigmoid, self.output
+        return self.hidden, self.fc1_activations, self.output
 
     def get_noise(self):
         return self.hidden_noise
@@ -380,7 +382,7 @@ def defineHyperparams():
         parser.add_argument('--batch-size', type=int, default=24, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=24, metavar='N', help='input batch size for testing (default: 48)')
         parser.add_argument('--epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--lr', type=float, default=0.003, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
