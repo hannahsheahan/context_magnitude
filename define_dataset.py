@@ -137,7 +137,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     if labelContext:
         print('- network has explicit context nodes')
     else:
-        print('- network does NOT have context explicitly indicated')   # ***HRS have not written this yet though
+        print('- network does NOT have context explicitly indicated')
     if blockedTraining:
         print('- training is blocked by context')
     else:
@@ -209,7 +209,9 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 if labelContext:
                     contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
                 else:
-                    contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
+                    context = random.randint(1,3)
+                    contextinput = turnOneHot(context, 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
+                    #contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                 # determine the correct rel magnitude judgement
                 if judgementValue > refValue:

@@ -24,6 +24,7 @@ from sklearn.utils import shuffle
 from importlib import reload
 from mpl_toolkits import mplot3d
 from matplotlib import animation
+import json
 
 # network stuff
 import torch
@@ -39,7 +40,7 @@ import argparse
 
 # ---------------------------------------------------------------------------- #
 
-def trainAndSaveANetwork(params):
+def trainAndSaveANetwork(params, createNewDataset):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparames for network (passed as args when called from command line)
     datasetname, trained_modelname = mnet.getDatasetName(*params)
@@ -96,37 +97,37 @@ def generatePlots(MDS_dict, params):
     #n = plt.hist(activations)
 
     # Take a look at the activations RSA
-    #MDSplt.activationRDMs(MDS_dict, params)
+    MDSplt.activationRDMs(MDS_dict, params)
 
     # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
     labelNumerosity = True
     MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with number labels
-    #labelNumerosity = True
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    labelNumerosity = True
+    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with output labels (true/false labels)
-    #labelNumerosity = False
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    labelNumerosity = False
+    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with context labels
-    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
+    MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DMDS(MDS_dict, params)
+    MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = False
+    createNewDataset = True
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = True
+    labelContext = False
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
 
@@ -134,22 +135,17 @@ if __name__ == '__main__':
     networkStyle = 'recurrent' #'recurrent'  # 'mlp'
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
+    num_repeats = range(10)
 
-    for noise_std in noiselevels:
-        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+    for repeat in num_repeats:
+        for noise_std in noiselevels:
+            params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
 
-        # Train the network from scratch
-        #trainAndSaveANetwork()
+            # Train the network from scratch
+            trainAndSaveANetwork(params, createNewDataset)
 
-        # Analyse the trained network
-        MDS_dict = analyseNetwork(fileloc, params)
-        generatePlots(MDS_dict, params)
-
-    # Now create a little animation that shows how the RDM morphs when you change the amount of injected noise
-    # (note that we should also show what test performance is for each of these)
-
-
-
-
+            # Analyse the trained network
+            #MDS_dict = analyseNetwork(fileloc, params)
+            #generatePlots(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #

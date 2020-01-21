@@ -15,6 +15,7 @@ import numpy as np
 import copy
 import sys
 import random
+import json
 
 import torch
 import torch.nn as nn
@@ -376,11 +377,11 @@ def defineHyperparams():
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[24])
+        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.002])
-        parser.add_argument('--batch-size', type=int, default=24, metavar='N', help='input batch size for training (default: 48)')
-        parser.add_argument('--test-batch-size', type=int, default=24, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--batch-size', type=int, default=12, metavar='N', help='input batch size for training (default: 48)')
+        parser.add_argument('--test-batch-size', type=int, default=12, metavar='N', help='input batch size for testing (default: 48)')
+        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.002, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -522,6 +523,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
      - the trained recurrent model is returned
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
+
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
         args.batch_size = batch_size
@@ -550,6 +552,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         # Train/test loop
         n_epochs = args.epochs
         printOutput = False
+        trainingPerformance, testPerformance = [[] for i in range(2)]
 
         print("Training network...")
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
@@ -564,11 +567,20 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
             test_perf = [test_loss, test_accuracy]
+            trainingPerformance.append(standard_train_accuracy)
+            testPerformance.append(test_accuracy)
             print(standard_train_accuracy, test_accuracy)
             logPerformance(writer, epoch, train_perf, test_perf)
             printProgress(epoch-1, n_epochs)
 
         print("Training complete.")
+        # save this training curve
+        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_nocontext" }
+        randnum = str(random.randint(0,10000))
+        dat = json.dumps(record)
+        f = open("trainingrecords/"+randnum+"_modeltrainingrecord_nocontext.json","w")
+        f.write(dat)
+        f.close()
 
     writer.close()
     return model
