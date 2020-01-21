@@ -251,7 +251,7 @@ def getActivations(trainset,trained_model,networkStyle):
     labels_judgeValues = np.empty((len(uniqueind),1))
     contexts = np.empty((len(uniqueind),1))
     MDSlabels = np.empty((len(uniqueind),1))
-    hdim = 60 #trained_model.hidden_size
+    hdim = trained_model.hidden_size
     activations = np.empty((len(uniqueind), hdim))
 
     #  pass each input through the netwrk and see what happens to the hidden layer activations
@@ -272,12 +272,11 @@ def getActivations(trainset,trained_model,networkStyle):
             inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
             inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
             recurrentinputs = [inputA, inputB]
-            h0activations = torch.zeros(1,60) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+            h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
 
             # pass inputs through the recurrent network
             for i in range(2):
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
-
 
         activations[sample] = h1activations.detach() #h1activations.detach()
 

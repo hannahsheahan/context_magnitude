@@ -56,7 +56,7 @@ def activationRDMs(MDS_dict, params):
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
     fig, ax = plt.subplots(1,2, figsize=(10,3))
     D = pairwise_distances(MDS_dict["activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
-    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
+    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
 
     divider = make_axes_locatable(ax[0])
     cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -70,7 +70,7 @@ def activationRDMs(MDS_dict, params):
 
     # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
     D = pairwise_distances(MDS_dict["sl_activations"])
-    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest')
+    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
 
     divider = make_axes_locatable(ax[1])
     cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -246,7 +246,8 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
         if networkStyle=='mlp':
             ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
         else:
-            ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
+            #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
+            ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
     n = autoSaveFigure('figures/3MDS60_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std, saveFig)
 
