@@ -122,7 +122,7 @@ def generatePlots(MDS_dict, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True
+    createNewDataset = False
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     networkStyle = 'recurrent' #'recurrent'  # 'mlp'
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
-    num_repeats = range(10)
+    num_repeats = range(20)
 
     for repeat in num_repeats:
         for noise_std in noiselevels:
