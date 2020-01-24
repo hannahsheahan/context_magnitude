@@ -29,7 +29,6 @@ for file in files:
 nc_perf = np.asarray(nocontext)
 wc_perf = np.asarray(withcontext)
 
-
 # Plot the training curves mean +- std results
 conditions_data = [nc_perf, wc_perf]
 linelabels = ['random (1-3) context markers', 'correct (1-3) context markers']
@@ -38,12 +37,13 @@ plt.figure()
 
 for condition in range(len(conditions_data)):
     means = np.mean(conditions_data[condition],0)
-    stds = np.std(conditions_data[condition],0)
+    ses = np.std(conditions_data[condition],0) / np.sqrt(len(nocontext))
     epochs = range(len(means))
     plt.plot(epochs, means, color=colours[condition], label=linelabels[condition])
-    plt.fill_between(epochs, means-stds, means+stds, color=colours[condition], alpha=0.25)
+    plt.fill_between(epochs, means-ses, means+ses, color=colours[condition], alpha=0.25)
+#plt.plot(epochs, np.ones(means.shape)*50, color='grey', linestyle=':')
 
 plt.xlabel('Epochs')
-plt.ylabel('Training performance')
+plt.ylabel('Training performance %')
 plt.legend()
-plt.savefig('figure.pdf')
+plt.savefig('context_training_comparison.pdf')

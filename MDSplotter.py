@@ -226,13 +226,17 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
         ax[j].set_title('context')
 
         # perhaps draw a coloured line between adjacent numbers
-        contextA = range(15)
-        contextB = range(15,25)
-        contextC = range(25, 35)
-        ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
         if labelContext:
-            ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
-            ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
+            contextA = range(15)
+            contextB = range(15,25)
+            contextC = range(25, 35)
+        else:
+            contextA = range(15)
+            contextB = range(15,30)
+            contextC = range(30, 45)
+        ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
+        ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
+        ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
 
         for i in range((MDS_act.shape[0])):
             # colour by context
@@ -272,8 +276,8 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     divisor = np.zeros((Ncontexts,len(uniqueValues)))
 
     # if the dataset did not label context during training, we cant fish this out at test on the hidden units either
-    if not givenContext:
-        labels_contexts = np.full_like(labels_contexts, 1)
+    #if not givenContext:
+    #    labels_contexts = np.full_like(labels_contexts, 1)
 
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
@@ -341,13 +345,18 @@ def animate3DMDS(MDS_dict, params):
     ax = mplot3d.Axes3D(fig)
     slMDS = MDS_dict["MDS_slactivations"]
     # which MDS points correspond to which contexts
-    contextA = range(15)
-    contextB = range(15,25)
-    contextC = range(25, 35)
-
+    if labelContext:
+        contextA = range(15)
+        contextB = range(15,25)
+        contextC = range(25, 35)
+    else:
+        contextA = range(15)
+        contextB = range(15,30)
+        contextC = range(30, 45)
+        
     def init():
 
-        points = [contextA, contextB, contextC] if labelContext else [contextA]
+        points = [contextA, contextB, contextC] #if labelContext else [contextA]
 
         for i in range(len(points)):
             ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])

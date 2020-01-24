@@ -73,7 +73,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         recurrentinputs = [inputA, inputB]
 
         # reset hidden recurrent weights
-        hidden = torch.zeros(args.batch_size, model.recurrent_size) # ***HRS hardcoding of hidden unit size for now
+        hidden = torch.zeros(args.batch_size, model.recurrent_size) 
 
         # perform a two-step recurrence
         for i in range(2):
@@ -343,6 +343,10 @@ class OneStepRNN(nn.Module):
         self.input2hidden = nn.Linear(D_in + self.recurrent_size, self.recurrent_size)
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
         self.fc1tooutput = nn.Linear(self.hidden_size, 1)
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.weight.data = nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # uniform random xavier weight initialisation
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)

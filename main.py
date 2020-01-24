@@ -68,7 +68,7 @@ def analyseNetwork(fileloc, params):
     trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
 
     # pass each input through the model and determine the hidden unit activations
-    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset,trained_model, networkStyle)
+    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset, trained_model, networkStyle)
     dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
     sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
@@ -104,18 +104,18 @@ def generatePlots(MDS_dict, params):
     MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with number labels
-    labelNumerosity = True
-    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    #labelNumerosity = True
+    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with output labels (true/false labels)
-    labelNumerosity = False
-    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    #labelNumerosity = False
+    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with context labels
-    MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
+    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    MDSplt.animate3DMDS(MDS_dict, params)
+    #MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
@@ -135,9 +135,8 @@ if __name__ == '__main__':
     networkStyle = 'recurrent' #'recurrent'  # 'mlp'
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
-    num_repeats = range(20)
 
-    for repeat in num_repeats:
+    for run in range(10):
         for noise_std in noiselevels:
             params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
 
@@ -146,6 +145,8 @@ if __name__ == '__main__':
 
             # Analyse the trained network
             #MDS_dict = analyseNetwork(fileloc, params)
+
+            #np.save("truecontextlabel_activations.npy", MDS_dict["sl_activations"])
             #generatePlots(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
