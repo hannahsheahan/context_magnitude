@@ -51,8 +51,11 @@ def batchToTorch(originalimages):
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
-    """ Train a recurrent neural network on the training set """
+def recurrent_train(args, model, device, train_loader, optimizer, criterion, epoch, retainHiddenState, printOutput=True):
+    """ Train a recurrent neural network on the training set.
+    This now trains whilst retaining the hidden state across all trials in the training sequence
+    but being evaluated just on pairs of inputs and considering each input pair as a trial for minibatching.
+     """
     model.train()
     train_loss = 0
     correct = 0
@@ -61,6 +64,9 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     Arange = range(15)
     Brange = range(15,30)
     contextrange = range(30,33)
+
+    # On the very first trial on training, reset the hidden weights to zeros
+    hidden = torch.zeros(args.batch_size, model.recurrent_size)
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
@@ -72,15 +78,19 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         inputB = torch.cat((inputs[:, Brange], context),1)
         recurrentinputs = [inputA, inputB]
 
-        # reset hidden recurrent weights
-        hidden = torch.zeros(args.batch_size, model.recurrent_size) 
+        if not retainHiddenState:
+            hidden = torch.zeros(args.batch_size, model.recurrent_size)  # only if you want to reset hidden recurrent weights
+        else:
+            # Note: we can still update the gradients every two steps and discard the gradients before that, and just keep the hidden state
+            #to reflect the recent statistics as an initialisation rather than something we continue to backprop through.
+            hidden = hidden.detach()
 
-        # perform a two-step recurrence
+        # perform two-steps of recurrence
         for i in range(2):
             # inject some noise ~= forgetting of the previous number and starting state
             noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
             hidden.add_(noise)
-            output, hidden = model(recurrentinputs[i], hidden)
+            output, hidden = model(recurrentinputs[i], hidden)  # this hidden state will be preserved across trials
 
         loss = criterion(output, labels)
         loss.backward()         # passes the loss backwards to compute the dE/dW gradients
@@ -110,8 +120,13 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_test(args, model, device, test_loader, criterion, printOutput=True):
-    """Test a recurrent neural network on the test set. """
+def recurrent_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True):
+    """Test a recurrent neural network on the test set.
+    Note that this will need to be modified such that it tracks test performance JUST
+    on the subset of trials towards the end of each block (initially for a proof of concept)
+    and then later across all trials regardless of position in block. So the later trials in a block
+    will have a clearer context signal because of the stats of previous inputs held in the recurrent hidden state.
+    """
     model.eval()
     test_loss = 0
     correct = 0
@@ -120,6 +135,9 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
     Arange = range(15)
     Brange = range(15,30)
     contextrange = range(30,33)
+
+    # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+    hidden = torch.zeros(args.batch_size, model.recurrent_size)
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
@@ -131,8 +149,9 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
             inputB = torch.cat((inputs[:, Brange], context),1)
             recurrentinputs = [inputA, inputB]
 
-            # reset hidden recurrent weights
-            hidden = torch.zeros(args.batch_size, model.recurrent_size)
+            if not retainHiddenState:  # only if you want to reset hidden state between trials
+                hidden = torch.zeros(args.batch_size, model.recurrent_size)
+
             # perform a two-step recurrence
             for i in range(2):
                 # inject some noise ~= forgetting of the previous number
@@ -232,15 +251,20 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(trainset,trained_model,networkStyle):
+def getActivations(trainset,trained_model,networkStyle, retainHiddenState):
     """ This will determine the hidden unit activations for each *unique* input in the training set
      there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads.
-     """
+     If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks, at the end of a block.
+    """
+
     # how to extract our paired inputs and context from our dataset
     Arange = range(15)
     Brange = range(15,30)
     contextrange = range(30,33)
+
     # determine the unique inputs for the training set (there are repeats)
+    # ***HRS to adjust this line here to consider the FINAL instances in the training set of each unit input, that way they will be at the END of each  training block.
+    # Once 'uniqueind' tells us the FINAL index of each unique input then this will work correctly ***HRS
     unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
     unique_labels = trainset["label"][uniqueind]
     unique_context = trainset["context"][uniqueind]
@@ -255,6 +279,10 @@ def getActivations(trainset,trained_model,networkStyle):
     hdim = trained_model.hidden_size
     activations = np.empty((len(uniqueind), hdim))
 
+    # If we want to get activations for our recurrent network and train hidden states, then we need a dataloader to pass the whole sequence through.
+    if (networkStyle=='recurrent') and retainHiddenState:
+        train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
+
     #  pass each input through the netwrk and see what happens to the hidden layer activations
     for sample in range(len(uniqueind)):
         sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
@@ -268,18 +296,42 @@ def getActivations(trainset,trained_model,networkStyle):
         if networkStyle=='mlp':
             h1activations,h2activations,_ = trained_model.get_activations(sample_input)
         elif networkStyle=='recurrent':
-            # reformat the paired input so that it works for our recurrent model
-            context = sample_input[contextrange]
-            inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
-            inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
-            recurrentinputs = [inputA, inputB]
-            h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+            if not retainHiddenState:
+                # reformat the paired input so that it works for our recurrent model
+                context = sample_input[contextrange]
+                inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
+                inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
+                recurrentinputs = [inputA, inputB]
+                h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
 
-            # pass inputs through the recurrent network
-            for i in range(2):
-                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
+                # pass inputs through the recurrent network
+                for i in range(2):
+                    h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
 
-        activations[sample] = h1activations.detach() #h1activations.detach()
+                activations[sample] = h1activations.detach()
+
+            else:
+                # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
+                # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+                h0activations = torch.zeros(1, trained_model.recurrent_size)
+
+                for batch_idx, data in enumerate(train_loader):
+                    inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+
+                    # reformat the paired input so that it works for our recurrent model
+                    context = inputs[:, contextrange]
+                    inputA = torch.cat((inputs[:, Arange], context),1)
+                    inputB = torch.cat((inputs[:, Brange], context),1)
+                    recurrentinputs = [inputA, inputB]
+
+                    # perform a two-step recurrence
+                    for i in range(2):
+                        h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
+
+                    # ***HRS this method will work but will be super slow and inefficient, since will overwrite every time until final occurance of that input.
+                    # ***HRS Later we can check whether the sample number is correct and this will be more efficient and only require one pass over all the data.
+                    if inputs==sample_input:  # This will currently keep updating until the final occurance of this input
+                        activations[sample] = h1activations.detach()
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
 
@@ -381,11 +433,11 @@ def defineHyperparams():
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
+        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
-        parser.add_argument('--batch-size', type=int, default=12, metavar='N', help='input batch size for training (default: 48)')
+        parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=12, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -436,7 +488,7 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext):
+def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
 
     if blockTrain:
         blockedtext = '_blocked'
@@ -446,6 +498,10 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext):
         seqtext = '_sequential'
     else:
         seqtext = ''
+    if retainHiddenState:
+        hiddenstate = '_retainedhidden'
+    else:
+        hiddenstate = '_resethidden'
     if labelContext:
         contextlabelledtext = '_contextlabelled'
     else:
@@ -453,9 +509,9 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext):
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
     if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+'_'+str(noise_std)+'.pth'
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+'.pth'
     else:
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+'.pth'
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'.pth'
 
     return datasetname, trained_modelname
 
@@ -520,7 +576,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N):
 
 # ---------------------------------------------------------------------------- #
 
-def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std):
+def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std, retainHiddenState):
     """This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
      - Train/test performance is logged with a SummaryWriter
@@ -562,11 +618,11 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
 
             # train network
-            standard_train_loss, standard_train_accuracy = recurrent_train(args, model, device, trainloader, optimizer, criterion, epoch, printOutput)
+            standard_train_loss, standard_train_accuracy = recurrent_train(args, model, device, trainloader, optimizer, criterion, epoch, retainHiddenState, printOutput)
 
             # assess network
-            fair_train_loss, fair_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, printOutput)
-            test_loss, test_accuracy = recurrent_test(args, model, device, testloader, criterion, printOutput)
+            fair_train_loss, fair_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
+            test_loss, test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
 
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]

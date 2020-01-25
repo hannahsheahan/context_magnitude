@@ -44,6 +44,8 @@ def trainAndSaveANetwork(params, createNewDataset):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparames for network (passed as args when called from command line)
     datasetname, trained_modelname = mnet.getDatasetName(*params)
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
+
     if createNewDataset:
         trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
     else:
@@ -51,7 +53,7 @@ def trainAndSaveANetwork(params, createNewDataset):
 
     # define and train a neural network model, log performance and output trained model
     if networkStyle == 'recurrent':
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std)
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std, retainHiddenState)
     else:
         model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
 
@@ -66,9 +68,10 @@ def analyseNetwork(fileloc, params):
     datasetname, trained_modelname = mnet.getDatasetName(*params)
     trained_model = torch.load(trained_modelname)
     trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     # pass each input through the model and determine the hidden unit activations
-    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset, trained_model, networkStyle)
+    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState)
     dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
     sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
@@ -127,7 +130,8 @@ if __name__ == '__main__':
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = False
+    labelContext = False              # does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
 
@@ -136,17 +140,16 @@ if __name__ == '__main__':
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
 
-    for run in range(10):
-        for noise_std in noiselevels:
-            params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext]
+    for noise_std in noiselevels:
+        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
-            # Train the network from scratch
-            trainAndSaveANetwork(params, createNewDataset)
+        # Train the network from scratch
+        #trainAndSaveANetwork(params, createNewDataset)
 
-            # Analyse the trained network
-            #MDS_dict = analyseNetwork(fileloc, params)
+        # Analyse the trained network
+        MDS_dict = analyseNetwork(fileloc, params)
 
-            #np.save("truecontextlabel_activations.npy", MDS_dict["sl_activations"])
-            #generatePlots(MDS_dict, params)
+        #np.save("truecontextlabel_activations.npy", MDS_dict["sl_activations"])
+        generatePlots(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
