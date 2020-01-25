@@ -251,7 +251,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(trainset,trained_model,networkStyle, retainHiddenState):
+def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train_loader):
     """ This will determine the hidden unit activations for each *unique* input in the training set
      there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads.
      If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks, at the end of a block.
@@ -265,73 +265,85 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState):
     # determine the unique inputs for the training set (there are repeats)
     # ***HRS to adjust this line here to consider the FINAL instances in the training set of each unit input, that way they will be at the END of each  training block.
     # Once 'uniqueind' tells us the FINAL index of each unique input then this will work correctly ***HRS
-    unique_inputs, uniqueind = np.unique(trainset["input"], axis=0, return_index=True)
-    unique_labels = trainset["label"][uniqueind]
-    unique_context = trainset["context"][uniqueind]
-    unique_refValue = trainset["refValue"][uniqueind]
-    unique_judgementValue = trainset["judgementValue"][uniqueind]
+
+    # Grab the indices of the FINAL instances of each unique input in the training set
+    unique_inputs, uniqueind = np.unique(np.flip(trainset["input"]), axis=0, return_index=True)
+    finaluniqueind = len(trainset["input"])-1 - uniqueind
+    finaluniqueind = np.sort(finaluniqueind)  # order important for how we record activations in the hidden state recurrent network
+
+    unique_labels = trainset["label"][finaluniqueind]
+    unique_context = trainset["context"][finaluniqueind]
+    unique_refValue = trainset["refValue"][finaluniqueind]
+    unique_judgementValue = trainset["judgementValue"][finaluniqueind]
 
     # preallocate some space...
-    labels_refValues = np.empty((len(uniqueind),1))
-    labels_judgeValues = np.empty((len(uniqueind),1))
-    contexts = np.empty((len(uniqueind),1))
-    MDSlabels = np.empty((len(uniqueind),1))
+    labels_refValues = np.empty((len(finaluniqueind),1))
+    labels_judgeValues = np.empty((len(finaluniqueind),1))
+    contexts = np.empty((len(finaluniqueind),1))
+    MDSlabels = np.empty((len(finaluniqueind),1))
     hdim = trained_model.hidden_size
-    activations = np.empty((len(uniqueind), hdim))
-
-    # If we want to get activations for our recurrent network and train hidden states, then we need a dataloader to pass the whole sequence through.
-    if (networkStyle=='recurrent') and retainHiddenState:
-        train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
+    activations = np.empty((len(finaluniqueind), hdim))
 
     #  pass each input through the netwrk and see what happens to the hidden layer activations
-    for sample in range(len(uniqueind)):
-        sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
-        sample_label = unique_labels[sample]
-        labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
-        labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
-        MDSlabels[sample] = sample_label
-        contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
 
-        # get the activations for that input
-        if networkStyle=='mlp':
-            h1activations,h2activations,_ = trained_model.get_activations(sample_input)
-        elif networkStyle=='recurrent':
-            if not retainHiddenState:
-                # reformat the paired input so that it works for our recurrent model
-                context = sample_input[contextrange]
-                inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
-                inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
-                recurrentinputs = [inputA, inputB]
-                h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+    if not ((networkStyle=='recurrent') and retainHiddenState):
+        for sample in range(len(finaluniqueind)):
+            sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
+            sample_label = unique_labels[sample]
+            labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
+            labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
+            MDSlabels[sample] = sample_label
+            contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
 
-                # pass inputs through the recurrent network
-                for i in range(2):
-                    h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
-
-                activations[sample] = h1activations.detach()
-
-            else:
-                # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
-                # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
-                h0activations = torch.zeros(1, trained_model.recurrent_size)
-
-                for batch_idx, data in enumerate(train_loader):
-                    inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
-
+            # get the activations for that input
+            if networkStyle=='mlp':
+                h1activations,h2activations,_ = trained_model.get_activations(sample_input)
+            elif networkStyle=='recurrent':
+                if not retainHiddenState:
                     # reformat the paired input so that it works for our recurrent model
-                    context = inputs[:, contextrange]
-                    inputA = torch.cat((inputs[:, Arange], context),1)
-                    inputB = torch.cat((inputs[:, Brange], context),1)
+                    context = sample_input[contextrange]
+                    inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
+                    inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
                     recurrentinputs = [inputA, inputB]
+                    h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
 
-                    # perform a two-step recurrence
+                    # pass inputs through the recurrent network
                     for i in range(2):
                         h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
 
-                    # ***HRS this method will work but will be super slow and inefficient, since will overwrite every time until final occurance of that input.
-                    # ***HRS Later we can check whether the sample number is correct and this will be more efficient and only require one pass over all the data.
-                    if inputs==sample_input:  # This will currently keep updating until the final occurance of this input
-                        activations[sample] = h1activations.detach()
+                    activations[sample] = h1activations.detach()
+
+    else:
+        # Do a single pass through the whole training set and look out for the final instances of each unique input.
+        # ***HRS Note that this will need a bit of adjusting when we remove context markers from the inputs.
+        # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
+        # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+
+        # ***HRS this section of code needs checking think its ok but not 100% sure that elements are matched across arrays
+        h0activations = torch.zeros(1, trained_model.recurrent_size)
+        sample = 0
+        for batch_idx, data in enumerate(train_loader):
+            sample_id = finaluniqueind[sample]
+            inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+
+            # reformat the paired input so that it works for our recurrent model
+            context = inputs[:, contextrange]
+            inputA = torch.cat((inputs[:, Arange], context),1)
+            inputB = torch.cat((inputs[:, Brange], context),1)
+            recurrentinputs = [inputA, inputB]
+
+            # perform a two-step recurrence
+            for i in range(2):
+                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
+
+            if batch_idx==sample_id:
+                activations[sample] = h1activations.detach()
+                sample_label = unique_labels[sample]
+                labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
+                labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
+                MDSlabels[sample] = sample_label
+                contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
+                sample += 1
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
 

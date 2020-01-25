@@ -33,9 +33,10 @@ def get_cmap(n, name='hsv'):
 
 # ---------------------------------------------------------------------------- #
 
-def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, saveFig):
+def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, saveFig):
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
     # automatic save file title details
+    retainstatetext = '_retainstate' if retainHiddenState else ''
     blockedtext = '_blocked' if blockTrain else ''
     seqtext = '_sequential' if seqTrain else ''
     labeltext = '_numerosity' if labelNumerosity else '_outcomes'
@@ -43,9 +44,9 @@ def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosit
     contextlabelledtext = '_contextlabelled' if givenContext else '_nocontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+str(noise_std)+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+str(noise_std)+'.pdf',bbox_inches='tight')
 
-    return basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+str(noise_std)
+    return basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+str(noise_std)
 
 # ---------------------------------------------------------------------------- #
 
@@ -53,7 +54,7 @@ def activationRDMs(MDS_dict, params):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-15, 1-10, 5-15
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig, ax = plt.subplots(1,2, figsize=(10,3))
     D = pairwise_distances(MDS_dict["activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
     im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
@@ -82,14 +83,14 @@ def activationRDMs(MDS_dict, params):
     ax[1].set_yticks([0,15,25])
     ax[1].set_yticklabels(['1-15', '1-10', '5-15'])
 
-    n = autoSaveFigure('figures/RDM_', networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std, saveFig)
+    n = autoSaveFigure('figures/RDM_', networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
 def plot3MDS(MDS_dict, labelNumerosity, params):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
 
     # Plot the hidden activations for the 3 MDS dimensions
     fig,ax = plt.subplots(3,3, figsize=(14,15))
@@ -153,14 +154,14 @@ def plot3MDS(MDS_dict, labelNumerosity, params):
                     ax[k,j].set_title('judgement')
                 ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
 
-    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, saveFig)
+    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
 def plot3MDSContexts(MDS_dict, labelNumerosity, params):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     labels_contexts = MDS_dict["labels_contexts"] if labelContext else  np.full_like(MDS_dict["labels_contexts"], 1)
 
     MDS_act = MDS_dict["MDS_activations"]
@@ -193,7 +194,7 @@ def plot3MDSContexts(MDS_dict, labelNumerosity, params):
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std, saveFig)
+    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -201,7 +202,7 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig,ax = plt.subplots(1,3, figsize=(18,5))
     colours = get_cmap(10, 'magma')
     diffcolours = get_cmap(20, 'magma')
@@ -253,7 +254,7 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
             ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std, saveFig)
+    n = autoSaveFigure('figures/3MDS60_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -340,7 +341,7 @@ def animate3DMDS(MDS_dict, params):
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
     slMDS = MDS_dict["MDS_slactivations"]
@@ -353,7 +354,7 @@ def animate3DMDS(MDS_dict, params):
         contextA = range(15)
         contextB = range(15,30)
         contextC = range(30, 45)
-        
+
     def init():
 
         points = [contextA, contextB, contextC] #if labelContext else [contextA]
@@ -380,7 +381,7 @@ def animate3DMDS(MDS_dict, params):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std, False)
+        strng = autoSaveFigure('animations/MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
