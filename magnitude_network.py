@@ -67,6 +67,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
     # On the very first trial on training, reset the hidden weights to zeros
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
+    latentstate = torch.zeros(args.batch_size, model.recurrent_size)
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
@@ -82,8 +83,8 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
             hidden = torch.zeros(args.batch_size, model.recurrent_size)  # only if you want to reset hidden recurrent weights
         else:
             # Note: we can still update the gradients every two steps and discard the gradients before that, and just keep the hidden state
-            #to reflect the recent statistics as an initialisation rather than something we continue to backprop through.
-            hidden = hidden.detach()
+            # to reflect the recent statistics as an initialisation rather than something we continue to backprop through.
+            hidden = latentstate
 
         # perform two-steps of recurrence
         for i in range(2):
@@ -91,6 +92,9 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
             noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
             hidden.add_(noise)
             output, hidden = model(recurrentinputs[i], hidden)  # this hidden state will be preserved across trials
+            # Since our trials are sequential and overlapping, store hidden state after only one input has been passed in and combined with original hidden state
+            if i==0:
+                latentstate = hidden.detach()
 
         loss = criterion(output, labels)
         loss.backward()         # passes the loss backwards to compute the dE/dW gradients
@@ -628,6 +632,13 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         trainingPerformance, testPerformance = [[] for i in range(2)]
 
         print("Training network...")
+
+        # Take baseline performance measures
+        _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
+        _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
+        trainingPerformance.append(base_train_accuracy)
+        testPerformance.append(base_test_accuracy)
+
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
 
             # train network

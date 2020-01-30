@@ -232,15 +232,11 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
         ax[j].set_title('context')
 
         # perhaps draw a coloured line between adjacent numbers
-        if labelContext=='true':
+        if (labelContext=='true') or (labelContext=='random'):
             contextA = range(15)
             contextB = range(15,25)
             contextC = range(25, 35)
-        elif labelContext=='random':
-            contextA = range(15)
-            contextB = range(15,30)
-            contextC = range(30, 45)
-        elif labelContext=='constant':  # ***HRS is this correct??
+        else:      # ***HRS is this correct??
             contextA = range(15)
             contextB = range(15,30)
             contextC = range(30, 45)
