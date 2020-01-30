@@ -75,6 +75,7 @@ def analyseNetwork(fileloc, params):
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
     activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
     dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
+    print(activations.shape)
     sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
 
     # do MDS on the activations for the training set
@@ -132,7 +133,7 @@ if __name__ == '__main__':
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'random'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    labelContext = 'constant'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
     retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
@@ -146,7 +147,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset)
+        #trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         MDS_dict = analyseNetwork(fileloc, params)

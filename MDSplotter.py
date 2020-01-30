@@ -232,14 +232,10 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
         ax[j].set_title('context')
 
         # perhaps draw a coloured line between adjacent numbers
-        if (labelContext=='true') or (labelContext=='random'):
-            contextA = range(15)
-            contextB = range(15,25)
-            contextC = range(25, 35)
-        else:      # ***HRS is this correct??
-            contextA = range(15)
-            contextB = range(15,30)
-            contextC = range(30, 45)
+        contextA = range(15)
+        contextB = range(15,25)
+        contextC = range(25, 35)
+
         ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
         ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
         ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
@@ -280,11 +276,6 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
     flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
     divisor = np.zeros((Ncontexts,len(uniqueValues)))
-
-    # if the dataset did not label context during training, we cant fish this out at test on the hidden units either
-    #if not givenContext:
-    #    labels_contexts = np.full_like(labels_contexts, 1)
-
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     if dimKeep == 'reference':

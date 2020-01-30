@@ -274,10 +274,15 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     # Grab the indices of the FINAL instances of each unique input in the training set
     # ***HRS change this to consider activations at all instances, then average these activations
     #  to get the mean per unique input. That should take some of the wonkiness out of the MDS lines.
-    unique_inputs, uniqueind = np.unique(np.flip(trainset["input"]), axis=0, return_index=True)
+    trainset_input_n_context = [np.append(trainset["input"][i],trainset["context"][i]) for i in range(len(trainset["input"]))]
+    unique_inputs, uniqueind = np.unique(np.flip(trainset_input_n_context), axis=0, return_index=True)
     finaluniqueind = len(trainset["input"])-1 - uniqueind
     finaluniqueind = np.sort(finaluniqueind)  # order important for how we record activations in the hidden state recurrent network
+    #print(unique_inputs)
+    print(trainset["context"])
+    print('-----')
 
+    unique_inputs = trainset["input"][finaluniqueind]
     unique_labels = trainset["label"][finaluniqueind]
     unique_context = trainset["context"][finaluniqueind]
     unique_refValue = trainset["refValue"][finaluniqueind]
@@ -291,7 +296,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     hdim = trained_model.hidden_size
     activations = np.empty((len(finaluniqueind), hdim))
 
-    #  pass each input through the netwrk and see what happens to the hidden layer activations
+    #  pass each input through the network and see what happens to the hidden layer activations
 
     if not ((networkStyle=='recurrent') and retainHiddenState):
         for sample in range(len(finaluniqueind)):
@@ -328,6 +333,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
         # ***HRS this section of code needs checking think its ok but not 100% sure that elements are matched across arrays
         h0activations = torch.zeros(1, trained_model.recurrent_size)
+        latentstate = torch.zeros(1, trained_model.recurrent_size)
         sample = 0
         for batch_idx, data in enumerate(train_loader):
             sample_id = finaluniqueind[sample]
@@ -339,9 +345,13 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             inputB = torch.cat((inputs[:, Brange], context),1)
             recurrentinputs = [inputA, inputB]
 
+            h0activations = latentstate  # because we have overlapping sequential trials
+
             # perform a two-step recurrence
             for i in range(2):
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
+                if i==0:
+                    latentstate = h0activations.detach()
 
             if batch_idx==sample_id:
                 activations[sample] = h1activations.detach()
