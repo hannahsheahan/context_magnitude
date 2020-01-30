@@ -143,7 +143,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
     # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
     latentstate = torch.zeros(args.batch_size, model.recurrent_size)
-    
+
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
             inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
@@ -638,6 +638,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         print("Training network...")
 
         # Take baseline performance measures
+        optimizer.zero_grad()
         _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
         _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
         trainingPerformance.append(base_train_accuracy)
