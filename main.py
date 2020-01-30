@@ -110,7 +110,7 @@ def generatePlots(MDS_dict, params):
 
     # plot the MDS with number labels
     #labelNumerosity = True
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with output labels (true/false labels)
     #labelNumerosity = False
@@ -120,7 +120,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DMDS(MDS_dict, params)
+    MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = False              # does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    labelContext = 'random'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
     retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled

@@ -122,7 +122,7 @@ def loadInputData(fileloc,datasetname):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True, labelContext=True):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True, labelContext='true'):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -134,10 +134,12 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
         sequentialABTraining = False
 
     print('Generating dataset...')
-    if labelContext:
+    if labelContext=='true':
         print('- network has explicit context nodes')
-    else:
-        print('- network does NOT have context explicitly indicated')
+    elif labelContext=='random':
+        print('- network has randomly assigned contexts')
+    elif labelContext=='constant':
+        print('- network has constant (1) context nodes')
     if blockedTraining:
         print('- training is blocked by context')
     else:
@@ -154,7 +156,6 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     Ncontexts = 3
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
-
 
     for phase in ['train','test']:   # this method should balance context instances in train and test phases
         if phase == 'train':
@@ -206,12 +207,14 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 input2 = turnOneHot(judgementValue, totalMaxNumerosity)
                 input1 = turnOneHot(refValue, totalMaxNumerosity)
 
-                if labelContext:
+                if labelContext=='true':
                     contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
-                else:
+                elif labelContext=='random':
                     context = random.randint(1,3)
                     contextinput = turnOneHot(context, 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
-                    #contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
+                elif labelContext=='constant':
+                    context = 1
+                    contextinput = turnOneHot(context, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                 # determine the correct rel magnitude judgement
                 if judgementValue > refValue:

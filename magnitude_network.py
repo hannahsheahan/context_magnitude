@@ -263,10 +263,9 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     contextrange = range(30,33)
 
     # determine the unique inputs for the training set (there are repeats)
-    # ***HRS to adjust this line here to consider the FINAL instances in the training set of each unit input, that way they will be at the END of each  training block.
-    # Once 'uniqueind' tells us the FINAL index of each unique input then this will work correctly ***HRS
-
     # Grab the indices of the FINAL instances of each unique input in the training set
+    # ***HRS change this to consider activations at all instances, then average these activations
+    #  to get the mean per unique input. That should take some of the wonkiness out of the MDS lines.
     unique_inputs, uniqueind = np.unique(np.flip(trainset["input"]), axis=0, return_index=True)
     finaluniqueind = len(trainset["input"])-1 - uniqueind
     finaluniqueind = np.sort(finaluniqueind)  # order important for how we record activations in the hidden state recurrent network
@@ -514,10 +513,12 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, 
         hiddenstate = '_retainedhidden'
     else:
         hiddenstate = '_resethidden'
-    if labelContext:
+    if labelContext=='true':
         contextlabelledtext = '_contextlabelled'
-    else:
-        contextlabelledtext = '_nocontextlabel'
+    elif labelContext=='random':
+        contextlabelledtext = '_randomcontextlabel'
+    elif labelContext=='constant':
+        contextlabelledtext = '_constantcontextlabel'
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
     if networkStyle=='recurrent':

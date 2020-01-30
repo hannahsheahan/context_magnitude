@@ -41,7 +41,12 @@ def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosit
     seqtext = '_sequential' if seqTrain else ''
     labeltext = '_numerosity' if labelNumerosity else '_outcomes'
     contexts = '_contexts' if labelContexts else ''
-    contextlabelledtext = '_contextlabelled' if givenContext else '_nocontextlabel'
+    if givenContext=='true':
+        contextlabelledtext = '_truecontextlabelled'
+    elif givenContext=='random':
+        contextlabelledtext =  '_randomcontextlabel'
+    elif givenContext=='constant':
+        contextlabelledtext =  '_constantcontextlabel'
 
     if saveFig:
         plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+str(noise_std)+'.pdf',bbox_inches='tight')
@@ -57,7 +62,7 @@ def activationRDMs(MDS_dict, params):
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig, ax = plt.subplots(1,2, figsize=(10,3))
     D = pairwise_distances(MDS_dict["activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
-    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
+    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
 
     divider = make_axes_locatable(ax[0])
     cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -71,7 +76,7 @@ def activationRDMs(MDS_dict, params):
 
     # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
     D = pairwise_distances(MDS_dict["sl_activations"])
-    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
+    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
 
     divider = make_axes_locatable(ax[1])
     cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -227,11 +232,15 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
         ax[j].set_title('context')
 
         # perhaps draw a coloured line between adjacent numbers
-        if labelContext:
+        if labelContext=='true':
             contextA = range(15)
             contextB = range(15,25)
             contextC = range(25, 35)
-        else:
+        elif labelContext=='random':
+            contextA = range(15)
+            contextB = range(15,30)
+            contextC = range(30, 45)
+        elif labelContext=='constant':  # ***HRS is this correct??
             contextA = range(15)
             contextB = range(15,30)
             contextC = range(30, 45)
@@ -252,7 +261,7 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
             ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
         else:
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
-            ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
+            ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
     n = autoSaveFigure('figures/3MDS60_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
