@@ -210,8 +210,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 if labelContext=='true':
                     contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
                 elif labelContext=='random':
-                    context = random.randint(1,3)
-                    contextinput = turnOneHot(context, 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
+                    #context = random.randint(1,3)   # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
+                    contextinput = turnOneHot(random.randint(1,3), 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
                 elif labelContext=='constant':
                     context = 1
                     contextinput = turnOneHot(context, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
