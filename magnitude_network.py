@@ -142,7 +142,8 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
     # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
-
+    latentstate = torch.zeros(args.batch_size, model.recurrent_size)
+    
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
             inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
@@ -155,13 +156,16 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
-
+            else:
+                hidden = latentstate
             # perform a two-step recurrence
             for i in range(2):
                 # inject some noise ~= forgetting of the previous number
                 noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                 hidden.add_(noise)
                 output, hidden = model(recurrentinputs[i], hidden)
+                if i==0:
+                    latentstate = hidden.detach()
 
             test_loss += criterion(output, labels).item()
 
