@@ -269,43 +269,42 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     Arange = range(15)
     Brange = range(15,30)
     contextrange = range(30,33)
+    ABrange = range(30)  # A and B but not context input
 
     # determine the unique inputs for the training set (there are repeats)
-    # Grab the indices of the FINAL instances of each unique input in the training set
+    # Grab the indices of the FINAL instances of each unique input in the training set.
     # ***HRS change this to consider activations at all instances, then average these activations
     #  to get the mean per unique input. That should take some of the wonkiness out of the MDS lines.
-    trainset_input_n_context = [np.append(trainset["input"][i],trainset["context"][i]) for i in range(len(trainset["input"]))]
-    unique_inputs, uniqueind = np.unique(np.flip(trainset_input_n_context), axis=0, return_index=True)
-    finaluniqueind = len(trainset["input"])-1 - uniqueind
-    finaluniqueind = np.sort(finaluniqueind)  # order important for how we record activations in the hidden state recurrent network
-    #print(unique_inputs)
-    print(trainset["context"])
-    print('-----')
+    trainset_input_n_context = [np.append(trainset["input"][i, ABrange],trainset["context"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
+    unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
 
-    unique_inputs = trainset["input"][finaluniqueind]
-    unique_labels = trainset["label"][finaluniqueind]
-    unique_context = trainset["context"][finaluniqueind]
-    unique_refValue = trainset["refValue"][finaluniqueind]
-    unique_judgementValue = trainset["judgementValue"][finaluniqueind]
+    unique_inputs = trainset["input"][uniqueind]
+    unique_labels = trainset["label"][uniqueind]
+    unique_context = trainset["context"][uniqueind]
+    unique_refValue = trainset["refValue"][uniqueind]
+    unique_judgementValue = trainset["judgementValue"][uniqueind]
 
     # preallocate some space...
-    labels_refValues = np.empty((len(finaluniqueind),1))
-    labels_judgeValues = np.empty((len(finaluniqueind),1))
-    contexts = np.empty((len(finaluniqueind),1))
-    MDSlabels = np.empty((len(finaluniqueind),1))
+    labels_refValues = np.empty((len(uniqueind),1))
+    labels_judgeValues = np.empty((len(uniqueind),1))
+    contexts = np.empty((len(uniqueind),1))
+    time_index = np.empty((len(uniqueind),1))
+    MDSlabels = np.empty((len(uniqueind),1))
     hdim = trained_model.hidden_size
-    activations = np.empty((len(finaluniqueind), hdim))
+    activations = np.empty((len(uniqueind), hdim))
 
     #  pass each input through the network and see what happens to the hidden layer activations
 
     if not ((networkStyle=='recurrent') and retainHiddenState):
-        for sample in range(len(finaluniqueind)):
+        for sample in range(len(uniqueind)):
             sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
             sample_label = unique_labels[sample]
             labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
             labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
             MDSlabels[sample] = sample_label
             contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
+            time_index[sample] = 0  # doesnt mean anything for these not-sequential cases
+            counter[sample] = 0     # we dont care how many instances of each unique input for these non-sequential cases
 
             # get the activations for that input
             if networkStyle=='mlp':
@@ -326,23 +325,26 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                     activations[sample] = h1activations.detach()
 
     else:
-        # Do a single pass through the whole training set and look out for the final instances of each unique input.
+        # Do a single pass through the whole training set and look out for ALL instances of each unique input.
         # ***HRS Note that this will need a bit of adjusting when we remove context markers from the inputs.
         # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
-        # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+        # reset hidden recurrent weights on the very first trial ***HRS be careful with this
 
-        # ***HRS this section of code needs checking think its ok but not 100% sure that elements are matched across arrays
         h0activations = torch.zeros(1, trained_model.recurrent_size)
         latentstate = torch.zeros(1, trained_model.recurrent_size)
-        sample = 0
+
+        #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
+        counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
+        aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
+
         for batch_idx, data in enumerate(train_loader):
-            sample_id = finaluniqueind[sample]
-            inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), data['context']
+            input_n_context = np.append(inputs[:, ABrange], context)  # concatenate the A,B input and the underlying context (but not context input)
 
             # reformat the paired input so that it works for our recurrent model
-            context = inputs[:, contextrange]
-            inputA = torch.cat((inputs[:, Arange], context),1)
-            inputB = torch.cat((inputs[:, Brange], context),1)
+            contextinput = inputs[:, contextrange]
+            inputA = torch.cat((inputs[:, Arange], contextinput),1)
+            inputB = torch.cat((inputs[:, Brange], contextinput),1)
             recurrentinputs = [inputA, inputB]
 
             h0activations = latentstate  # because we have overlapping sequential trials
@@ -353,14 +355,26 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                 if i==0:
                     latentstate = h0activations.detach()
 
-            if batch_idx==sample_id:
-                activations[sample] = h1activations.detach()
-                sample_label = unique_labels[sample]
-                labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
-                labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
-                MDSlabels[sample] = sample_label
-                contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
-                sample += 1
+            # search the list of unique inputs and underlying contexts,
+            tmp = (unique_inputs_n_context.shape)[0]
+            for i in range(tmp):
+                if np.all(unique_inputs_n_context[i,:]==input_n_context):
+                    index = i
+                    break
+
+            activations[index] = h1activations.detach()
+            labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
+            labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+            MDSlabels[index] = unique_labels[index]
+            contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+            time_index[index] = batch_idx
+
+            # Aggregate activity associated with each instance of each input
+            aggregate_activations[index] += activations[index]
+            counter[index] += 1    # captures how many instances of each unique input there are in the training set
+
+        # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
+        activations = np.divide(aggregate_activations, counter)
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
 
@@ -371,6 +385,8 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     MDSlabels = np.take_along_axis(MDSlabels, context_ind, axis=0)
     labels_refValues = np.take_along_axis(labels_refValues, context_ind, axis=0)
     labels_judgeValues = np.take_along_axis(labels_judgeValues, context_ind, axis=0)
+    time_index = np.take_along_axis(time_index, context_ind, axis=0)
+    counter = np.take_along_axis(counter, context_ind, axis=0)
 
     # within each context, sort according to numerosity of the judgement value
     for context in range(1,4):
@@ -381,8 +397,10 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
         contexts[ind] = np.take_along_axis(contexts, numerosity_ind, axis=0)
         MDSlabels[ind] = np.take_along_axis(MDSlabels, numerosity_ind, axis=0)
         activations[ind] = np.take_along_axis(activations, numerosity_ind, axis=0)
+        time_index[ind] = np.take_along_axis(time_index, numerosity_ind, axis=0)
+        counter[ind] = np.take_along_axis(counter, numerosity_ind, axis=0)
 
-    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter
 
 # ---------------------------------------------------------------------------- #
 

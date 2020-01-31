@@ -73,7 +73,7 @@ def analyseNetwork(fileloc, params):
     # pass each input through the model and determine the hidden unit activations
     if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
-    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
+    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
     dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
     print(activations.shape)
     sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
