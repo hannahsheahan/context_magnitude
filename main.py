@@ -75,8 +75,7 @@ def analyseNetwork(fileloc, params):
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
     activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
     dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-    print(activations.shape)
-    sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext)
+    sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
     # do MDS on the activations for the training set
     randseed = 3 # so that we get the same MDS each time
@@ -88,7 +87,7 @@ def analyseNetwork(fileloc, params):
     MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels,\
                 "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues,\
                 "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
-                "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues}
+                "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter}
 
     return MDS_dict
 
@@ -102,6 +101,9 @@ def generatePlots(MDS_dict, params):
     # they are quite sparse activations? (but we dont really care that much)
     #n = plt.hist(activations)
 
+    # Check how many samples we have of each unique input (should be context-ordered)
+    MDSplt.instanceCounter(MDS_dict, params)
+
     # Take a look at the activations RSA
     MDSplt.activationRDMs(MDS_dict, params)
 
@@ -111,7 +113,7 @@ def generatePlots(MDS_dict, params):
 
     # plot the MDS with number labels
     #labelNumerosity = True
-    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with output labels (true/false labels)
     #labelNumerosity = False
@@ -121,7 +123,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    MDSplt.animate3DMDS(MDS_dict, params)
+    #MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 

@@ -374,6 +374,11 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             counter[index] += 1    # captures how many instances of each unique input there are in the training set
 
         # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
+        for i in range(counter.shape[0]):
+            if counter[i]==0:
+                counter[i]=1  # prevent divide by zero
+                print('Warning: index ' + str(i) + ' input had no instances?')
+
         activations = np.divide(aggregate_activations, counter)
 
     # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations

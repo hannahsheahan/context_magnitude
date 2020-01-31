@@ -259,7 +259,7 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
 
 # ---------------------------------------------------------------------------- #
 
-def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext):
+def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
     """This function will average the hidden unit activations over one of the two numbers involved in the representation:
     either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
      which are averaged over the previously presented number (input B).
@@ -275,7 +275,9 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     flat_values = np.zeros((Ncontexts,len(uniqueValues),1))
     flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
     flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
+    flat_counter = np.zeros((Ncontexts,len(uniqueValues),1))
     divisor = np.zeros((Ncontexts,len(uniqueValues)))
+
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     if dimKeep == 'reference':
@@ -293,6 +295,7 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
                         flat_contexts[context,value-1] = context
                         flat_values[context,value-1] = value
                         flat_outcomes[context,value-1] = MDSlabels[i]
+                        flat_counter[context,value-1] += counter[i]
                         divisor[context,value-1] +=1
 
             # take the mean i.e. normalise by the number of instances that met that condition
@@ -302,8 +305,8 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
                 flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
 
     # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
-    flat_activations, flat_contexts, flat_values, flat_outcomes = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes]]
-    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels = [[] for i in range(5)]
+    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter = [[] for i in range(6)]
 
     for i in range(flat_activations.shape[0]):
         checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
@@ -313,6 +316,7 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
             sl_activations.append(flat_activations[i])
             sl_contexts.append(flat_contexts[i])
             sl_MDSlabels.append(flat_outcomes[i])
+            sl_counter.append(flat_counter[i])
 
             if dimKeep == 'reference':
                 sl_refValues.append(flat_values[i])
@@ -322,13 +326,13 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
                 sl_judgeValues.append(flat_values[i])
 
     # finally, reshape the outputs so that they match our inputs nicely
-    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels = [np.asarray(i) for i in [sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels]]
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter = [np.asarray(i) for i in [sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter]]
     if dimKeep == 'reference':
         sl_judgeValues = np.expand_dims(sl_judgeValues, axis=1)
     else:
         sl_refValues = np.expand_dims(sl_refValues, axis=1)
 
-    return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues
+    return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter
 
 # ---------------------------------------------------------------------------- #
 
@@ -381,3 +385,21 @@ def animate3DMDS(MDS_dict, params):
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
+
+def instanceCounter(MDS_dict, params):
+    """ Plot a histogram showing the number of times each unique input (reference averaged) and context was in the generated training set."""
+
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    plt.figure()
+    rangeA = np.arange(15)
+    rangeB = np.arange(15,25)
+    rangeC = np.arange(25, 35)
+    y = MDS_dict["sl_counter"].flatten()
+
+    plt.bar(rangeA, y[rangeA], color='gold', edgecolor = 'gold')
+    plt.bar(rangeB, y[rangeB], color='dodgerblue', edgecolor = 'dodgerblue')
+    plt.bar(rangeC, y[rangeC], color='orangered', edgecolor = 'orangered')
+    plt.xlabel('Numbers and contexts')
+    plt.ylabel('Instances in training set')
+
+    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
