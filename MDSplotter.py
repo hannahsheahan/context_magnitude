@@ -403,3 +403,55 @@ def instanceCounter(MDS_dict, params):
     plt.ylabel('Instances in training set')
 
     n = autoSaveFigure('figures/InstanceCounter_meanJudgement', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+
+# ---------------------------------------------------------------------------- #
+
+def viewTrainingSequence(MDS_dict, params):
+    """Take the data loader and view how the contexts and latent states evolved in time in the training set."""
+
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
+    temporal_context = MDS_dict["drift"]["temporal_context"]
+
+    # context in time/trials in training set
+    plt.figure()
+    plt.plot(temporal_context.flatten())
+    plt.xlabel('Trials in training set')
+    plt.ylabel('Context (0: 1-15; 1: 1-10; 2: 6-15)')
+    n = autoSaveFigure('figures/temporalcontext_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+
+    # latent state drift in time/trials in training set
+    fig,ax = plt.subplots(1,3, figsize=(18,5))
+
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        ax[j].set_title('latent state drift')
+
+        # perhaps draw a coloured line between adjacent numbers
+        ax[j].plot(MDS_latentstate[:, dimA], MDS_latentstate[:, dimB], color='grey')
+
+        for i in range((MDS_latentstate.shape[0])):
+            # colour by context
+            ax[j].scatter(MDS_latentstate[i, dimA], MDS_latentstate[i, dimB], color=contextcolours[int(temporal_context[i])], s=80)
+
+        ax[j].axis('equal')
+        #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
+
+    n = autoSaveFigure('figures/latentstatedrift_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+
+# ---------------------------------------------------------------------------- #

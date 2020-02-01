@@ -278,6 +278,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     trainset_input_n_context = [np.append(trainset["input"][i, ABrange],trainset["context"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
     unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
 
+    trainsize = trainset["label"].shape[0]
     unique_inputs = trainset["input"][uniqueind]
     unique_labels = trainset["label"][uniqueind]
     unique_context = trainset["context"][uniqueind]
@@ -291,7 +292,10 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     time_index = np.empty((len(uniqueind),1))
     MDSlabels = np.empty((len(uniqueind),1))
     hdim = trained_model.hidden_size
+    rdim = trained_model.recurrent_size
     activations = np.empty((len(uniqueind), hdim))
+    temporal_context = np.zeros((trainsize,))            # for tracking the evolution of context in the training set
+    temporal_activation_drift = np.zeros((trainsize, rdim))
 
     #  pass each input through the network and see what happens to the hidden layer activations
 
@@ -340,6 +344,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
         for batch_idx, data in enumerate(train_loader):
             inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), data['context']
             input_n_context = np.append(inputs[:, ABrange], context)  # concatenate the A,B input and the underlying context (but not context input)
+            temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
 
             # reformat the paired input so that it works for our recurrent model
             contextinput = inputs[:, contextrange]
@@ -362,6 +367,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                     index = i
                     break
 
+            temporal_activation_drift[batch_idx, :] = latentstate
             activations[index] = h1activations.detach()
             labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
             labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
@@ -405,7 +411,9 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
         time_index[ind] = np.take_along_axis(time_index, numerosity_ind, axis=0)
         counter[ind] = np.take_along_axis(counter, numerosity_ind, axis=0)
 
-    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter
+    drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
+
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift
 
 # ---------------------------------------------------------------------------- #
 
@@ -562,12 +570,14 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, 
         contextlabelledtext = '_constantcontextlabel'
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)
+
     if networkStyle=='recurrent':
         trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+'.pth'
     else:
         trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'.pth'
 
-    return datasetname, trained_modelname
+    return datasetname, trained_modelname, analysis_name
 
 # ---------------------------------------------------------------------------- #
 

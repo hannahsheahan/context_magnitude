@@ -25,6 +25,7 @@ from importlib import reload
 from mpl_toolkits import mplot3d
 from matplotlib import animation
 import json
+import time
 
 # network stuff
 import torch
@@ -43,7 +44,7 @@ import argparse
 def trainAndSaveANetwork(params, createNewDataset):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparames for network (passed as args when called from command line)
-    datasetname, trained_modelname = mnet.getDatasetName(*params)
+    datasetname, trained_modelname, analysis_name = mnet.getDatasetName(*params)
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     if createNewDataset:
@@ -64,30 +65,62 @@ def trainAndSaveANetwork(params, createNewDataset):
 # ---------------------------------------------------------------------------- #
 
 def analyseNetwork(fileloc, params):
-    # load the trained model and the datasets it was trained/tested on
-    datasetname, trained_modelname = mnet.getDatasetName(*params)
-    trained_model = torch.load(trained_modelname)
-    trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
+    """Perform MDS on:
+        - the hidden unit activations (60-dim) for each unique input in each context.
+        - the averaged hidden unit activations (60-dim), averaged across the unique judgement values in each context.
+        - the recurrent latent states (33-dim), as they evolve across the 12k sequential trials.
+    """
+    # load the MDS analysis if we already have it and move on
+    datasetname, trained_modelname, analysis_name = mnet.getDatasetName(*params)
 
-    # pass each input through the model and determine the hidden unit activations
-    if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
-        train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
-    activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
-    dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-    sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+    # load an existing dataset
+    try:
+        data = np.load(analysis_name+'.npy', allow_pickle=True)
+        MDS_dict = data.item()
+        preanalysed = True
+        print('Loading existing network analysis...')
+    except:
+        preanalysed = False
+        print('Analysing trained network...')
 
-    # do MDS on the activations for the training set
-    randseed = 3 # so that we get the same MDS each time
-    embedding = MDS(n_components=3, random_state=randseed)
-    MDS_activations = embedding.fit_transform(activations)
-    sl_embedding = MDS(n_components=3, random_state=randseed)
-    MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+    if not preanalysed:
+        # load the trained model and the datasets it was trained/tested on
+        trained_model = torch.load(trained_modelname)
+        trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
+        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
-    MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels,\
-                "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues,\
-                "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
-                "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter}
+        # pass each input through the model and determine the hidden unit activations
+        if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
+            train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
+        activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
+        dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
+        sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+
+        # do MDS on the activations for the training set
+        tic = time.time()
+        randseed = 3 # so that we get the same MDS each time
+        embedding = MDS(n_components=3, random_state=randseed)
+        MDS_activations = embedding.fit_transform(activations)
+        sl_embedding = MDS(n_components=3, random_state=randseed)
+        MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+
+        # now do MDS again but for the latent state activations through time in the training set
+        print(drift["temporal_activation_drift"].shape)
+        embedding = MDS(n_components=3, random_state=randseed)
+        drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
+        print(drift["MDS_latentstate"].shape)
+        toc = time.time()
+        print('Time elapsed: ')
+        print(toc-tic)
+
+        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels,\
+                    "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
+                    "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
+                    "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter}
+
+        # save the analysis for next time
+        np.save(analysis_name+'.npy', MDS_dict)
+        print('Saving network analysis...')
 
     return MDS_dict
 
@@ -100,6 +133,9 @@ def generatePlots(MDS_dict, params):
 
     # they are quite sparse activations? (but we dont really care that much)
     #n = plt.hist(activations)
+
+    # Plot the latent state drifting in time with context in the training set
+    MDSplt.viewTrainingSequence(MDS_dict, params)
 
     # Check how many samples we have of each unique input (should be context-ordered)
     MDSplt.instanceCounter(MDS_dict, params)
@@ -123,7 +159,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DMDS(MDS_dict, params)
+    MDSplt.animate3DMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
