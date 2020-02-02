@@ -96,6 +96,8 @@ def analyseNetwork(fileloc, params):
         dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
         sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
+        np.save("constantcontextlabel_recurrentnet_meanactivations.npy", sl_activations)
+
         # do MDS on the activations for the training set
         tic = time.time()
         randseed = 3 # so that we get the same MDS each time
@@ -138,14 +140,14 @@ def generatePlots(MDS_dict, params):
     MDSplt.viewTrainingSequence(MDS_dict, params)
 
     # Check how many samples we have of each unique input (should be context-ordered)
-    MDSplt.instanceCounter(MDS_dict, params)
+    #MDSplt.instanceCounter(MDS_dict, params)
 
     # Take a look at the activations RSA
-    MDSplt.activationRDMs(MDS_dict, params)
+    #MDSplt.activationRDMs(MDS_dict, params)
 
     # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
-    labelNumerosity = True
-    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
+    #labelNumerosity = True
+    #MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with number labels
     #labelNumerosity = True
@@ -159,7 +161,10 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    MDSplt.animate3DMDS(MDS_dict, params)
+    #MDSplt.animate3DMDS(MDS_dict, params)
+
+    # plot a 3D version of the latent state MDS
+    MDSplt.animate3DdriftMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
@@ -190,7 +195,7 @@ if __name__ == '__main__':
         # Analyse the trained network
         MDS_dict = analyseNetwork(fileloc, params)
 
-        #np.save("truecontextlabel_activations.npy", MDS_dict["sl_activations"])
+        #np.save("constantcontextlabel_activations.npy", MDS_dict["sl_activations"])
         generatePlots(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #

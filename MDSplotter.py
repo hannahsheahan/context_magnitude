@@ -346,14 +346,9 @@ def animate3DMDS(MDS_dict, params):
     ax = mplot3d.Axes3D(fig)
     slMDS = MDS_dict["MDS_slactivations"]
     # which MDS points correspond to which contexts
-    if labelContext:
-        contextA = range(15)
-        contextB = range(15,25)
-        contextC = range(25, 35)
-    else:
-        contextA = range(15)
-        contextB = range(15,30)
-        contextC = range(30, 45)
+    contextA = range(15)
+    contextB = range(15,25)
+    contextC = range(25, 35)
 
     def init():
 
@@ -443,15 +438,57 @@ def viewTrainingSequence(MDS_dict, params):
         ax[j].set_title('latent state drift')
 
         # perhaps draw a coloured line between adjacent numbers
-        ax[j].plot(MDS_latentstate[:, dimA], MDS_latentstate[:, dimB], color='grey')
+        # ax[j].plot(MDS_latentstate[:, dimA], MDS_latentstate[:, dimB], color='grey')
 
-        for i in range((MDS_latentstate.shape[0])):
+        #for i in range((MDS_latentstate.shape[0])):
+        for i in range(2000,3500): # a subset of trials
             # colour by context
-            ax[j].scatter(MDS_latentstate[i, dimA], MDS_latentstate[i, dimB], color=contextcolours[int(temporal_context[i])], s=80)
+            ax[j].scatter(MDS_latentstate[i, dimA], MDS_latentstate[i, dimB], color=contextcolours[int(temporal_context[i])-1], s=20)
+            ax[j].plot([MDS_latentstate[i, dimA], MDS_latentstate[i+1, dimA]], [MDS_latentstate[i, dimB],MDS_latentstate[i+1, dimB]], color=contextcolours[int(temporal_context[i])-1])
 
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
     n = autoSaveFigure('figures/latentstatedrift_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+
+# ---------------------------------------------------------------------------- #
+
+def animate3DdriftMDS(MDS_dict, params):
+    """ This function will plot the latent state drift MDS projections
+     on a 3D plot, animate/rotate that plot to view it
+     from different angles and optionally save it as a mp4 file.
+    """
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    fig = plt.figure()
+    ax = mplot3d.Axes3D(fig)
+    MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
+    temporal_context = MDS_dict["drift"]["temporal_context"]
+
+    def init():
+
+        #points = [contextA, contextB, contextC] #if labelContext else [contextA]
+
+        for i in range(2000,3500):
+            ax.scatter(MDS_latentstate[i, 0], MDS_latentstate[i, 1], MDS_latentstate[i, 2], color=contextcolours[int(temporal_context[i])-1])
+            #ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+
+        ax.set_xlabel('MDS dim 1')
+        ax.set_ylabel('MDS dim 2')
+        ax.set_zlabel('MDS dim 3')
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=10., azim=i)
+        return fig,
+
+    # Animate.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=360, interval=20, blit=True)
+
+    # save the animation as an mp4.
+    if saveFig:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        strng = autoSaveFigure('animations/latentdrift_MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
+        anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
