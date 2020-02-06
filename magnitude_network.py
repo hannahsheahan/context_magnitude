@@ -296,7 +296,9 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     activations = np.empty((len(uniqueind), hdim))
     temporal_context = np.zeros((trainsize,))            # for tracking the evolution of context in the training set
     temporal_activation_drift = np.zeros((trainsize, rdim))
-
+    #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
+    aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
+    counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
     #  pass each input through the network and see what happens to the hidden layer activations
 
     if not ((networkStyle=='recurrent') and retainHiddenState):
@@ -337,9 +339,6 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
         h0activations = torch.zeros(1, trained_model.recurrent_size)
         latentstate = torch.zeros(1, trained_model.recurrent_size)
 
-        #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
-        counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
-        aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
 
         for batch_idx, data in enumerate(train_loader):
             inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), data['context']
@@ -493,11 +492,11 @@ def defineHyperparams():
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
+        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
-        parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
+        parser.add_argument('--batch-size', type=int, default=12, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=12, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=8, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -663,8 +662,10 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
         # Define our dataloaders
-        trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False)
-        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+        #trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False)
+        #testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+        trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)
+        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=True)
 
         # Log the model on TensorBoard and label it with the date/time and some other naming string
         now = datetime.now()
@@ -684,6 +685,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
         optimizer.zero_grad()
         _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
         _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
+        print(base_train_accuracy, base_test_accuracy)
         trainingPerformance.append(base_train_accuracy)
         testPerformance.append(base_test_accuracy)
 
@@ -707,10 +709,10 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise
 
         print("Training complete.")
         # save this training curve
-        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_nocontext" }
+        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_constantcontext" }
         randnum = str(random.randint(0,10000))
         dat = json.dumps(record)
-        f = open("trainingrecords/"+randnum+"_modeltrainingrecord_nocontext.json","w")
+        f = open("trainingrecords/"+randnum+"_modeltrainingrecord_constantcontext.json","w")
         f.write(dat)
         f.close()
 

@@ -90,11 +90,15 @@ def analyseNetwork(fileloc, params):
         networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
         # pass each input through the model and determine the hidden unit activations
-        if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
-            train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
+        #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
+        train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
         activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
         dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
         sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+
+        # How bout if we average activations over the difference values!
+        diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+
 
         np.save("constantcontextlabel_recurrentnet_meanactivations.npy", sl_activations)
 
@@ -106,19 +110,24 @@ def analyseNetwork(fileloc, params):
         sl_embedding = MDS(n_components=3, random_state=randseed)
         MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 
+        diff_sl_embedding = MDS(n_components=3, random_state=randseed)
+        MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
+
+
         # now do MDS again but for the latent state activations through time in the training set
-        print(drift["temporal_activation_drift"].shape)
-        embedding = MDS(n_components=3, random_state=randseed)
-        drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
-        print(drift["MDS_latentstate"].shape)
+        #print(drift["temporal_activation_drift"].shape)
+        #embedding = MDS(n_components=3, random_state=randseed)
+        #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
+        #print(drift["MDS_latentstate"].shape)
         toc = time.time()
         print('Time elapsed: ')
         print(toc-tic)
 
-        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels,\
+        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, \
                     "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
                     "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
-                    "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter}
+                    "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
+                    "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
 
         # save the analysis for next time
         np.save(analysis_name+'.npy', MDS_dict)
@@ -137,7 +146,7 @@ def generatePlots(MDS_dict, params):
     #n = plt.hist(activations)
 
     # Plot the latent state drifting in time with context in the training set
-    MDSplt.viewTrainingSequence(MDS_dict, params)
+    #MDSplt.viewTrainingSequence(MDS_dict, params)
 
     # Check how many samples we have of each unique input (should be context-ordered)
     #MDSplt.instanceCounter(MDS_dict, params)
@@ -146,12 +155,17 @@ def generatePlots(MDS_dict, params):
     #MDSplt.activationRDMs(MDS_dict, params)
 
     # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
-    #labelNumerosity = True
-    #MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
+    labelNumerosity = True
+    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
 
     # plot the MDS with number labels
+    labelNumerosity = True
+    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+
+    #MDSplt.diff_activationRDMs(MDS_dict, params)
     #labelNumerosity = True
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    MDSplt.diff_plot3MDSMean(MDS_dict, labelNumerosity, params)
+    #MDSplt.diff_animate3DMDS(MDS_dict, params)
 
     # plot the MDS with output labels (true/false labels)
     #labelNumerosity = False
@@ -164,7 +178,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.animate3DMDS(MDS_dict, params)
 
     # plot a 3D version of the latent state MDS
-    MDSplt.animate3DdriftMDS(MDS_dict, params)
+    #MDSplt.animate3DdriftMDS(MDS_dict, params)
 
 # ---------------------------------------------------------------------------- #
 
@@ -176,8 +190,8 @@ if __name__ == '__main__':
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'constant'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
-    retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
+    labelContext = 'true'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    retainHiddenState = False          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
 
@@ -186,6 +200,7 @@ if __name__ == '__main__':
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
 
+    #for reps in range(10):
     for noise_std in noiselevels:
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 

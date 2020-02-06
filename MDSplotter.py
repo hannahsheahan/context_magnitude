@@ -14,6 +14,7 @@ import copy
 import sys
 import random
 import matplotlib.pyplot as plt
+import matplotlib.colors as mplcol
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import animation
 
@@ -92,15 +93,43 @@ def activationRDMs(MDS_dict, params):
 
 # ---------------------------------------------------------------------------- #
 
+def diff_activationRDMs(MDS_dict, params):
+    """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
+    Context order:  1-15, 1-10, 6-15
+    """
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    fig, ax = plt.subplots(1,2, figsize=(10,3))
+
+    # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
+    D = pairwise_distances(MDS_dict["diff_sl_activations"])
+    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
+
+    divider = make_axes_locatable(ax[1])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.set_label('disimilarity')
+    ax[1].set_title('Averaged activations for a difference code')
+    ax[1].set_xticks([0,27,45])
+    ax[1].set_xticklabels(['-14:+14', '-9:+9', '-9:+9'])
+    ax[1].set_yticks([0,27,45])
+    ax[1].set_yticklabels(['-14:+14', '-9:+9', '-9:+9'])
+
+    n = autoSaveFigure('figures/RDM_differencecode_', networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
+
+# ---------------------------------------------------------------------------- #
+
 def plot3MDS(MDS_dict, labelNumerosity, params):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
 
     # Plot the hidden activations for the 3 MDS dimensions
-    fig,ax = plt.subplots(3,3, figsize=(14,15))
-    colours = get_cmap(10, 'viridis')
-    diffcolours = get_cmap(20, 'viridis')
+    colours = plt.cm.get_cmap('viridis')
+    diffcolours = plt.cm.get_cmap('viridis')
+    outcomecolours = ['red', 'green']
+
+    norm = mplcol.Normalize(vmin=1, vmax=15)
+    dnorm = mplcol.Normalize(vmin=-14, vmax=14)
 
     if not labelContext:
         labels_contexts = np.full_like(MDS_dict["labels_contexts"], 1)
@@ -108,58 +137,82 @@ def plot3MDS(MDS_dict, labelNumerosity, params):
         labels_contexts = MDS_dict["labels_contexts"]
     MDS_act = MDS_dict["MDS_activations"]
 
-    for k in range(3):
+    for k in range(5):
+        fig,ax = plt.subplots(1,3, figsize=(10,3.3))
         for j in range(3):  # 3 MDS dimensions
             if j==0:
                 dimA = 0
                 dimB = 1
-                ax[k,j].set_xlabel('dim 1')
-                ax[k,j].set_ylabel('dim 2')
+                ax[j].set_xlabel('dim 1')
+                ax[j].set_ylabel('dim 2')
             elif j==1:
                 dimA = 0
                 dimB = 2
-                ax[k,j].set_xlabel('dim 1')
-                ax[k,j].set_ylabel('dim 3')
+                ax[j].set_xlabel('dim 1')
+                ax[j].set_ylabel('dim 3')
             elif j==2:
                 dimA = 1
                 dimB = 2
-                ax[k,j].set_xlabel('dim 2')
-                ax[k,j].set_ylabel('dim 3')
+                ax[j].set_xlabel('dim 2')
+                ax[j].set_ylabel('dim 3')
 
             for i in range((MDS_act.shape[0])):
-                if labelNumerosity:
-                    # colour by numerosity
-                    if k==0:
-                        ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(int(10+MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
-                    elif k==1:
-                        ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_refValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
-                    else:
-                        im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
-                        if j==2:
-                            if i == (MDS_act.shape[0])-1:
-                                cbar = fig.colorbar(im, ticks=[0,1])
-                                if labelNumerosity:
-                                    cbar.ax.set_yticklabels(['1','15'])
 
-                else:
-                    # colour by true/false label
-                    if MDS_dict["MDSlabels"][i]==0:
-                        colour = 'red'
-                    else:
-                        colour = 'green'
-                    ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colour)
+                # colour by numerosity
+                if k==0:   # difference labels
+
+                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(int(10+MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(dnorm(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i]))), s=20)
+                    #ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), color='black', size=4, horizontalalignment='center', verticalalignment='center')
+                    if j==2:
+                        if i == (MDS_act.shape[0])-1:
+                            cbar = fig.colorbar(im, ticks=[0,1])
+                            if labelNumerosity:
+                                cbar.ax.set_yticklabels(['-14','14'])
+                elif k==1:  # B values
+                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_refValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_refValues"][i])-1)), s=20)
+                    if j==2:
+                        if i == (MDS_act.shape[0])-1:
+                            cbar = fig.colorbar(im, ticks=[0,1])
+                            if labelNumerosity:
+                                cbar.ax.set_yticklabels(['1','15'])
+                elif k==2:  # A values
+                    #im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_judgeValues"][i])-1)), s=20)
+                    if j==2:
+                        if i == (MDS_act.shape[0])-1:
+                            cbar = fig.colorbar(im, ticks=[0,1])
+                            if labelNumerosity:
+                                cbar.ax.set_yticklabels(['1','15'])
+                elif k==3:  # context labels
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["labels_contexts"][i])-1], s=20)
+
+                elif k==4:
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=outcomecolours[int(MDS_dict["MDSlabels"][i])], s=20)
+
 
                 # some titles
                 if k==0:
-                    ax[k,j].set_title('value difference')
-                    ax[k,j].axis('equal')
+                    ax[j].set_title('A - B labels')
+                    #ax[j].axis('equal')
+                    tx = 'AminusBlabel_'
                 elif k==1:
-                    ax[k,j].set_title('reference')
-                else:
-                    ax[k,j].set_title('judgement')
-                ax[k,j].set(xlim=(-3, 3), ylim=(-3, 3))  # set axes equal and the same for comparison
+                    ax[j].set_title('B labels')
+                    tx = 'Blabel_'
+                elif k==2:
+                    ax[j].set_title('A labels')
+                    tx = 'Alabel_'
+                elif k==3:
+                    ax[j].set_title('context labels')
+                    tx = 'contlabel_'
+                elif k==4:
+                    ax[j].set_title('outcome labels')
+                    tx = 'outcomelabel_'
 
-    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, saveFig)
+                ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
+
+        n = autoSaveFigure('figures/3MDS60_'+tx, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -259,6 +312,63 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
 
 # ---------------------------------------------------------------------------- #
 
+def diff_plot3MDSMean(MDS_dict, labelNumerosity, params):
+    """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
+    Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
+    This is a variant which plots the difference code.
+    """
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    fig,ax = plt.subplots(1,3, figsize=(18,5))
+    colours = get_cmap(10, 'magma')
+    diffcolours = get_cmap(20, 'magma')
+    MDS_act = MDS_dict["MDS_diff_slactivations"]
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        ax[j].set_title('context')
+
+        # perhaps draw a coloured line between adjacent numbers
+        contextA = range(27)
+        contextB = range(27,45)
+        contextC = range(45, 63)
+
+        #ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
+        #ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
+        #ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
+
+        for i in range((MDS_act.shape[0])):
+            # colour by context
+            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["diff_sl_contexts"][i])], s=80)
+
+            # label numerosity in white inside the marker
+            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["sl_diffValues"][i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
+
+
+        ax[j].axis('equal')
+        if networkStyle=='mlp':
+            ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
+        else:
+            #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
+            ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
+
+    n = autoSaveFigure('figures/3MDS60_differencecode_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
+
+# ---------------------------------------------------------------------------- #
+
 def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
     """This function will average the hidden unit activations over one of the two numbers involved in the representation:
     either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
@@ -336,6 +446,81 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
 
 # ---------------------------------------------------------------------------- #
 
+def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
+    """This function will average the hidden unit activations over one of the two numbers involved in the representation:
+    either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
+     which are averaged over the previously presented number (input B).
+    Prior to performing the MDS we want to know whether to flatten over a particular value
+    i.e. if plotting for reference value, flatten over the judgement value and vice versa.
+     - dimKeep = 'reference' or 'judgement'
+     This is a variant which plots the difference code.
+    """
+
+    # initializing
+    uniqueValues = [i for i in range(-14,14)] # hacked for now
+    #uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
+    Ncontexts = 3
+    flat_activations = np.zeros((Ncontexts,len(uniqueValues),activations.shape[1]))
+    flat_values = np.zeros((Ncontexts,len(uniqueValues),1))
+    flat_outcomes = np.empty((Ncontexts,len(uniqueValues),1))
+    flat_contexts = np.empty((Ncontexts,len(uniqueValues),1))
+    flat_counter = np.zeros((Ncontexts,len(uniqueValues),1))
+    divisor = np.zeros((Ncontexts,len(uniqueValues)))
+
+
+    # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
+
+    flattenValues = [labels_judgeValues[i] - labels_refValues[i] for i in range(len(labels_refValues))]
+
+    # pick out all the activations that meet this condition for each context and then average over them
+    for context in range(Ncontexts):
+        for value in uniqueValues:
+            for i in range(len(flattenValues)):
+                if labels_contexts[i] == context+1:  # remember to preserve the context structure
+                    if flattenValues[i] == value:
+                        flat_activations[context, value-1,:] += activations[i]
+                        flat_contexts[context,value-1] = context
+                        flat_values[context,value-1] = value
+                        flat_outcomes[context,value-1] = MDSlabels[i]
+                        flat_counter[context,value-1] += counter[i]
+                        divisor[context,value-1] +=1
+
+            # take the mean i.e. normalise by the number of instances that met that condition
+            if int(divisor[context,value-1]) == 0:
+                flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
+            else:
+                flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
+
+    # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
+    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter, sl_diffValues = [[] for i in range(7)]
+
+    for i in range(flat_activations.shape[0]):
+        checknan = np.asarray([ np.isnan(flat_activations[i][j]) for j in range(len(flat_activations[i]))])
+        if (checknan).all():
+            pass
+        else:
+            sl_activations.append(flat_activations[i])
+            sl_contexts.append(flat_contexts[i])
+            sl_MDSlabels.append(flat_outcomes[i])
+            sl_counter.append(flat_counter[i])
+
+            # hack for now
+            sl_refValues.append(0)
+            sl_diffValues.append(flat_values[i])
+            sl_judgeValues.append(0)
+
+
+    # finally, reshape the outputs so that they match our inputs nicely
+    sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter, sl_diffValues = [np.asarray(i) for i in [sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter, sl_diffValues]]
+
+    sl_judgeValues = np.expand_dims(sl_judgeValues, axis=1)
+    sl_refValues = np.expand_dims(sl_refValues, axis=1)
+
+    return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter, sl_diffValues
+
+# ---------------------------------------------------------------------------- #
+
 def animate3DMDS(MDS_dict, params):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
@@ -377,6 +562,52 @@ def animate3DMDS(MDS_dict, params):
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
         strng = autoSaveFigure('animations/MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
+        anim.save(strng+'.mp4', writer=writer)
+
+# ---------------------------------------------------------------------------- #
+
+def diff_animate3DMDS(MDS_dict, params):
+    """ This function will plot the numerosity labeled, context-marked MDS projections
+     of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
+     from different angles and optionally save it as a mp4 file.
+     This is a variant which plots the difference code.
+    """
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    fig = plt.figure()
+    ax = mplot3d.Axes3D(fig)
+    slMDS = MDS_dict["MDS_diff_slactivations"]
+    # which MDS points correspond to which contexts
+    contextA = range(27)
+    contextB = range(27,45)
+    contextC = range(45, 63)
+
+    def init():
+
+        points = [contextA, contextB, contextC] #if labelContext else [contextA]
+
+        for i in range(len(points)):
+            ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+            #ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+            for j in range(len(points[i])):
+                label = str(int(MDS_dict["sl_diffValues"][points[i][j]]))
+                ax.text(slMDS[points[i][j], 0], slMDS[points[i][j], 1], slMDS[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
+        ax.set_xlabel('MDS dim 1')
+        ax.set_ylabel('MDS dim 2')
+        ax.set_zlabel('MDS dim 3')
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=10., azim=i)
+        return fig,
+
+    # Animate.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=360, interval=20, blit=True)
+
+    # save the animation as an mp4.
+    if saveFig:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        strng = autoSaveFigure('animations/MDS_3Danimation_differencecode_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #

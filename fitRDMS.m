@@ -4,19 +4,21 @@ clear
 close all
 
 % load RDMS
-load('feedforward_hiddenActivations.mat')
+load('matlab_constantcontextlabel_recurrentnet_meanactivations.mat')
+activations = arr
 rdm{1} = pdist(activations);
 
-load('trueConlab_activations.mat')
-rdm{2} = pdist(f);
-descriptData = {['ffNet']; ['RNN w Con']};
+%load('trueConlab_activations.mat')
+%rdm{2} = pdist(f);
+descriptData = {['retainNet']};
 % max and min parameter values based on a priori hypotheses
 % its the context seperataion, the normalisation, the low offset and high
 % offset (param 5 is unused as of now)
 minp    = [0 9/15 -6/15 -5/15 -1]; % -10/15];
 maxp    = [2 15/15 6/15  5/15  1]; % 10/15];
 % context, norm, offset
-for rdmIdx = 1:2
+rdmIdx = 1
+%for rdmIdx = 1:2
     Y = rdm{rdmIdx}./max(max(abs(rdm{rdmIdx}))); %zeros(1,703); % it only matters for fitting
     
     clear tparam
@@ -126,4 +128,4 @@ for rdmIdx = 1:2
     hold on, title(['actual RDM ', descriptData{rdmIdx}])
     set(gca, 'FontSize', 14)
     axis square
-end
+%end
