@@ -156,7 +156,8 @@ def generatePlots(MDS_dict, params):
 
     # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
     labelNumerosity = True
-    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params)
+    plot_diff_code = False
+    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
 
     # plot the MDS with number labels
     labelNumerosity = True
@@ -164,18 +165,19 @@ def generatePlots(MDS_dict, params):
 
     #MDSplt.diff_activationRDMs(MDS_dict, params)
     #labelNumerosity = True
-    MDSplt.diff_plot3MDSMean(MDS_dict, labelNumerosity, params)
-    #MDSplt.diff_animate3DMDS(MDS_dict, params)
+    plot_diff_code = True
+    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
+
 
     # plot the MDS with output labels (true/false labels)
     #labelNumerosity = False
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
+    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params, plot_diff_code)
 
     # plot the MDS with context labels
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
 
     # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DMDS(MDS_dict, params)
+    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)
 
     # plot a 3D version of the latent state MDS
     #MDSplt.animate3DdriftMDS(MDS_dict, params)

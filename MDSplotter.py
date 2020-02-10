@@ -256,15 +256,27 @@ def plot3MDSContexts(MDS_dict, labelNumerosity, params):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, labelNumerosity, params):
+def plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code=False):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
+     - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig,ax = plt.subplots(1,3, figsize=(18,5))
     colours = get_cmap(10, 'magma')
     diffcolours = get_cmap(20, 'magma')
-    MDS_act = MDS_dict["MDS_slactivations"]
+
+    if plot_diff_code:
+        MDS_act = MDS_dict["MDS_diff_slactivations"]
+        contextlabel = MDS_dict["diff_sl_contexts"]
+        numberlabel = MDS_dict["sl_diffValues"]
+        differenceCodeText = 'differencecode_'
+    else:
+        MDS_act = MDS_dict["MDS_slactivations"]
+        contextlabel = MDS_dict["sl_contexts"]
+        numberlabel = MDS_dict["sl_judgeValues"]
+        differenceCodeText = ''
+
     for j in range(3):  # 3 MDS dimensions
         if j==0:
             dimA = 0
@@ -284,22 +296,25 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
 
         ax[j].set_title('context')
 
-        # perhaps draw a coloured line between adjacent numbers
-        contextA = range(15)
-        contextB = range(15,25)
-        contextC = range(25, 35)
-
-        ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
-        ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
-        ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
+        if plot_diff_code:
+            contextA = range(27)
+            contextB = range(27,45)
+            contextC = range(45, 63)
+        else:
+            contextA = range(15)
+            contextB = range(15,25)
+            contextC = range(25, 35)
+            # only plot lines between the MDS dots when plotting the average A activations, not A-B difference code (A-B structured differently)
+            ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
+            ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
+            ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
 
         for i in range((MDS_act.shape[0])):
             # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["sl_contexts"][i])], s=80)
+            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(contextlabel[i])], s=80)
 
             # label numerosity in white inside the marker
-            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["sl_judgeValues"][i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
-
+            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(numberlabel[i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
         if networkStyle=='mlp':
@@ -308,64 +323,7 @@ def plot3MDSMean(MDS_dict, labelNumerosity, params):
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
             ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/3MDS60_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
-
-# ---------------------------------------------------------------------------- #
-
-def diff_plot3MDSMean(MDS_dict, labelNumerosity, params):
-    """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
-    Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
-    This is a variant which plots the difference code.
-    """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
-    fig,ax = plt.subplots(1,3, figsize=(18,5))
-    colours = get_cmap(10, 'magma')
-    diffcolours = get_cmap(20, 'magma')
-    MDS_act = MDS_dict["MDS_diff_slactivations"]
-    for j in range(3):  # 3 MDS dimensions
-        if j==0:
-            dimA = 0
-            dimB = 1
-            ax[j].set_xlabel('dim 1')
-            ax[j].set_ylabel('dim 2')
-        elif j==1:
-            dimA = 0
-            dimB = 2
-            ax[j].set_xlabel('dim 1')
-            ax[j].set_ylabel('dim 3')
-        elif j==2:
-            dimA = 1
-            dimB = 2
-            ax[j].set_xlabel('dim 2')
-            ax[j].set_ylabel('dim 3')
-
-        ax[j].set_title('context')
-
-        # perhaps draw a coloured line between adjacent numbers
-        contextA = range(27)
-        contextB = range(27,45)
-        contextC = range(45, 63)
-
-        #ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
-        #ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
-        #ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
-
-        for i in range((MDS_act.shape[0])):
-            # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["diff_sl_contexts"][i])], s=80)
-
-            # label numerosity in white inside the marker
-            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["sl_diffValues"][i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
-
-
-        ax[j].axis('equal')
-        if networkStyle=='mlp':
-            ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
-        else:
-            #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
-            ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
-
-    n = autoSaveFigure('figures/3MDS60_differencecode_meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
+    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -521,19 +479,30 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_dict, params):
+def animate3DMDS(MDS_dict, params, plot_diff_code):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
+     - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
-    slMDS = MDS_dict["MDS_slactivations"]
-    # which MDS points correspond to which contexts
-    contextA = range(15)
-    contextB = range(15,25)
-    contextC = range(25, 35)
+    if plot_diff_code:
+        slMDS = MDS_dict["MDS_diff_slactivations"]
+        labels = MDS_dict["sl_diffValues"]
+        differenceCodeText = 'differencecode_'
+        # which MDS points correspond to which contexts
+        contextA = range(27)
+        contextB = range(27,45)
+        contextC = range(45, 63)
+    else:
+        slMDS = MDS_dict["MDS_slactivations"]
+        labels = MDS_dict["sl_judgeValues"]
+        differenceCodeText = ''
+        contextA = range(15)
+        contextB = range(15,25)
+        contextC = range(25, 35)
 
     def init():
 
@@ -541,9 +510,11 @@ def animate3DMDS(MDS_dict, params):
 
         for i in range(len(points)):
             ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
-            ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+
+            if not plot_diff_code:  # the difference code is arranged differently
+                ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
             for j in range(len(points[i])):
-                label = str(int(MDS_dict["sl_judgeValues"][points[i][j]]))
+                label = str(int(labels[points[i][j]]))
                 ax.text(slMDS[points[i][j], 0], slMDS[points[i][j], 1], slMDS[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
         ax.set_xlabel('MDS dim 1')
         ax.set_ylabel('MDS dim 2')
@@ -561,53 +532,7 @@ def animate3DMDS(MDS_dict, params):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
-        anim.save(strng+'.mp4', writer=writer)
-
-# ---------------------------------------------------------------------------- #
-
-def diff_animate3DMDS(MDS_dict, params):
-    """ This function will plot the numerosity labeled, context-marked MDS projections
-     of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
-     from different angles and optionally save it as a mp4 file.
-     This is a variant which plots the difference code.
-    """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
-    fig = plt.figure()
-    ax = mplot3d.Axes3D(fig)
-    slMDS = MDS_dict["MDS_diff_slactivations"]
-    # which MDS points correspond to which contexts
-    contextA = range(27)
-    contextB = range(27,45)
-    contextC = range(45, 63)
-
-    def init():
-
-        points = [contextA, contextB, contextC] #if labelContext else [contextA]
-
-        for i in range(len(points)):
-            ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
-            #ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
-            for j in range(len(points[i])):
-                label = str(int(MDS_dict["sl_diffValues"][points[i][j]]))
-                ax.text(slMDS[points[i][j], 0], slMDS[points[i][j], 1], slMDS[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
-        ax.set_xlabel('MDS dim 1')
-        ax.set_ylabel('MDS dim 2')
-        ax.set_zlabel('MDS dim 3')
-        return fig,
-
-    def animate(i):
-        ax.view_init(elev=10., azim=i)
-        return fig,
-
-    # Animate.  blit=True means only re-draw the parts that have changed.
-    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=360, interval=20, blit=True)
-
-    # save the animation as an mp4.
-    if saveFig:
-        Writer = animation.writers['ffmpeg']
-        writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/MDS_3Danimation_differencecode_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
+        strng = autoSaveFigure('animations/MDS_3Danimation_'+ differenceCodeText, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
