@@ -56,65 +56,39 @@ def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosit
 
 # ---------------------------------------------------------------------------- #
 
-def activationRDMs(MDS_dict, params):
+def activationRDMs(MDS_dict, params, plot_diff_code):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-15, 1-10, 5-15
+     - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
-    fig, ax = plt.subplots(1,2, figsize=(10,3))
-    D = pairwise_distances(MDS_dict["activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
-    im = ax[0].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
+    plt.figure(figsize=(5,3))
+    ax = plt.gca()
 
-    divider = make_axes_locatable(ax[0])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
+    if plot_diff_code:
+        D = pairwise_distances(MDS_dict["diff_sl_activations"])
+        labelticks = ['-14:+14', '-9:+9', '-9:+9']
+        ticks = [0,27,45]
+        differenceCodeText = 'differencecode_'
+    else:
+        D = pairwise_distances(MDS_dict["sl_activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
+        labelticks = ['1-15', '1-10', '5-15']
+        ticks = [0,15,25]
+        differenceCodeText = ''
+
+    im = plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
+
+    #    divider = make_axes_locatable(ax[1])
+    #    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(im)
     cbar.set_label('disimilarity')
-    ax[0].set_title('All activations')
-    ax[0].set_xticks([0,210,300])
-    ax[0].set_xticklabels(['1-15', '1-10', '5-15'])
-    ax[0].set_yticks([0,210,300])
-    ax[0].set_yticklabels(['1-15', '1-10', '5-15'])
+    ax.set_title('Averaged activations')
+    ax.set_xticks([0,27,45])
+    ax.set_xticklabels(labelticks)
+    ax.set_yticks([0,27,45])
+    ax.set_yticklabels(labelticks)
 
-    # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
-    D = pairwise_distances(MDS_dict["sl_activations"])
-    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
-
-    divider = make_axes_locatable(ax[1])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label('disimilarity')
-    ax[1].set_title('Averaged activations')
-    ax[1].set_xticks([0,15,25])
-    ax[1].set_xticklabels(['1-15', '1-10', '5-15'])
-    ax[1].set_yticks([0,15,25])
-    ax[1].set_yticklabels(['1-15', '1-10', '5-15'])
-
-    n = autoSaveFigure('figures/RDM_', networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
-
-# ---------------------------------------------------------------------------- #
-
-def diff_activationRDMs(MDS_dict, params):
-    """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
-    Context order:  1-15, 1-10, 6-15
-    """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
-    fig, ax = plt.subplots(1,2, figsize=(10,3))
-
-    # this looks like absolute magnitude to me (note the position of the light diagonals on the between context magnitudes - they are not centred)
-    D = pairwise_distances(MDS_dict["diff_sl_activations"])
-    im = ax[1].imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
-
-    divider = make_axes_locatable(ax[1])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label('disimilarity')
-    ax[1].set_title('Averaged activations for a difference code')
-    ax[1].set_xticks([0,27,45])
-    ax[1].set_xticklabels(['-14:+14', '-9:+9', '-9:+9'])
-    ax[1].set_yticks([0,27,45])
-    ax[1].set_yticklabels(['-14:+14', '-9:+9', '-9:+9'])
-
-    n = autoSaveFigure('figures/RDM_differencecode_', networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
+    n = autoSaveFigure('figures/RDM_'+differenceCodeText, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 

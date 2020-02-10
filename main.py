@@ -141,7 +141,8 @@ def generatePlots(MDS_dict, params):
     # This function just plots stuff and saves the generated figures
     saveFig = True
     params.append(saveFig)
-
+    plot_diff_code = False
+    
     # they are quite sparse activations? (but we dont really care that much)
     #n = plt.hist(activations)
 
@@ -152,19 +153,16 @@ def generatePlots(MDS_dict, params):
     #MDSplt.instanceCounter(MDS_dict, params)
 
     # Take a look at the activations RSA
-    #MDSplt.activationRDMs(MDS_dict, params)
+    #MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)
 
     # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
     labelNumerosity = True
-    plot_diff_code = False
     MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
 
     # plot the MDS with number labels
     labelNumerosity = True
     MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
 
-    #MDSplt.diff_activationRDMs(MDS_dict, params)
-    #labelNumerosity = True
     plot_diff_code = True
     MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
 
