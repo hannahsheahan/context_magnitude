@@ -54,9 +54,9 @@ def trainAndSaveANetwork(params, createNewDataset):
 
     # define and train a neural network model, log performance and output trained model
     if networkStyle == 'recurrent':
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, noise_std, retainHiddenState)
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, params)
     else:
-        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N)
+        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N, params)
 
     # save the trained weights so we can easily look at them
     print(trained_modelname)
@@ -99,9 +99,6 @@ def analyseNetwork(fileloc, params):
         # How bout if we average activations over the difference values!
         diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
-
-        np.save("constantcontextlabel_recurrentnet_meanactivations.npy", sl_activations)
-
         # do MDS on the activations for the training set
         tic = time.time()
         randseed = 3 # so that we get the same MDS each time
@@ -114,7 +111,7 @@ def analyseNetwork(fileloc, params):
         MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
 
 
-        # now do MDS again but for the latent state activations through time in the training set
+        # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
         #print(drift["temporal_activation_drift"].shape)
         #embedding = MDS(n_components=3, random_state=randseed)
         #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
@@ -165,7 +162,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)  # plot the MDS with context labels. ***HRS obsolete?
 
     # 3D Animations
-    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
+    MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
     #MDSplt.animate3DdriftMDS(MDS_dict, params)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
@@ -178,7 +175,7 @@ if __name__ == '__main__':
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'true'         # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    labelContext = 'true'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
     retainHiddenState = False          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
@@ -188,7 +185,6 @@ if __name__ == '__main__':
     #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
 
-    #for reps in range(10):
     for noise_std in noiselevels:
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 

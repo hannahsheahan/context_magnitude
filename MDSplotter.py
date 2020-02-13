@@ -62,7 +62,7 @@ def activationRDMs(MDS_dict, params, plot_diff_code):
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
-    plt.figure(figsize=(5,3))
+    fig = plt.figure(figsize=(5,3))
     ax = plt.gca()
 
     if plot_diff_code:
@@ -83,9 +83,9 @@ def activationRDMs(MDS_dict, params, plot_diff_code):
     cbar = fig.colorbar(im)
     cbar.set_label('disimilarity')
     ax.set_title('Averaged activations')
-    ax.set_xticks([0,27,45])
+    ax.set_xticks(ticks)
     ax.set_xticklabels(labelticks)
-    ax.set_yticks([0,27,45])
+    ax.set_yticks(ticks)
     ax.set_yticklabels(labelticks)
 
     n = autoSaveFigure('figures/RDM_'+differenceCodeText, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
@@ -453,7 +453,7 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_dict, params, plot_diff_code):
+def animate3DMDS(MDS_dict, params, plot_diff_code=False):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
