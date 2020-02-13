@@ -92,7 +92,7 @@ def activationRDMs(MDS_dict, params, plot_diff_code):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_dict, labelNumerosity, params):
+def plot3MDS(MDS_dict, params, labelNumerosity=True):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
@@ -230,7 +230,7 @@ def plot3MDSContexts(MDS_dict, labelNumerosity, params):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code=False):
+def plot3MDSMean(MDS_dict, params, labelNumerosity=True, plot_diff_code=False):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations

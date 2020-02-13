@@ -140,45 +140,33 @@ def analyseNetwork(fileloc, params):
 def generatePlots(MDS_dict, params):
     # This function just plots stuff and saves the generated figures
     saveFig = True
+    plot_diff_code = False    # do we want to plot the difference code or the average A activations
+    labelNumerosity = True    # numerosity vs outcome labels
     params.append(saveFig)
-    plot_diff_code = False
-    
-    # they are quite sparse activations? (but we dont really care that much)
-    #n = plt.hist(activations)
 
-    # Plot the latent state drifting in time with context in the training set
-    #MDSplt.viewTrainingSequence(MDS_dict, params)
+    # Label activations by mean number A numerosity
+    MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
+    MDSplt.plot3MDS(MDS_dict, params)      # the full MDS cloud, coloured by different labels
 
-    # Check how many samples we have of each unique input (should be context-ordered)
-    #MDSplt.instanceCounter(MDS_dict, params)
+    # Label activations by the difference code numerosity
+    #plot_diff_code = True
+    #MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)  # activations RSA
+    #MDSplt.plot3MDSMean(MDS_dict, params, labelNumerosity, plot_diff_code)
 
-    # Take a look at the activations RSA
-    #MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)
+    # Plot checks on the training data sequencing
+    #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
+    #MDSplt.viewTrainingSequence(MDS_dict, params)  # Plot the context sequencing in the training set through time
+    #MDSplt.instanceCounter(MDS_dict, params)  # Check how many samples we have of each unique input (should be context-ordered)
 
-    # # plot the MDS of our hidden activations, with number labels but flatten across the other factor
-    labelNumerosity = True
-    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
-
-    # plot the MDS with number labels
-    labelNumerosity = True
-    MDSplt.plot3MDS(MDS_dict, labelNumerosity, params)
-
-    plot_diff_code = True
-    MDSplt.plot3MDSMean(MDS_dict, labelNumerosity, params, plot_diff_code)
-
-
-    # plot the MDS with output labels (true/false labels)
+    # MDS with output labels (true/false labels)
     #labelNumerosity = False
-    #MDSplt.plot3MDS(MDS_dict, labelNumerosity, params, plot_diff_code)
+    #MDSplt.plot3MDS(MDS_dict, params, labelNumerosity, plot_diff_code)
+    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)  # plot the MDS with context labels. ***HRS obsolete?
 
-    # plot the MDS with context labels
-    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)
-
-    # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)
-
-    # plot a 3D version of the latent state MDS
-    #MDSplt.animate3DdriftMDS(MDS_dict, params)
+    # 3D Animations
+    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
+    #MDSplt.animate3DdriftMDS(MDS_dict, params)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
 
