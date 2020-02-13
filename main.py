@@ -44,7 +44,7 @@ import argparse
 def trainAndSaveANetwork(params, createNewDataset):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparames for network (passed as args when called from command line)
-    datasetname, trained_modelname, analysis_name = mnet.getDatasetName(*params)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(*params)
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     if createNewDataset:
@@ -71,7 +71,7 @@ def analyseNetwork(fileloc, params):
         - the recurrent latent states (33-dim), as they evolve across the 12k sequential trials.
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name = mnet.getDatasetName(*params)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(*params)
 
     # load an existing dataset
     try:
@@ -117,8 +117,7 @@ def analyseNetwork(fileloc, params):
         #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
         #print(drift["MDS_latentstate"].shape)
         toc = time.time()
-        print('Time elapsed: ')
-        print(toc-tic)
+        print('MDS fitting completed, took (s): ' + str(toc-tic))
 
         MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, \
                     "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
@@ -162,7 +161,7 @@ def generatePlots(MDS_dict, params):
     #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)  # plot the MDS with context labels. ***HRS obsolete?
 
     # 3D Animations
-    MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
+    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
     #MDSplt.animate3DdriftMDS(MDS_dict, params)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
@@ -189,7 +188,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        #trainAndSaveANetwork(params, createNewDataset)
+        trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         MDS_dict = analyseNetwork(fileloc, params)

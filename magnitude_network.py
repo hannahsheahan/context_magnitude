@@ -448,8 +448,8 @@ class OneStepRNN(nn.Module):
     """
     def __init__(self, D_in, batch_size, D_out, noise_std):
         super(OneStepRNN, self).__init__()
-        self.recurrent_size = 400  # WAS 33 to match to the parallel MLP; now larger to prevent bottleneck on context rep
-        self.hidden_size = 500
+        self.recurrent_size = 33  # WAS 33 to match to the parallel MLP; now larger to prevent bottleneck on context rep
+        self.hidden_size = 60
         self.hidden_noise = noise_std
         self.input2hidden = nn.Linear(D_in + self.recurrent_size, self.recurrent_size)
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
@@ -492,11 +492,11 @@ def defineHyperparams():
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
+        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=8, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -576,7 +576,9 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, 
     else:
         trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'.pth'
 
-    return datasetname, trained_modelname, analysis_name
+    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)
+
+    return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
 # ---------------------------------------------------------------------------- #
 
@@ -587,7 +589,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
      - the trained model is returned
      """
 
-    _, modelname, _ = mnet.getDatasetName(*params)
+    _, _, _, trainingrecord_name = getDatasetName(*params)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -611,7 +613,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
         now = datetime.now()
         date = now.strftime("_%d-%m-%y_%H-%M-%S")
         comment = "_batch_size-{}_lr-{}_epochs-{}_wdecay-{}".format(args.batch_size, args.lr, args.epochs, args.weight_decay)
-        writer = SummaryWriter(log_dir='results/runs/' + modelname + args.modeltype + date + comment)
+        writer = SummaryWriter(log_dir='results/runs/' + trainingrecord_name + args.modeltype + date + comment)
         print("Open tensorboard in another shell to monitor network training (hannahsheahan$  tensorboard --logdir=runs)")
 
         # Train/test loop
@@ -650,7 +652,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
     _, noise_std, _, _, _, retainHiddenState = params
-    _, modelname, _ = mnet.getDatasetName(*params)
+    _, _, _, trainingrecord_name = getDatasetName(*params)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -674,7 +676,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         now = datetime.now()
         date = now.strftime("_%d-%m-%y_%H-%M-%S")
         comment = "_batch_size-{}_lr-{}_epochs-{}_wdecay-{}".format(args.batch_size, args.lr, args.epochs, args.weight_decay)
-        writer = SummaryWriter(log_dir='results/runs/' + modelname + args.modeltype + date + comment)
+        writer = SummaryWriter(log_dir='results/runs/' + trainingrecord_name + args.modeltype + date + comment)
         print("Open tensorboard in another shell to monitor network training (hannahsheahan$  tensorboard --logdir=runs)")
 
         # Train/test loop
@@ -715,7 +717,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_constantcontext" }
         randnum = str(random.randint(0,10000))
         dat = json.dumps(record)
-        f = open("trainingrecords/"+randnum+"_trainingrecord_"+modelname+".json","w")
+        f = open("trainingrecords/"+randnum + trainingrecord_name+".json","w")
         f.write(dat)
         f.close()
 
