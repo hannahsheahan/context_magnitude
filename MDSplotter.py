@@ -42,21 +42,22 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
 
     # automatic save file title details
     retainstatetext = '_retainstate' if retainHiddenState else ''
-    blockedtext = '_blocked' if blockTrain else ''
-    seqtext = '_sequential' if seqTrain else ''
-    labeltext = '_numerosity' if labelNumerosity else '_outcomes'
+    blockedtext = '_blck' if blockTrain else ''
+    seqtext = '_seq' if seqTrain else ''
+    labeltext = '_number' if labelNumerosity else '_outcomes'
     contexts = '_contexts' if labelContexts else ''
+    networkTxt = 'RNN' if networkStyle == 'recurrent' else 'MLP'
     if givenContext=='true':
-        contextlabelledtext = '_truecontextlabelled'
+        contextlabelledtext = '_truecontextlabel'
     elif givenContext=='random':
-        contextlabelledtext =  '_randomcontextlabel'
+        contextlabelledtext =  '_randcontextlabel'
     elif givenContext=='constant':
-        contextlabelledtext =  '_constantcontextlabel'
+        contextlabelledtext =  '_constcontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+networkTxt+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
 
-    return basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
+    return basetitle+networkTxt+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
 
 # ---------------------------------------------------------------------------- #
 

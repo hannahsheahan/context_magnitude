@@ -554,34 +554,35 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
     # conver the hyperparameter settings into a string ID
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size)
 
+    networkTxt = 'RNN' if networkStyle == 'recurrent' else 'MLP'
     if blockTrain:
-        blockedtext = '_blocked'
+        blockedtext = '_blck'
     else:
         blockedtext = ''
     if seqTrain:
-        seqtext = '_sequential'
+        seqtext = '_seq'
     else:
         seqtext = ''
     if retainHiddenState:
-        hiddenstate = '_retainedhidden'
+        hiddenstate = '_retainstate'
     else:
-        hiddenstate = '_resethidden'
+        hiddenstate = '_resetstate'
     if labelContext=='true':
-        contextlabelledtext = '_contextlabelled'
+        contextlabelledtext = '_truecontextlabel'
     elif labelContext=='random':
-        contextlabelledtext = '_randomcontextlabel'
+        contextlabelledtext = '_randcontextlabel'
     elif labelContext=='constant':
-        contextlabelledtext = '_constantcontextlabel'
+        contextlabelledtext = '_constcontextlabel'
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
 
     if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
     else:
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+str_args+'.pth'
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+str_args+'.pth'
 
-    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
+    trainingrecord_name = '_trainingrecord_'+ networkTxt + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 

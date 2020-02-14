@@ -135,11 +135,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
 
     print('Generating dataset...')
     if labelContext=='true':
-        print('- network has explicit context nodes')
+        print('- network has correct context labelling')
     elif labelContext=='random':
-        print('- network has randomly assigned contexts')
+        print('- network has randomly assigned context labelling')
     elif labelContext=='constant':
-        print('- network has constant (1) context nodes')
+        print('- network has constant (1) context labelling')
     if blockedTraining:
         print('- training is blocked by context')
     else:
