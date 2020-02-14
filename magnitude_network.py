@@ -453,9 +453,9 @@ class OneStepRNN(nn.Module):
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
         self.fc1tooutput = nn.Linear(self.hidden_size, 1)
 
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                m.weight.data = nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # uniform random xavier weight initialisation
+        #for m in self.modules():
+        #    if isinstance(m, nn.Linear):
+        #        m.weight.data = nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # uniform random xavier weight initialisation
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
@@ -490,10 +490,10 @@ def defineHyperparams():
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
+        parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
-        parser.add_argument('--batch-size', type=int, default=12, metavar='N', help='input batch size for training (default: 48)')
-        parser.add_argument('--test-batch-size', type=int, default=12, metavar='N', help='input batch size for testing (default: 48)')
+        parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
+        parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
         parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
@@ -545,7 +545,10 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
+def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
+
+    # conver the hyperparameter settings into a string ID
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi) + '_ep' + str(args.epochs)
 
     if blockTrain:
         blockedtext = '_blocked'
@@ -567,14 +570,14 @@ def getDatasetName(networkStyle, noise_std, blockTrain, seqTrain, labelContext, 
         contextlabelledtext = '_constantcontextlabel'
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args
 
     if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+'.pth'
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args+'.pth'
     else:
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'.pth'
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+str_args+'.pth'
 
-    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)
+    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
@@ -587,7 +590,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
      - the trained model is returned
      """
 
-    _, _, _, trainingrecord_name = getDatasetName(*params)
+    _, _, _, trainingrecord_name = getDatasetName(args, *params)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -650,7 +653,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
     _, noise_std, _, _, _, retainHiddenState = params
-    _, _, _, trainingrecord_name = getDatasetName(*params)
+    _, _, _, trainingrecord_name = getDatasetName(args, *params)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -712,7 +715,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
 
         print("Training complete.")
         # save this training curve
-        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_constantcontext" }
+        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_truecontext" }
         randnum = str(random.randint(0,10000))
         dat = json.dumps(record)
         f = open("trainingrecords/"+randnum + trainingrecord_name+".json","w")

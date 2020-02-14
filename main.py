@@ -43,8 +43,8 @@ import argparse
 
 def trainAndSaveANetwork(params, createNewDataset):
     # define the network parameters
-    args, device, multiparams = mnet.defineHyperparams() # training hyperparames for network (passed as args when called from command line)
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(*params)
+    args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     if createNewDataset:
@@ -64,14 +64,14 @@ def trainAndSaveANetwork(params, createNewDataset):
 
 # ---------------------------------------------------------------------------- #
 
-def analyseNetwork(fileloc, params):
+def analyseNetwork(fileloc, args, params):
     """Perform MDS on:
         - the hidden unit activations (60-dim) for each unique input in each context.
         - the averaged hidden unit activations (60-dim), averaged across the unique judgement values in each context.
         - the recurrent latent states (33-dim), as they evolve across the 12k sequential trials.
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(*params)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
 
     # load an existing dataset
     try:
@@ -133,7 +133,7 @@ def analyseNetwork(fileloc, params):
 
 # ---------------------------------------------------------------------------- #
 
-def generatePlots(MDS_dict, params):
+def generatePlots(MDS_dict, args, params):
     # This function just plots stuff and saves the generated figures
     saveFig = True
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
@@ -141,28 +141,28 @@ def generatePlots(MDS_dict, params):
     params.append(saveFig)
 
     # Label activations by mean number A numerosity
-    MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
-    MDSplt.plot3MDS(MDS_dict, params)      # the full MDS cloud, coloured by different labels
+    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
+    MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
     #plot_diff_code = True
-    #MDSplt.activationRDMs(MDS_dict, params, plot_diff_code)  # activations RSA
-    #MDSplt.plot3MDSMean(MDS_dict, params, labelNumerosity, plot_diff_code)
+    #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
+    #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
 
     # Plot checks on the training data sequencing
     #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
-    #MDSplt.viewTrainingSequence(MDS_dict, params)  # Plot the context sequencing in the training set through time
-    #MDSplt.instanceCounter(MDS_dict, params)  # Check how many samples we have of each unique input (should be context-ordered)
+    #MDSplt.viewTrainingSequence(MDS_dict, args, params)  # Plot the context sequencing in the training set through time
+    #MDSplt.instanceCounter(MDS_dict, args, params)  # Check how many samples we have of each unique input (should be context-ordered)
 
     # MDS with output labels (true/false labels)
     #labelNumerosity = False
-    #MDSplt.plot3MDS(MDS_dict, params, labelNumerosity, plot_diff_code)
-    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, params)  # plot the MDS with context labels. ***HRS obsolete?
+    #MDSplt.plot3MDS(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args, params)  # plot the MDS with context labels. ***HRS obsolete?
 
     # 3D Animations
-    #MDSplt.animate3DMDS(MDS_dict, params, plot_diff_code)  # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DdriftMDS(MDS_dict, params)             # plot a 3D version of the latent state MDS
+    #MDSplt.animate3DMDS(MDS_dict, args, params, plot_diff_code)  # plot a 3D version of the MDS constructions
+    #MDSplt.animate3DdriftMDS(MDS_dict, args, params)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
 
@@ -188,10 +188,11 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        #trainAndSaveANetwork(params, createNewDataset)
+        trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
-        MDS_dict = analyseNetwork(fileloc, params)
+        args, _, _ = mnet.defineHyperparams() # network training hyperparams
+        MDS_dict = analyseNetwork(fileloc, args, params)
 
         #np.save("constantcontextlabel_activations.npy", MDS_dict["sl_activations"])
         generatePlots(MDS_dict, params)
