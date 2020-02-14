@@ -34,8 +34,12 @@ def get_cmap(n, name='hsv'):
 
 # ---------------------------------------------------------------------------- #
 
-def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, saveFig):
+def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, saveFig):
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
+
+    # conver the hyperparameter settings into a string ID
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size)
+
     # automatic save file title details
     retainstatetext = '_retainstate' if retainHiddenState else ''
     blockedtext = '_blocked' if blockTrain else ''
@@ -50,13 +54,13 @@ def autoSaveFigure(basetitle, networkStyle, blockTrain, seqTrain, labelNumerosit
         contextlabelledtext =  '_constantcontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+str(noise_std)+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
 
-    return basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+str(noise_std)
+    return basetitle+networkStyle+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
 
 # ---------------------------------------------------------------------------- #
 
-def activationRDMs(MDS_dict, params, plot_diff_code):
+def activationRDMs(MDS_dict, args, params, plot_diff_code):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-15, 1-10, 5-15
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -88,11 +92,11 @@ def activationRDMs(MDS_dict, params, plot_diff_code):
     ax.set_yticks(ticks)
     ax.set_yticklabels(labelticks)
 
-    n = autoSaveFigure('figures/RDM_'+differenceCodeText, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
+    n = autoSaveFigure('figures/RDM_'+differenceCodeText, args, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_dict, params, labelNumerosity=True):
+def plot3MDS(MDS_dict, args, params, labelNumerosity=True):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
@@ -186,11 +190,11 @@ def plot3MDS(MDS_dict, params, labelNumerosity=True):
 
                 ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
 
-        n = autoSaveFigure('figures/3MDS60_'+tx, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, saveFig)
+        n = autoSaveFigure('figures/3MDS60_'+tx, args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSContexts(MDS_dict, labelNumerosity, params):
+def plot3MDSContexts(MDS_dict, args, labelNumerosity, params):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
@@ -226,11 +230,11 @@ def plot3MDSContexts(MDS_dict, labelNumerosity, params):
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
+    n = autoSaveFigure('figures/3MDS60_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, params, labelNumerosity=True, plot_diff_code=False):
+def plot3MDSMean(MDS_dict, args, params, labelNumerosity=True, plot_diff_code=False):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -297,7 +301,7 @@ def plot3MDSMean(MDS_dict, params, labelNumerosity=True, plot_diff_code=False):
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
             ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
+    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState,saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -448,7 +452,7 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_dict, params, plot_diff_code=False):
+def animate3DMDS(MDS_dict, args, params, plot_diff_code=False):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -501,12 +505,12 @@ def animate3DMDS(MDS_dict, params, plot_diff_code=False):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/MDS_3Danimation_'+ differenceCodeText, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
+        strng = autoSaveFigure('animations/MDS_3Danimation_'+ differenceCodeText, args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
 
-def instanceCounter(MDS_dict, params):
+def instanceCounter(MDS_dict, args, params):
     """ Plot a histogram showing the number of times each unique input (reference averaged) and context was in the generated training set."""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
@@ -522,11 +526,11 @@ def instanceCounter(MDS_dict, params):
     plt.xlabel('Numbers and contexts')
     plt.ylabel('Instances in training set')
 
-    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def viewTrainingSequence(MDS_dict, params):
+def viewTrainingSequence(MDS_dict, args, params):
     """Take the data loader and view how the contexts and latent states evolved in time in the training set."""
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
@@ -538,7 +542,7 @@ def viewTrainingSequence(MDS_dict, params):
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Context (0: 1-15; 1: 1-10; 2: 6-15)')
-    n = autoSaveFigure('figures/temporalcontext_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+    n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
 
     # latent state drift in time/trials in training set
     fig,ax = plt.subplots(1,3, figsize=(18,5))
@@ -574,11 +578,11 @@ def viewTrainingSequence(MDS_dict, params):
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/latentstatedrift_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
+    n = autoSaveFigure('figures/latentstatedrift_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DdriftMDS(MDS_dict, params):
+def animate3DdriftMDS(MDS_dict, args, params):
     """ This function will plot the latent state drift MDS projections
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -613,7 +617,7 @@ def animate3DdriftMDS(MDS_dict, params):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/latentdrift_MDS_3Danimation_', networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
+        strng = autoSaveFigure('animations/latentdrift_MDS_3Danimation_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState,False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #

@@ -444,10 +444,10 @@ class OneStepRNN(nn.Module):
     input_size = 15 + 3 for context
     Reference: https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
     """
-    def __init__(self, D_in, batch_size, D_out, noise_std):
+    def __init__(self, D_in, batch_size, D_out, noise_std, recurrent_size, hidden_size):
         super(OneStepRNN, self).__init__()
-        self.recurrent_size = 33  # WAS 33 to match to the parallel MLP; now larger to prevent bottleneck on context rep
-        self.hidden_size = 60
+        self.recurrent_size = recurrent_size  # was 33 default to match to the parallel MLP; now larger to prevent bottleneck on context rep
+        self.hidden_size = hidden_size   # was 60 default
         self.hidden_noise = noise_std
         self.input2hidden = nn.Linear(D_in + self.recurrent_size, self.recurrent_size)
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
@@ -502,6 +502,8 @@ def defineHyperparams():
         parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
         parser.add_argument('--weight_decay', type=int, default=0.0000, metavar='N', help='weight-decay for l2 regularisation (default: 0)')
         parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
+        parser.add_argument('--recurrent-size', type=int, default=33, metavar='N', help='number of nodes in recurrent layer (default: 33)')
+        parser.add_argument('--hidden-size', type=int, default=60, metavar='N', help='number of nodes in hidden layer (default: 60)')
         args = parser.parse_args()
 
     multiparams = [args.batch_size_multi, args.lr_multi]
@@ -542,13 +544,15 @@ class argsparser():
         self.log_interval = 1000
         self.weight_decay = 0.00
         self.save_model = False
+        self.recurrent_size = 33
+        self.hidden_size = 60
 
 # ---------------------------------------------------------------------------- #
 
 def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi) + '_ep' + str(args.epochs)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size)
 
     if blockTrain:
         blockedtext = '_blocked'
@@ -570,14 +574,14 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
         contextlabelledtext = '_constantcontextlabel'
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkStyle+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
 
     if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args+'.pth'
+        trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
     else:
         trained_modelname = 'models/'+networkStyle+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+str_args+'.pth'
 
-    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_'+str(noise_std)+str_args
+    trainingrecord_name = '_trainingrecord_'+ networkStyle + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
@@ -665,7 +669,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         print("\n")
 
         # Define a model for training
-        model = OneStepRNN(N+3, args.batch_size, 1, noise_std).to(device)
+        model = OneStepRNN(N+3, args.batch_size, 1, noise_std, args.recurrent_size, args.hidden_size).to(device)
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 

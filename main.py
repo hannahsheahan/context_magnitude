@@ -195,6 +195,6 @@ if __name__ == '__main__':
         MDS_dict = analyseNetwork(fileloc, args, params)
 
         #np.save("constantcontextlabel_activations.npy", MDS_dict["sl_activations"])
-        generatePlots(MDS_dict, params)
+        generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #
