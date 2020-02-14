@@ -1,11 +1,11 @@
 """
- This is a first pass simulation for training a simple MLP on a relational magnitude problem
- i.e. the network will be trained to answer the question: is input 2 > input 1?
+ This is a set of simulations for training a simple MLP or RNN on a relational magnitude problem
+ The network will be trained to answer the question: is input 2 > input 1?
 
  Author: Hannah Sheahan, sheahan.hannah@gmail.com
  Date: 04/12/2019
  Notes:
- - requires ffmpeg for 3D animation generation
+ - requires ffmpeg for 3D animation generation in generatePlots()
  Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
@@ -169,7 +169,7 @@ def generatePlots(MDS_dict, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = False
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
@@ -188,7 +188,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset)
+        #trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         MDS_dict = analyseNetwork(fileloc, params)

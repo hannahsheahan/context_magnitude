@@ -256,7 +256,6 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
     return test_loss, accuracy
 
-
 # ---------------------------------------------------------------------------- #
 
 def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train_loader):
@@ -332,7 +331,6 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
     else:
         # Do a single pass through the whole training set and look out for ALL instances of each unique input.
-        # ***HRS Note that this will need a bit of adjusting when we remove context markers from the inputs.
         # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
         # reset hidden recurrent weights on the very first trial ***HRS be careful with this
 
@@ -494,9 +492,9 @@ def defineHyperparams():
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[12])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
-        parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
-        parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--batch-size', type=int, default=12, metavar='N', help='input batch size for training (default: 48)')
+        parser.add_argument('--test-batch-size', type=int, default=12, metavar='N', help='input batch size for testing (default: 48)')
+        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')

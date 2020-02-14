@@ -76,7 +76,7 @@ def activationRDMs(MDS_dict, params, plot_diff_code):
         ticks = [0,15,25]
         differenceCodeText = ''
 
-    im = plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=6)
+    im = plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
 
     #    divider = make_axes_locatable(ax[1])
     #    cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -379,13 +379,8 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
 # ---------------------------------------------------------------------------- #
 
 def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
-    """This function will average the hidden unit activations over one of the two numbers involved in the representation:
-    either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
-     which are averaged over the previously presented number (input B).
-    Prior to performing the MDS we want to know whether to flatten over a particular value
-    i.e. if plotting for reference value, flatten over the judgement value and vice versa.
-     - dimKeep = 'reference' or 'judgement'
-     This is a variant which plots the difference code.
+    """
+     This is a hacky variant of averageReferenceNumerosity(), which averages over numbers which have the same difference (A-B).
     """
 
     # initializing
