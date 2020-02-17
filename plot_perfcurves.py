@@ -50,4 +50,5 @@ for condition in range(len(conditions_data)):
 plt.xlabel('Epochs')
 plt.ylabel('Training performance %')
 plt.legend()
-plt.savefig('context_training_comparison.pdf')
+plt.xlim((-0.5,8))
+plt.savefig('context_training_comparison_shuffleddataset.pdf')

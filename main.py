@@ -146,9 +146,9 @@ def generatePlots(MDS_dict, args, params):
     MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
-    #plot_diff_code = True
-    #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
-    #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+    plot_diff_code = True
+    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
 
     # Plot checks on the training data sequencing
     #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
@@ -169,7 +169,7 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context

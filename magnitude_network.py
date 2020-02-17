@@ -457,6 +457,12 @@ class OneStepRNN(nn.Module):
         #    if isinstance(m, nn.Linear):
         #        m.weight.data = nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # uniform random xavier weight initialisation
 
+                # ***HRS this should be fine, wtf for some reason this inialisation leads to way for jiggly representations than default initalisation of uniform +-sqrt(N)
+                # ***HRS to investigate: try changing this function to what you expect the default to be. Note that relu gain is *sqrt(2) which means the resultant uniform distributions for the default
+                # vs for the xavier uniform should be very very similar uniform distributions so what gives for the different resultant reps?
+
+
+
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
         self.hidden = F.relu(self.input2hidden(combined))
