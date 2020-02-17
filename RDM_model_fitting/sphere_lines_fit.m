@@ -1,4 +1,5 @@
-
+% Author: Stephanie Nelli
+% Date: Jan? 2020
 
 
 function [SSE,pred,numline,coord] = sphere_lines_fit(p, Y)

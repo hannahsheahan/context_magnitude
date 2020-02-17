@@ -1,4 +1,7 @@
-%% note: feel free to clean things up or do some better optimisation scheme. this 
+% Author: Stephanie Nelli
+% Date: Jan? 2020
+
+%% note: feel free to clean things up or do some better optimisation scheme. this
 %is definitely a first draft :)
 clear
 close all

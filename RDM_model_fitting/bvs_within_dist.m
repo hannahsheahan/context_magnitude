@@ -1,3 +1,6 @@
+% Author: Stephanie Nelli
+% Date: Jan? 2020
+
 %% between vs within distance stuff 
 % kind of cobbled, but hopefully understandable
 clear
