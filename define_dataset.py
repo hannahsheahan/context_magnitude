@@ -242,11 +242,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
                 refValue = None
                 for i in range(sequenceLength):
-                    if refValue is None:
+                    if i==0:
                         target[block, sample, i] = None  # there is no feedback for the first presented number in sequence
                     else:
-                        refValue = input_sequence[i-1]
-                        judgementValue = input_sequence[i]
+                        refValue = turnOneHotToInteger(input_sequence[i-1])
+                        judgementValue = turnOneHotToInteger(input_sequence[i])
 
                         if judgementValue > refValue:
                             target[block, sample, i] = 1
@@ -259,7 +259,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 judgementValues[block, sample] = np.squeeze(np.asarray(tmp))
                 tmp = copy.deepcopy(input_sequence)
                 tmp[-1] = np.zeros((15,1)) # the final element in sequence cannot be reference element
-                
+
                 refValues[block, sample] = np.squeeze(np.asarray(tmp))
                 contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
                 contextinputs[block, sample] = np.squeeze(contextinput)

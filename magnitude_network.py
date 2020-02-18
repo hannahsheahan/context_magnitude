@@ -149,42 +149,41 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
         for batch_idx, data in enumerate(test_loader):
             inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), batchToTorch(data['contextinput'])
 
-            # reformat the paired input so that it works for our recurrent model
-            item_idx = 0
-            inputA = torch.cat((inputs[:, item_idx], context),1)
-            inputB = torch.cat((inputs[:, item_idx+1], context),1)
+            # reformat the input sequences for our recurrent model
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+            for i in range(sequenceLength):
+                inputX = torch.cat((inputs[:, i], context),1)
+                recurrentinputs.append(inputX)
 
-            print(inputA)
-            print(inputB)
-            print(context)
-            print(inputs.shape)
-            recurrentinputs = [inputA, inputB]
+            print(labels)
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
             else:
                 hidden = latentstate
-            # perform a two-step recurrence
-            for i in range(2):
+
+            # perform a N-step recurrence for the whole sequence of numbers in the input
+            for item_idx in range(sequenceLength):
                 # inject some noise ~= forgetting of the previous number
                 noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                 hidden.add_(noise)
-                output, hidden = model(recurrentinputs[i], hidden)
-                if i==0:
+                output, hidden = model(recurrentinputs[item_idx], hidden)
+                if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = hidden.detach()
 
-            test_loss += criterion(output, labels).item()
+                if item_idx>0:
+                    test_loss += criterion(output, labels[item_idx]).item()
+                    output = np.squeeze(output, axis=1)
+                    pred = np.zeros((output.size()))
+                    for i in range((output.size()[0])):
+                        if output[i]>0.5:
+                            pred[i] = 1
+                        else:
+                            pred[i] = 0
 
-            output = np.squeeze(output, axis=1)
-            pred = np.zeros((output.size()))
-            for i in range((output.size()[0])):
-                if output[i]>0.5:
-                    pred[i] = 1
-                else:
-                    pred[i] = 0
-
-            tmp = np.squeeze(np.asarray(labels))
-            correct += (pred==tmp).sum().item()
+                    tmp = np.squeeze(np.asarray(labels[item_idx]))
+                    correct += (pred==tmp).sum().item()
 
     test_loss /= len(test_loader.dataset)
     accuracy = 100. * correct / len(test_loader.dataset)
