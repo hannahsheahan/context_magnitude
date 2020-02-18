@@ -127,8 +127,9 @@ def analyseNetwork(fileloc, args, params):
                     "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
 
         # save the analysis for next time
-        np.save(analysis_name+'.npy', MDS_dict)
         print('Saving network analysis...')
+        np.save(analysis_name+'.npy', MDS_dict)                                          # the full MDS analysis
+        np.save('network_analysis/RDMs/RDM_'+analysis_name[29:]+'.npy', sl_activations)  # the RDM matrix only
 
     return MDS_dict
 
@@ -147,9 +148,9 @@ def generatePlots(MDS_dict, args, params):
     #MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
-    #plot_diff_code = True
-    #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
-    #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+    plot_diff_code = True
+    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
 
     # Plot checks on the training data sequencing
     #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
@@ -188,7 +189,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset)
+        #trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         args, _, _ = mnet.defineHyperparams() # network training hyperparams

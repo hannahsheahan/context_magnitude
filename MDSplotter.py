@@ -42,7 +42,7 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
 
     # automatic save file title details
     diffcodetext = '_diffcode' if plot_diff_code else ''
-    retainstatetext = '_retainstate' if retainHiddenState else ''
+    retainstatetext = '_retainstate' if retainHiddenState else '_resetstate'
     blockedtext = '_blck' if blockTrain else ''
     seqtext = '_seq' if seqTrain else ''
     labeltext = '_number' if labelNumerosity else '_outcomes'
@@ -56,9 +56,9 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
         contextlabelledtext =  '_constcontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+networkTxt+diffcodetext+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+networkTxt+diffcodetext+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
 
-    return basetitle+networkTxt+diffcodetext+blockedtext+seqtext+contextlabelledtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
+    return basetitle+networkTxt+diffcodetext+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
 
 # ---------------------------------------------------------------------------- #
 
@@ -78,7 +78,7 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code):
         differenceCodeText = 'differencecode_'
     else:
         D = pairwise_distances(MDS_dict["sl_activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
-        labelticks = ['1-15', '1-10', '5-15']
+        labelticks = ['1-15', '1-10', '6-15']
         ticks = [0,15,25]
         differenceCodeText = ''
 

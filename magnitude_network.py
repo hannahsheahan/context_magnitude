@@ -454,12 +454,6 @@ class OneStepRNN(nn.Module):
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
         self.fc1tooutput = nn.Linear(self.hidden_size, 1)
 
-        #torch.manual_seed(1)   # for setting the same manual weight initialisation each time
-        #for m in self.modules():
-        #    if isinstance(m, nn.Linear):
-                # xavier usually ends up with jigglier reps
-                #nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # xavier initialisation usually ends up with jigglier reps
-
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
         self.hidden = F.relu(self.input2hidden(combined))
