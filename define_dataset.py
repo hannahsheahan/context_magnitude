@@ -153,8 +153,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     else:
         print('- training chooses random A and B at each time step')
 
-    totalN = 15000         # how many examples we want to use (each of these in a sequence on numbers)
-    Ntrain = 12000       # 8:2 train:test split
+    totalN = 5760         # how many examples we want to use (each of these in a sequence on numbers)
+    Ntrain = 4800       # 8:2 train:test split
     Ntest = totalN - Ntrain
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
     Ncontexts = 3

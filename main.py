@@ -171,13 +171,13 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
     labelContext = 'true'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
-    retainHiddenState = False          # initialise the hidden state for each pair as the hidden state of the previous pair
+    retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
 
@@ -189,7 +189,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset)
+        #trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         args, _, _ = mnet.defineHyperparams() # network training hyperparams

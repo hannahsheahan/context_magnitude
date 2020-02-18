@@ -61,66 +61,63 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     train_loss = 0
     correct = 0
 
-    # how to extract our paired inputs and context from our dataset
-    Arange = range(15)
-    Brange = range(15,30)
-    contextrange = range(30,33)
-
     # On the very first trial on training, reset the hidden weights to zeros
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
     latentstate = torch.zeros(args.batch_size, model.recurrent_size)
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
-        inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+        inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], batchToTorch(data['contextinput'])
 
-        # reformat the paired input so that it works for our recurrent model
-        context = inputs[:, contextrange]
-        inputA = torch.cat((inputs[:, Arange], context),1)
-        inputB = torch.cat((inputs[:, Brange], context),1)
-        recurrentinputs = [inputA, inputB]
+        # reformat the input sequences for our recurrent model
+        recurrentinputs = []
+        sequenceLength = inputs.shape[1]
+        loss = 0
+
+        for i in range(sequenceLength):
+            inputX = torch.cat((inputs[:, i], context),1)
+            recurrentinputs.append(inputX)
 
         if not retainHiddenState:
             hidden = torch.zeros(args.batch_size, model.recurrent_size)  # only if you want to reset hidden recurrent weights
         else:
-            # Note: we can still update the gradients every two steps and discard the gradients before that, and just keep the hidden state
-            # to reflect the recent statistics as an initialisation rather than something we continue to backprop through.
+            # keep the hidden state to reflect the recent statistics of previous sequences as an initialisation
             hidden = latentstate
 
-        # perform two-steps of recurrence
-        for i in range(2):
-            # inject some noise ~= forgetting of the previous number and starting state
+        # perform N-steps of recurrence
+        for item_idx in range(sequenceLength):
+            # inject some noise ~= forgetting of the previous number
             noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
             hidden.add_(noise)
-            output, hidden = model(recurrentinputs[i], hidden)  # this hidden state will be preserved across trials
-            # Since our trials are sequential and overlapping, store hidden state after only one input has been passed in and combined with original hidden state
-            if i==0:
+            output, hidden = model(recurrentinputs[item_idx], hidden)
+            if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                 latentstate = hidden.detach()
 
-        loss = criterion(output, labels)
-        loss.backward()         # passes the loss backwards to compute the dE/dW gradients
-        optimizer.step()        # update our weights
+            # evaluate performance at every comparison between the current and previous input
+            if item_idx>0:
+                loss += criterion(output, labels[item_idx])   # accumulate the loss (autograd should sort this out for us: https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
+                output = np.squeeze(output, axis=1)
+                pred = np.zeros((output.size()))
+                for i in range((output.size()[0])):
+                    if output[i]>0.5:
+                        pred[i] = 1
+                    else:
+                        pred[i] = 0
 
-        # evaluate performance
-        train_loss += loss.item()
-        output = np.squeeze(output, axis=1)
-        pred = np.zeros((output.size()))
-        for i in range((output.size()[0])):
-            if output[i]>0.5:
-                pred[i] = 1
-            else:
-                pred[i] = 0
+                tmp = np.squeeze(np.asarray(labels[item_idx]))
+                correct += (pred==tmp).sum().item()
 
-        tmp = np.squeeze(np.asarray(labels))
-        correct += (pred==tmp).sum().item()
+        loss.backward()             # passes the loss backwards to compute the dE/dW gradients
+        optimizer.step()            # update our weights
+        train_loss += loss.item()   # keep track for display purposes
 
         if batch_idx % args.log_interval == 0:
             if printOutput:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(inputs), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item()))
 
-    train_loss /= len(train_loader.dataset)
-    accuracy = 100. * correct / len(train_loader.dataset)
+    train_loss /= len(train_loader.dataset)*(sequenceLength-1)
+    accuracy = 100. * correct / (len(train_loader.dataset)*(sequenceLength-1))
     return train_loss, accuracy
 
 # ---------------------------------------------------------------------------- #
@@ -136,27 +133,21 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
     test_loss = 0
     correct = 0
 
-    # how to extract our paired inputs and context from our dataset
-    Arange = range(15)
-    Brange = range(15,30)
-    contextrange = range(30,33)
-
     # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
     latentstate = torch.zeros(args.batch_size, model.recurrent_size)
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), batchToTorch(data['contextinput'])
+            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], batchToTorch(data['contextinput'])
 
             # reformat the input sequences for our recurrent model
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
+
             for i in range(sequenceLength):
                 inputX = torch.cat((inputs[:, i], context),1)
                 recurrentinputs.append(inputX)
-
-            print(labels)
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
@@ -165,6 +156,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
             # perform a N-step recurrence for the whole sequence of numbers in the input
             for item_idx in range(sequenceLength):
+
                 # inject some noise ~= forgetting of the previous number
                 noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                 hidden.add_(noise)
@@ -185,8 +177,8 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
                     tmp = np.squeeze(np.asarray(labels[item_idx]))
                     correct += (pred==tmp).sum().item()
 
-    test_loss /= len(test_loader.dataset)
-    accuracy = 100. * correct / len(test_loader.dataset)
+    test_loss /= len(test_loader.dataset)*(sequenceLength-1)  # there are sequenceLength-1 instances of feedback per sequence
+    accuracy = 100. * correct / (len(test_loader.dataset)*(sequenceLength-1))
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
     return test_loss, accuracy
@@ -269,25 +261,38 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
      If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks, at the end of a block.
     """
 
-    # how to extract our paired inputs and context from our dataset
-    Arange = range(15)
-    Brange = range(15,30)
-    contextrange = range(30,33)
-    ABrange = range(30)  # A and B but not context input
+    # reformat the input sequences for our recurrent model
+    recurrentinputs = []
+    sequenceLength = trainset["input"].shape[1]
 
     # determine the unique inputs for the training set (there are repeats)
-    # Grab the indices of the FINAL instances of each unique input in the training set.
-    # ***HRS change this to consider activations at all instances, then average these activations
-    #  to get the mean per unique input. That should take some of the wonkiness out of the MDS lines.
-    trainset_input_n_context = [np.append(trainset["input"][i, ABrange],trainset["context"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
-    unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
+    # consider activations at all instances, then average these activations to get the mean per unique input.
+    trainset_input_n_context, seq_record = [[] for i in range(2)]
+    for seq in range(len(trainset["input"])):
+        for item_idx in range(len(trainset["input"][seq])):
+            if item_idx>0:
+                inputA = trainset["input"][seq, item_idx]
+                inputB = trainset["input"][seq, item_idx-1]
+                context = trainset["context"][seq]  # the actual underlying range context, not the label
+                trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
+                seq_record.append([seq, item_idx])
 
+    #trainset_input_n_context = [np.append(trainset["input"][i, j],trainset["contextinput"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
+    unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
+    N_unique = (unique_inputs_n_context.shape)[0]
+    sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
+    seqinput_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
+    print(sequence_id)
+    print(seqinput_id)
+    num_unique = len(uniqueind)
+    print(num_unique)  # this doesnt seem right... should be 390?? ***HRS
     trainsize = trainset["label"].shape[0]
-    unique_inputs = trainset["input"][uniqueind]
-    unique_labels = trainset["label"][uniqueind]
-    unique_context = trainset["context"][uniqueind]
-    unique_refValue = trainset["refValue"][uniqueind]
-    unique_judgementValue = trainset["judgementValue"][uniqueind]
+
+    unique_inputs = trainset["input"][sequence_id][seqinput_id]
+    unique_labels = trainset["label"][sequence_id][seqinput_id]
+    unique_context = trainset["context"][sequence_id][seqinput_id]
+    unique_refValue = trainset["refValue"][sequence_id][seqinput_id]
+    unique_judgementValue = trainset["judgementValue"][sequence_id][seqinput_id]
 
     # preallocate some space...
     labels_refValues = np.empty((len(uniqueind),1))
@@ -344,38 +349,43 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
 
         for batch_idx, data in enumerate(train_loader):
-            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), data['context']
-            input_n_context = np.append(inputs[:, ABrange], context)  # concatenate the A,B input and the underlying context (but not context input)
-            temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
+            inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
 
-            # reformat the paired input so that it works for our recurrent model
-            contextinput = inputs[:, contextrange]
-            inputA = torch.cat((inputs[:, Arange], contextinput),1)
-            inputB = torch.cat((inputs[:, Brange], contextinput),1)
-            recurrentinputs = [inputA, inputB]
+            # reformat the input sequences for our recurrent model
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+
+            for i in range(sequenceLength):
+                inputX = torch.cat((inputs[:, i], contextinput),1)
+                recurrentinputs.append(inputX)
+
+            #input_n_context = np.append(inputs[:, ABrange], context)  # concatenate the A,B input and the underlying context (but not context input)
+            temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
 
             h0activations = latentstate  # because we have overlapping sequential trials
 
             # perform a two-step recurrence
-            for i in range(2):
-                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
-                if i==0:
+            for item_idx in range(sequenceLength):
+                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
+                if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = h0activations.detach()
 
-            # search the list of unique inputs and underlying contexts,
-            tmp = (unique_inputs_n_context.shape)[0]
-            for i in range(tmp):
-                if np.all(unique_inputs_n_context[i,:]==input_n_context):
-                    index = i
-                    break
+                # search the list of unique inputs and underlying contexts,
+                if item_idx>0:
+                    input_n_context = np.append(np.append(recurrentinputs[item_idx], recurrentinputs[item_idx-1]), context)  # actual underlying range context
+                    for i in range(N_unique):
+                        if np.all(unique_inputs_n_context[i,:]==input_n_context):
+                            index = i
+                            break
+
+                    activations[index] = h1activations.detach()
+                    labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
+                    labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+                    MDSlabels[index] = unique_labels[index]
+                    contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+                    time_index[index] = batch_idx
 
             temporal_activation_drift[batch_idx, :] = latentstate
-            activations[index] = h1activations.detach()
-            labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
-            labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
-            MDSlabels[index] = unique_labels[index]
-            contexts[index] = dset.turnOneHotToInteger(unique_context[index])
-            time_index[index] = batch_idx
 
             # Aggregate activity associated with each instance of each input
             aggregate_activations[index] += activations[index]
