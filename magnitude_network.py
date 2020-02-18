@@ -16,6 +16,7 @@ import copy
 import sys
 import random
 import json
+import math
 
 import torch
 import torch.nn as nn
@@ -453,15 +454,11 @@ class OneStepRNN(nn.Module):
         self.input2fc1 = nn.Linear(D_in + self.recurrent_size, self.hidden_size)  # size input, size output
         self.fc1tooutput = nn.Linear(self.hidden_size, 1)
 
+        #torch.manual_seed(1)   # for setting the same manual weight initialisation each time
         #for m in self.modules():
         #    if isinstance(m, nn.Linear):
-        #        m.weight.data = nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # uniform random xavier weight initialisation
-
-                # ***HRS this should be fine, wtf for some reason this inialisation leads to way for jiggly representations than default initalisation of uniform +-sqrt(N)
-                # ***HRS to investigate: try changing this function to what you expect the default to be. Note that relu gain is *sqrt(2) which means the resultant uniform distributions for the default
-                # vs for the xavier uniform should be very very similar uniform distributions so what gives for the different resultant reps?
-
-
+                # xavier usually ends up with jigglier reps
+                #nn.init.xavier_uniform(m.weight.data, gain=nn.init.calculate_gain('relu')) # xavier initialisation usually ends up with jigglier reps
 
     def forward(self, x, hidden):
         combined = torch.cat((x, hidden), 1)
@@ -500,7 +497,7 @@ def defineHyperparams():
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -676,7 +673,9 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         print("\n")
 
         # Define a model for training
+        #torch.manual_seed(1)         # if we want the same default weight initialisation every time
         model = OneStepRNN(N+3, args.batch_size, 1, noise_std, args.recurrent_size, args.hidden_size).to(device)
+
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
@@ -702,7 +701,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         optimizer.zero_grad()
         _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
         _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
-        print(base_train_accuracy, base_test_accuracy)
+        print('Training %: {:+.2f}, Test %: {:+.2f}'.format(base_train_accuracy, base_test_accuracy))
         trainingPerformance.append(base_train_accuracy)
         testPerformance.append(base_test_accuracy)
 
@@ -720,7 +719,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
             test_perf = [test_loss, test_accuracy]
             trainingPerformance.append(standard_train_accuracy)
             testPerformance.append(test_accuracy)
-            print(standard_train_accuracy, test_accuracy)
+            print('Training %: {:+.2f}, Test %: {:+.2f}'.format(base_train_accuracy, base_test_accuracy))
             logPerformance(writer, epoch, train_perf, test_perf)
             printProgress(epoch-1, n_epochs)
 

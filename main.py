@@ -116,6 +116,7 @@ def analyseNetwork(fileloc, args, params):
         #embedding = MDS(n_components=3, random_state=randseed)
         #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
         #print(drift["MDS_latentstate"].shape)
+
         toc = time.time()
         print('MDS fitting completed, took (s): ' + str(toc-tic))
 
@@ -143,12 +144,12 @@ def generatePlots(MDS_dict, args, params):
     # Label activations by mean number A numerosity
     MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
     MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
-    MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
+    #MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
-    plot_diff_code = True
-    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+    #plot_diff_code = True
+    #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
+    #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
 
     # Plot checks on the training data sequencing
     #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
@@ -181,7 +182,6 @@ if __name__ == '__main__':
 
     # which model / trained dataset we want to look at
     networkStyle = 'recurrent' #'recurrent'  # 'mlp'
-    #noiselevels = np.linspace(0, 2.5, 25)
     noiselevels = [0.0]
 
     for noise_std in noiselevels:
