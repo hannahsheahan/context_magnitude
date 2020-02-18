@@ -719,7 +719,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
             test_perf = [test_loss, test_accuracy]
             trainingPerformance.append(standard_train_accuracy)
             testPerformance.append(test_accuracy)
-            print('Train: {:.2f}%, Test: {:.2f}%'.format(base_train_accuracy, base_test_accuracy))
+            print('Train: {:.2f}%, Test: {:.2f}%'.format(standard_train_accuracy, test_accuracy))
             logPerformance(writer, epoch, train_perf, test_perf)
             printProgress(epoch-1, n_epochs)
 
