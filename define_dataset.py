@@ -59,10 +59,12 @@ def flattenAllFirstDimArrays(*allarrays):
 
 def flattenFirstDim(array):
     """This function with return a numpy array which flattens the first two dimensions together. Only works for 3d np arrays."""
-    if len(array.shape) != 3:
-        print('Error: the array you are trying to partially flatten is not the correct shape.')
-    else:
+    if len(array.shape) == 3:
         return array.reshape(array.shape[0]*array.shape[1], array.shape[2])
+    elif len(array.shape) == 4:
+        return array.reshape(array.shape[0]*array.shape[1], array.shape[2], array.shape[3])
+    else:
+        print('Error: the array you are trying to partially flatten is not the correct shape.')
 
 #--------------------------------------------------#
 
@@ -88,8 +90,9 @@ class createDataset(Dataset):
         self.judgementValue = dataset['judgementValue']
         self.input = dataset['input']
         self.context = dataset['context']
+        self.contextinput = dataset['contextinputs']
         self.index = (self.index).astype(int)
-        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input, 'context':self.context}
+        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input, 'context':self.context, 'contextinput':self.contextinput}
         self.transform = transform
 
     def __len__(self):
@@ -102,7 +105,7 @@ class createDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx]}
+        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx], 'contextinput':self.contextinput[idx] }
         return sample
 
 # ---------------------------------------------------------------------------- #
@@ -126,6 +129,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
+    - 18/02 updated for training on sequences with BPTT
     """
 
     # note that if there is no context blocking, we can't have sequential AB training structure.
@@ -149,11 +153,12 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     else:
         print('- training chooses random A and B at each time step')
 
-    totalN = 15000         # how many examples we want to use
+    totalN = 15000         # how many examples we want to use (each of these in a sequence on numbers)
     Ntrain = 12000       # 8:2 train:test split
     Ntest = totalN - Ntrain
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
     Ncontexts = 3
+    sequenceLength = 9
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
@@ -164,10 +169,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
             N = totalN - Ntrain
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
-        refValues = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity))
-        judgementValues = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity))
-        input = np.empty((Mblocks, int(N/Mblocks),totalMaxNumerosity*2+Ncontexts))
-        target = np.empty((Mblocks, int(N/Mblocks),1))
+        refValues = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
+        judgementValues = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
+        input = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
+        contextinputs = np.empty((Mblocks, int(N/Mblocks), Ncontexts ))
+        target = np.empty((Mblocks, int(N/Mblocks),sequenceLength))
         contexts = np.empty((Mblocks, int(N/Mblocks),Ncontexts))
         contextdigits = np.empty((Mblocks, int(N/Mblocks),1))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
@@ -190,23 +196,39 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 maxNumerosity = 15
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
-            judgementValue = None              # reset the sequentialAB structure for each new context
+            firstTrialInContext = True              # reset the sequentialAB structure for each new context
             for sample in range(int(N/Mblocks)):
-                if sequentialABTraining:
-                    if judgementValue == None: # the first trial in a given context
-                        refValue = random.randint(minNumerosity,maxNumerosity)
+                input_sequence = []
+
+                # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
+                for item in range(sequenceLength):
+                    if sequentialABTraining:
+                        if firstTrialInContext:
+                            refValue = random.randint(minNumerosity,maxNumerosity)
+                        else:
+                            refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
                     else:
-                        refValue = copy.deepcopy(judgementValue)  # make sure its a copy not a reference to same piece of memory
-                else:
-                    refValue = random.randint(minNumerosity,maxNumerosity)
+                        refValue = random.randint(minNumerosity,maxNumerosity)
 
-                judgementValue = random.randint(minNumerosity,maxNumerosity)
-                while refValue==judgementValue:    # make sure we dont do inputA==inputB
+
                     judgementValue = random.randint(minNumerosity,maxNumerosity)
+                    while refValue==judgementValue:    # make sure we dont do inputA==inputB for two adjacent inputs
+                        judgementValue = random.randint(minNumerosity,maxNumerosity)
 
-                input2 = turnOneHot(judgementValue, totalMaxNumerosity)
-                input1 = turnOneHot(refValue, totalMaxNumerosity)
+                    input1 = turnOneHot(refValue, totalMaxNumerosity)
+                    input2 = turnOneHot(judgementValue, totalMaxNumerosity)
 
+                    # add our new inputs to our sequence
+                    if firstTrialInContext and item==0:
+                        input_sequence.append(input1)
+                    input_sequence.append(input2)
+
+                if firstTrialInContext:
+                    input_sequence = input_sequence[:-1]  # make sure all sequences are the same length
+                    judgementValue = turnOneHotToInteger(input_sequence[-1])  # and then make sure that the next sequence starts where this one left off (bit of a hack)
+                    firstTrialInContext = False
+
+                # Define a single context for the whole sequence
                 if labelContext=='true':
                     contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
                 elif labelContext=='random':
@@ -217,23 +239,38 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                     # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
                     contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
-                # determine the correct rel magnitude judgement
-                if judgementValue > refValue:
-                    target[block, sample] = 1
-                else:
-                    target[block, sample] = 0
+                # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
+                refValue = None
+                for i in range(sequenceLength):
+                    if refValue is None:
+                        target[block, sample, i] = None  # there is no feedback for the first presented number in sequence
+                    else:
+                        refValue = input_sequence[i-1]
+                        judgementValue = input_sequence[i]
+
+                        if judgementValue > refValue:
+                            target[block, sample, i] = 1
+                        else:
+                            target[block, sample, i] = 0
 
                 contextdigits[block, sample] = context
-                judgementValues[block, sample] = np.squeeze(input2)
-                refValues[block, sample] = np.squeeze(input1)
+                tmp = copy.deepcopy(input_sequence)
+                tmp[0] = np.zeros((15,1))  # the first element in sequence cannot be judgement element
+                judgementValues[block, sample] = np.squeeze(np.asarray(tmp))
+                tmp = copy.deepcopy(input_sequence)
+                tmp[-1] = np.zeros((15,1)) # the final element in sequence cannot be reference element
+                
+                refValues[block, sample] = np.squeeze(np.asarray(tmp))
                 contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
-                input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))
+                contextinputs[block, sample] = np.squeeze(contextinput)
+                #input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))  # for the MLP
+                input[block, sample] = np.squeeze(np.asarray(input_sequence))             # for the RNN with BPTT
                 blocks[block, sample] = block
 
         if phase=='train':
 
             # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
-            input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, random_state=0)
+            input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, random_state=0)
 
             # now flatten across the first dim of the structure
             input = flattenFirstDim(input)
@@ -244,15 +281,16 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
             contextdigits = flattenFirstDim(contextdigits)
             trainindices = flattenFirstDim(trainindices)
             blocks = flattenFirstDim(blocks)
+            contextinputs = flattenFirstDim(contextinputs)
 
             # if you want to destroy the trial by trial sequential context and all other structure, then shuffle again across the trial order
             if not blockedTraining:
-                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, random_state=0)
-            trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits }
+                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, random_state=0)
+            trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs }
         else:
 
             # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
-            input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, random_state=0)
+            input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, random_state=0)
 
             # now flatten across the first dim of the structure
             input = flattenFirstDim(input)
@@ -263,11 +301,12 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
             contextdigits = flattenFirstDim(contextdigits)
             testindices = flattenFirstDim(testindices)
             blocks = flattenFirstDim(blocks)
+            contextinputs = flattenFirstDim(contextinputs)
 
             # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
             if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
-                input, refValues, judgementValues, target, contexts, contextdigits, testindices = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, random_state=0)
-            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits }
+                input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, random_state=0)
+            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs }
 
     # save the dataset so  we can use it again
     dat = {"trainset":trainset, "testset":testset}

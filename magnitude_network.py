@@ -147,12 +147,17 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
+            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor), batchToTorch(data['contextinput'])
 
             # reformat the paired input so that it works for our recurrent model
-            context = inputs[:, contextrange]
-            inputA = torch.cat((inputs[:, Arange], context),1)
-            inputB = torch.cat((inputs[:, Brange], context),1)
+            item_idx = 0
+            inputA = torch.cat((inputs[:, item_idx], context),1)
+            inputB = torch.cat((inputs[:, item_idx+1], context),1)
+
+            print(inputA)
+            print(inputB)
+            print(context)
+            print(inputs.shape)
             recurrentinputs = [inputA, inputB]
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
