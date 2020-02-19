@@ -1,9 +1,9 @@
-% Author: Stephanie Nelli
-% Date: Jan? 2020
-
 
 function [SSE,pred,numline,coord] = sphere_lines_fit(p, Y)
 %close all
+% Authors: Fabrice Luyckx and Stephanie Nelli
+% Date: 2019/2020
+
 % SN added:
 % p = parameters
 % Y = neural RDMs (703 x 703)

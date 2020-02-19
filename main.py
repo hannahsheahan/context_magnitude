@@ -48,7 +48,7 @@ def trainAndSaveANetwork(params, createNewDataset):
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
+        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, labelContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
@@ -100,6 +100,7 @@ def analyseNetwork(fileloc, args, params):
         diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
         # do MDS on the activations for the training set
+        print('Performing MDS...')
         tic = time.time()
         randseed = 3 # so that we get the same MDS each time
         embedding = MDS(n_components=3, random_state=randseed)
@@ -118,7 +119,7 @@ def analyseNetwork(fileloc, args, params):
         #print(drift["MDS_latentstate"].shape)
 
         toc = time.time()
-        print('MDS fitting completed, took (s): ' + str(toc-tic))
+        print('MDS fitting completed, took (s): {:.2f}'.format(toc-tic))
 
         MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, \
                     "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
@@ -145,7 +146,7 @@ def generatePlots(MDS_dict, args, params):
     # Label activations by mean number A numerosity
     MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
     MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
-    #MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
+    MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
     plot_diff_code = True
@@ -173,10 +174,10 @@ if __name__ == '__main__':
     # dataset parameters
     createNewDataset = True          # re-generate the random train/test dataset each time?
     fileloc = 'datasets/'
-    N = 15                            # total max numerosity for the greatest range we deal with
+    N = 15                            # global
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'true'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    labelContext = 'constant'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
     retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
@@ -195,7 +196,7 @@ if __name__ == '__main__':
         args, _, _ = mnet.defineHyperparams() # network training hyperparams
         MDS_dict = analyseNetwork(fileloc, args, params)
 
-        #np.save("constantcontextlabel_activations.npy", MDS_dict["sl_activations"])
+        # Visualise the resultant network activations (RDMs and MDS)
         generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #

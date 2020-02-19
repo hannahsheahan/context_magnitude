@@ -263,6 +263,8 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
      We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
       - HRS could change ativation assessment to be for the test set, but shouldn't make a big difference.
 
+      - HRS note that this function could really do with a cleanup. It's a long ugly mess.
+
     """
 
     # reformat the input sequences for our recurrent model
@@ -296,12 +298,6 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     unique_context = np.asarray([trainset["context"][sequence_id[i]] for i in range(len(sequence_id))])
     unique_refValue = np.asarray([trainset["refValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
     unique_judgementValue = np.asarray([trainset["judgementValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-
-    print(unique_inputs.shape)
-    print(unique_labels.shape)
-    print(unique_context.shape)
-    print(unique_refValue.shape)
-    print(unique_judgementValue.shape)
 
     # preallocate some space...
     labels_refValues = np.empty((len(uniqueind),1))
@@ -386,11 +382,6 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                         if np.all(unique_inputs_n_context[i,:]==input_n_context):
                             index = i
                             break
-
-                    print(index)
-                    print(unique_inputs_n_context[index,:])
-                    print(unique_refValue[index])
-                    print(unique_judgementValue[index])
 
                     activations[index] = h1activations.detach()
                     labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
@@ -519,7 +510,7 @@ def defineHyperparams():
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -527,8 +518,9 @@ def defineHyperparams():
         parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
         parser.add_argument('--weight_decay', type=int, default=0.0000, metavar='N', help='weight-decay for l2 regularisation (default: 0)')
         parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
-        parser.add_argument('--recurrent-size', type=int, default=33, metavar='N', help='number of nodes in recurrent layer (default: 33)')
-        parser.add_argument('--hidden-size', type=int, default=60, metavar='N', help='number of nodes in hidden layer (default: 60)')
+        parser.add_argument('--recurrent-size', type=int, default=200, metavar='N', help='number of nodes in recurrent layer (default: 33)')
+        parser.add_argument('--hidden-size', type=int, default=200, metavar='N', help='number of nodes in hidden layer (default: 60)')
+        parser.add_argument('--BPTT-len', type=int, default=90, metavar='N', help='length of sequences that we backprop through (default: 9)')
         args = parser.parse_args()
 
     multiparams = [args.batch_size_multi, args.lr_multi]
@@ -571,13 +563,14 @@ class argsparser():
         self.save_model = False
         self.recurrent_size = 33
         self.hidden_size = 60
+        self.BPTT_len = 9
 
 # ---------------------------------------------------------------------------- #
 
 def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
 
     networkTxt = 'RNN' if networkStyle == 'recurrent' else 'MLP'
     if blockTrain:
@@ -599,7 +592,7 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
     elif labelContext=='constant':
         contextlabelledtext = '_constcontextlabel'
 
-    datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext
+    datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext + '_bpl' + str(args.BPTT_len)
     analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
 
     if networkStyle=='recurrent':

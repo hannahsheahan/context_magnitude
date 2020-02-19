@@ -125,11 +125,12 @@ def loadInputData(fileloc,datasetname):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraining=True, sequentialABTraining=True, labelContext='true'):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, labelContext='true'):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
     - 18/02 updated for training on sequences with BPTT
+    - 19/02 BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len < block length
     """
 
     # note that if there is no context blocking, we can't have sequential AB training structure.
@@ -158,7 +159,6 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
     Ntest = totalN - Ntrain
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
     Ncontexts = 3
-    sequenceLength = 9
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
@@ -169,11 +169,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
             N = totalN - Ntrain
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
-        refValues = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
-        judgementValues = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
-        input = np.empty((Mblocks, int(N/Mblocks),sequenceLength, totalMaxNumerosity))
+        refValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
+        judgementValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
+        input = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
         contextinputs = np.empty((Mblocks, int(N/Mblocks), Ncontexts ))
-        target = np.empty((Mblocks, int(N/Mblocks),sequenceLength))
+        target = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
         contexts = np.empty((Mblocks, int(N/Mblocks),Ncontexts))
         contextdigits = np.empty((Mblocks, int(N/Mblocks),1))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
@@ -201,7 +201,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 input_sequence = []
 
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
-                for item in range(sequenceLength):
+                for item in range(BPTT_len):
                     if sequentialABTraining:
                         if firstTrialInContext and item==0:
                             refValue = random.randint(minNumerosity,maxNumerosity)
@@ -245,7 +245,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
 
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
                 refValue = None
-                for i in range(sequenceLength):
+                for i in range(BPTT_len):
                     if i==0:
                         target[block, sample, i] = None  # there is no feedback for the first presented number in sequence
                     else:
