@@ -520,7 +520,7 @@ def defineHyperparams():
         parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
         parser.add_argument('--recurrent-size', type=int, default=200, metavar='N', help='number of nodes in recurrent layer (default: 33)')
         parser.add_argument('--hidden-size', type=int, default=200, metavar='N', help='number of nodes in hidden layer (default: 60)')
-        parser.add_argument('--BPTT-len', type=int, default=90, metavar='N', help='length of sequences that we backprop through (default: 9)')
+        parser.add_argument('--BPTT-len', type=int, default=120, metavar='N', help='length of sequences that we backprop through (default: 120 = whole block length)')
         args = parser.parse_args()
 
     multiparams = [args.batch_size_multi, args.lr_multi]
@@ -563,7 +563,7 @@ class argsparser():
         self.save_model = False
         self.recurrent_size = 33
         self.hidden_size = 60
-        self.BPTT_len = 9
+        self.BPTT_len = 120
 
 # ---------------------------------------------------------------------------- #
 
