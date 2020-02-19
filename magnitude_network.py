@@ -271,7 +271,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
     # determine the unique inputs for the training set (there are repeats)
     # consider activations at all instances, then average these activations to get the mean per unique input.
-    trainset_input_n_context, seq_record, inputsA, inputsB, allcontexts = [[] for i in range(5)]
+    trainset_input_n_context, seq_record = [[] for i in range(2)]
     for seq in range(len(trainset["input"])):
         for item_idx in range(len(trainset["input"][seq])):
             if item_idx>0:
@@ -282,44 +282,26 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                 context = trainset["context"][seq]  # the actual underlying range context, not the label
                 trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                 seq_record.append([seq, item_idx])
-                inputsA.append(inputA)
-                inputsB.append(inputB)
-                allcontexts.append(context)
-
-
-
 
     #trainset_input_n_context = [np.append(trainset["input"][i, j],trainset["contextinput"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
     unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
     N_unique = (unique_inputs_n_context.shape)[0]
-    print(len(trainset_input_n_context))  # this looks good
-
-    np.set_printoptions(threshold=sys.maxsize)
-    print(np.unique(inputsA, axis=0))  # this looks good
-    print('------------')
-    print(np.unique(inputsB, axis=0))  # this looks good
-    print('------------')
-    print(np.unique(allcontexts, axis=0)) # this looks good
-    print('------------')
-    print(len([unique_inputs_n_context[i] for i in range(len(unique_inputs_n_context)) if np.all(unique_inputs_n_context[i][-3:]==[1, 0, 0]) ]))
-
-    print(N_unique)  # should be 390 but is 403 - wtf? **HRS why are there extra combinations?
-
     sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
     seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
-    print(unique_inputs_n_context)
-    print(len(unique_inputs_n_context))
-    print(len(sequence_id))
-    print(len(seqitem_id))
     num_unique = len(uniqueind)
-    print(num_unique)  # this doesnt seem right... should be 390?? ***HRS
     trainsize = trainset["label"].shape[0]
 
-    unique_inputs = trainset["input"][sequence_id][seqitem_id]
-    unique_labels = trainset["label"][sequence_id][seqitem_id]
-    unique_context = trainset["context"][sequence_id][seqitem_id]
-    unique_refValue = trainset["refValue"][sequence_id][seqitem_id]
-    unique_judgementValue = trainset["judgementValue"][sequence_id][seqitem_id]
+    unique_inputs = np.asarray([trainset["input"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_labels = np.asarray([trainset["label"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_context = np.asarray([trainset["context"][sequence_id[i]] for i in range(len(sequence_id))])
+    unique_refValue = np.asarray([trainset["refValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_judgementValue = np.asarray([trainset["judgementValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+
+    print(unique_inputs.shape)
+    print(unique_labels.shape)
+    print(unique_context.shape)
+    print(unique_refValue.shape)
+    print(unique_judgementValue.shape)
 
     # preallocate some space...
     labels_refValues = np.empty((len(uniqueind),1))
@@ -391,7 +373,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
             h0activations = latentstate  # because we have overlapping sequential trials
 
-            # perform a two-step recurrence
+            # perform an N-step recurrence
             for item_idx in range(sequenceLength):
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
@@ -399,11 +381,16 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
                 # search the list of unique inputs and underlying contexts,
                 if item_idx>0:
-                    input_n_context = np.append(np.append(recurrentinputs[item_idx], recurrentinputs[item_idx-1]), context)  # actual underlying range context
+                    input_n_context = np.append(np.append(recurrentinputs[item_idx][0][:15], recurrentinputs[item_idx-1][0][:15]), context)  # actual underlying range context
                     for i in range(N_unique):
                         if np.all(unique_inputs_n_context[i,:]==input_n_context):
                             index = i
                             break
+
+                    print(index)
+                    print(unique_inputs_n_context[index,:])
+                    print(unique_refValue[index])
+                    print(unique_judgementValue[index])
 
                     activations[index] = h1activations.detach()
                     labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])

@@ -258,12 +258,10 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                             target[block, sample, i] = 0
 
                 contextdigits[block, sample] = context
+                judgementValues[block, sample] = np.squeeze(np.asarray(input_sequence))
                 tmp = copy.deepcopy(input_sequence)
-                tmp[0] = np.zeros((15,1))  # the first element in sequence cannot be judgement element
-                judgementValues[block, sample] = np.squeeze(np.asarray(tmp))
-                tmp = copy.deepcopy(input_sequence)
-                tmp[-1] = np.zeros((15,1)) # the final element in sequence cannot be reference element
-
+                tmp = tmp[-1:] + tmp[:-1]
+                tmp[0] = np.zeros((15,1)) # the first element in sequence does not have a reference element
                 refValues[block, sample] = np.squeeze(np.asarray(tmp))
                 contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
                 contextinputs[block, sample] = np.squeeze(contextinput)
