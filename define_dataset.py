@@ -203,7 +203,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
                 for item in range(sequenceLength):
                     if sequentialABTraining:
-                        if firstTrialInContext:
+                        if firstTrialInContext and item==0:
                             refValue = random.randint(minNumerosity,maxNumerosity)
                         else:
                             refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
@@ -217,6 +217,10 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, blockedTraini
 
                     input1 = turnOneHot(refValue, totalMaxNumerosity)
                     input2 = turnOneHot(judgementValue, totalMaxNumerosity)
+
+                    if np.all(input1==input2):
+                        print('Warning: trial in dataset has two adjacent inputs the same number')
+                        print('State of firstTrialInContext: {}'.format(firstTrialInContext))
 
                     # add our new inputs to our sequence
                     if firstTrialInContext and item==0:

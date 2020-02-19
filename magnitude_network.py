@@ -256,9 +256,13 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 # ---------------------------------------------------------------------------- #
 
 def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train_loader):
-    """ This will determine the hidden unit activations for each *unique* input in the training set
-     there are many repeats of inputs in the training set so just doing it over the unique ones will help speed up our MDS by loads.
-     If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks, at the end of a block.
+    """ This will determine the hidden unit activations for each *unique* input pair in the training set.
+     There are many repeats of inputs in the training set.If retainHiddenState is set to True,
+     then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
+     This will lead to slightly different activations for each instance of a particular input pair.
+     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
+      - HRS could change ativation assessment to be for the test set, but shouldn't make a big difference.
+
     """
 
     # reformat the input sequences for our recurrent model
@@ -267,32 +271,55 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
     # determine the unique inputs for the training set (there are repeats)
     # consider activations at all instances, then average these activations to get the mean per unique input.
-    trainset_input_n_context, seq_record = [[] for i in range(2)]
+    trainset_input_n_context, seq_record, inputsA, inputsB, allcontexts = [[] for i in range(5)]
     for seq in range(len(trainset["input"])):
         for item_idx in range(len(trainset["input"][seq])):
             if item_idx>0:
                 inputA = trainset["input"][seq, item_idx]
                 inputB = trainset["input"][seq, item_idx-1]
+                if np.all(inputA==inputB):
+                    print('Warning: adjacent inputs are the same at {},{}'.format(seq,item_idx))
                 context = trainset["context"][seq]  # the actual underlying range context, not the label
                 trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                 seq_record.append([seq, item_idx])
+                inputsA.append(inputA)
+                inputsB.append(inputB)
+                allcontexts.append(context)
+
+
+
 
     #trainset_input_n_context = [np.append(trainset["input"][i, j],trainset["contextinput"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
     unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
     N_unique = (unique_inputs_n_context.shape)[0]
+    print(len(trainset_input_n_context))  # this looks good
+
+    np.set_printoptions(threshold=sys.maxsize)
+    print(np.unique(inputsA, axis=0))  # this looks good
+    print('------------')
+    print(np.unique(inputsB, axis=0))  # this looks good
+    print('------------')
+    print(np.unique(allcontexts, axis=0)) # this looks good
+    print('------------')
+    print(len([unique_inputs_n_context[i] for i in range(len(unique_inputs_n_context)) if np.all(unique_inputs_n_context[i][-3:]==[1, 0, 0]) ]))
+
+    print(N_unique)  # should be 390 but is 403 - wtf? **HRS why are there extra combinations?
+
     sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
-    seqinput_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
-    print(sequence_id)
-    print(seqinput_id)
+    seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
+    print(unique_inputs_n_context)
+    print(len(unique_inputs_n_context))
+    print(len(sequence_id))
+    print(len(seqitem_id))
     num_unique = len(uniqueind)
     print(num_unique)  # this doesnt seem right... should be 390?? ***HRS
     trainsize = trainset["label"].shape[0]
 
-    unique_inputs = trainset["input"][sequence_id][seqinput_id]
-    unique_labels = trainset["label"][sequence_id][seqinput_id]
-    unique_context = trainset["context"][sequence_id][seqinput_id]
-    unique_refValue = trainset["refValue"][sequence_id][seqinput_id]
-    unique_judgementValue = trainset["judgementValue"][sequence_id][seqinput_id]
+    unique_inputs = trainset["input"][sequence_id][seqitem_id]
+    unique_labels = trainset["label"][sequence_id][seqitem_id]
+    unique_context = trainset["context"][sequence_id][seqitem_id]
+    unique_refValue = trainset["refValue"][sequence_id][seqitem_id]
+    unique_judgementValue = trainset["judgementValue"][sequence_id][seqitem_id]
 
     # preallocate some space...
     labels_refValues = np.empty((len(uniqueind),1))

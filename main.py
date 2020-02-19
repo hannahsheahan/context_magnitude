@@ -171,7 +171,7 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = False          # re-generate the random train/test dataset each time?
+    createNewDataset = True          # re-generate the random train/test dataset each time?
     fileloc = 'datasets/'
     N = 15                            # total max numerosity for the greatest range we deal with
     blockTrain = True                 # whether to block the training by context
@@ -189,7 +189,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        #trainAndSaveANetwork(params, createNewDataset)
+        trainAndSaveANetwork(params, createNewDataset)
 
         # Analyse the trained network
         args, _, _ = mnet.defineHyperparams() # network training hyperparams
