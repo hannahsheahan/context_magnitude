@@ -11,6 +11,7 @@ Issues: N/A
 # ---------------------------------------------------------------------------- #
 import define_dataset as dset
 import matplotlib.pyplot as plt
+import MDSplotter as MDSplt
 import numpy as np
 import copy
 import sys
@@ -52,7 +53,32 @@ def batchToTorch(originalimages):
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_train(args, model, device, train_loader, optimizer, criterion, epoch, retainHiddenState, printOutput=True):
+def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
+    """
+    This function will take a look at the gradients in all layers of our model during training.
+    This will help us to see whether our gradients are flowing well through our RNN
+    For my RNN it really needs to be divided up so that the loop is over recurrent steps rather than an unfolded model.
+
+    - Edited from code on forum: https://discuss.pytorch.org/t/check-gradient-flow-in-network/15063/7 by Roshan Rane (downloaded 20/02/2020)
+    - ave_grads are the gradients from our model. Call this function jsut after each backwards pass.
+    """
+    plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+    plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(left=0, right=len(ave_grads))
+    plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow, update #{}".format(batch_number))
+
+    # save figure of gradient flow (this will take ages if you do it every loop)
+    networkStyle, noise_std, blockTrain, seqTrain, givenContext, retainHiddenState = params
+    MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, True)
+
+# ---------------------------------------------------------------------------- #
+
+def recurrent_train(params, args, model, device, train_loader, optimizer, criterion, epoch, retainHiddenState, printOutput=True):
     """ Train a recurrent neural network on the training set.
     This now trains whilst retaining the hidden state across all trials in the training sequence
     but being evaluated just on pairs of inputs and considering each input pair as a trial for minibatching.
@@ -67,22 +93,23 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
-        inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], batchToTorch(data['contextinput'])
+        inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
 
-        # reformat the input sequences for our recurrent model
+        # initialise everything for our recurrent model
         recurrentinputs = []
         sequenceLength = inputs.shape[1]
+        n_comparetrials = np.nansum(np.nansum(trialtype))
+        layers, ave_grads, max_grads = [[] for i in range(3)]
         loss = 0
 
         for i in range(sequenceLength):
-            inputX = torch.cat((inputs[:, i], context),1)
+            inputX = torch.cat((inputs[:, i], context, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
         if not retainHiddenState:
             hidden = torch.zeros(args.batch_size, model.recurrent_size)  # only if you want to reset hidden recurrent weights
         else:
-            # keep the hidden state to reflect the recent statistics of previous sequences as an initialisation
-            hidden = latentstate
+            hidden = latentstate # keep hidden state to reflect recent statistics of previous inputs
 
         # perform N-steps of recurrence
         for item_idx in range(sequenceLength):
@@ -93,8 +120,8 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
             if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                 latentstate = hidden.detach()
 
-            # evaluate performance at every comparison between the current and previous input
-            if item_idx>0:
+            # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
+            if item_idx>0 and (trialtype[0,item_idx]==1):
                 loss += criterion(output, labels[item_idx])   # accumulate the loss (autograd should sort this out for us: https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
                 output = np.squeeze(output, axis=1)
                 pred = np.zeros((output.size()))
@@ -108,6 +135,20 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                 correct += (pred==tmp).sum().item()
 
         loss.backward()             # passes the loss backwards to compute the dE/dW gradients
+
+        # record and visualise our gradients (code from: Roshan Rane, https://discuss.pytorch.org/t/check-gradient-flow-in-network/15063/10)
+        if (batch_idx % 100) == 0:
+            for n, p in model.named_parameters():
+                if(p.requires_grad) and ("bias" not in n):
+                    if p.grad is not None:
+                        layers.append(n)
+                        ave_grads.append(p.grad.abs().mean())
+                        max_grads.append(p.grad.abs().max())
+                    else:
+                        # this might just trigger on leaf variables
+                        print("Warning: p.grad gradient is type None at batch {} in sequence of length {}".format(batch_idx, sequenceLength) )
+            plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_idx)   # plot our gradients to check that they are flowing well through the RNN
+
         optimizer.step()            # update our weights
         train_loss += loss.item()   # keep track for display purposes
 
@@ -116,8 +157,8 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(inputs), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item()))
 
-    train_loss /= len(train_loader.dataset)*(sequenceLength-1)
-    accuracy = 100. * correct / (len(train_loader.dataset)*(sequenceLength-1))
+    train_loss /= len(train_loader.dataset)*(n_comparetrials-1)
+    accuracy = 100. * correct / (len(train_loader.dataset)*(n_comparetrials-1))
     return train_loss, accuracy
 
 # ---------------------------------------------------------------------------- #
@@ -139,14 +180,16 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, context = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], batchToTorch(data['contextinput'])
+            inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+
 
             # reformat the input sequences for our recurrent model
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
+            n_comparetrials = np.nansum(np.nansum(trialtype))
 
             for i in range(sequenceLength):
-                inputX = torch.cat((inputs[:, i], context),1)
+                inputX = torch.cat((inputs[:, i], context, trialtype[:, i]),dim=1)
                 recurrentinputs.append(inputX)
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
@@ -164,7 +207,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = hidden.detach()
 
-                if item_idx>0:
+                if item_idx>0 and (trialtype[0,item_idx]==1):
                     test_loss += criterion(output, labels[item_idx]).item()
                     output = np.squeeze(output, axis=1)
                     pred = np.zeros((output.size()))
@@ -177,8 +220,8 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
                     tmp = np.squeeze(np.asarray(labels[item_idx]))
                     correct += (pred==tmp).sum().item()
 
-    test_loss /= len(test_loader.dataset)*(sequenceLength-1)  # there are sequenceLength-1 instances of feedback per sequence
-    accuracy = 100. * correct / (len(test_loader.dataset)*(sequenceLength-1))
+    test_loss /= len(test_loader.dataset)*(n_comparetrials-1)  # there are n_comparetrials-1 instances of feedback per sequence
+    accuracy = 100. * correct / (len(test_loader.dataset)*(n_comparetrials-1))
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
     return test_loss, accuracy
@@ -457,14 +500,8 @@ class separateinputMLP(nn.Module):
 # ---------------------------------------------------------------------------- #
 
 class OneStepRNN(nn.Module):
-    """
-    This is a simple recurrent network which compares the magnitude of two inputs (A and B), which are passed in sequentially.
-    A in passed in first, B second.
-    Both the recurrent layer and the output layer have relu activations.
-    input_size = 15 + 3 for context
-    Reference: https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
-    """
-    def __init__(self, D_in, batch_size, D_out, noise_std, recurrent_size, hidden_size):
+
+    def __init__(self, D_in, D_out, noise_std, recurrent_size, hidden_size):
         super(OneStepRNN, self).__init__()
         self.recurrent_size = recurrent_size  # was 33 default to match to the parallel MLP; now larger to prevent bottleneck on context rep
         self.hidden_size = hidden_size   # was 60 default
@@ -689,7 +726,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
 
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
-        model = OneStepRNN(N+3, args.batch_size, 1, noise_std, args.recurrent_size, args.hidden_size).to(device)
+        model = OneStepRNN(N+3+1, 1, noise_std, args.recurrent_size, args.hidden_size).to(device)
 
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -719,11 +756,12 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
         print('Baseline train: {:.2f}%, Baseline test: {:.2f}%'.format(base_train_accuracy, base_test_accuracy))
         trainingPerformance.append(base_train_accuracy)
         testPerformance.append(base_test_accuracy)
+        printProgress(0, n_epochs)
 
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
 
             # train network
-            standard_train_loss, standard_train_accuracy = recurrent_train(args, model, device, trainloader, optimizer, criterion, epoch, retainHiddenState, printOutput)
+            standard_train_loss, standard_train_accuracy = recurrent_train(params, args, model, device, trainloader, optimizer, criterion, epoch, retainHiddenState, printOutput)
 
             # assess network
             fair_train_loss, fair_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)

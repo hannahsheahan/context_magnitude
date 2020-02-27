@@ -3,9 +3,6 @@ This is a selection of functions for creating a dataset for network training
 on the contextual magnitude mapping project with Fabrice. The dataset is structured
 to match the experimental conditions in Fabrice's EEG experiment as well as possible.
 
-The network defined in 'mag_network.py' is simple MLP is trained on a relational
-magnitude problem: is input A > input B?
-
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 13/12/2019
 Notes: N/A
@@ -55,7 +52,7 @@ def flattenAllFirstDimArrays(*allarrays):
         flatarrays.append(array)
     return  flatarrays
 
-#--------------------------------------------------#
+# ---------------------------------------------------------------------------- #
 
 def flattenFirstDim(array):
     """This function with return a numpy array which flattens the first two dimensions together. Only works for 3d np arrays."""
@@ -66,7 +63,7 @@ def flattenFirstDim(array):
     else:
         print('Error: the array you are trying to partially flatten is not the correct shape.')
 
-#--------------------------------------------------#
+# ---------------------------------------------------------------------------- #
 
 class createDataset(Dataset):
     """A class to hold a dataset.
@@ -92,7 +89,8 @@ class createDataset(Dataset):
         self.context = dataset['context']
         self.contextinput = dataset['contextinputs']
         self.index = (self.index).astype(int)
-        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input, 'context':self.context, 'contextinput':self.contextinput}
+        self.trialtypeinput = dataset['trialtypeinputs']
+        self.data = {'index':self.index, 'label':self.label, 'refValue':self.refValue, 'judgementValue':self.judgementValue, 'input':self.input, 'context':self.context, 'contextinput':self.contextinput, "trialtypeinput":self.trialtypeinput}
         self.transform = transform
 
     def __len__(self):
@@ -105,7 +103,7 @@ class createDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx], 'contextinput':self.contextinput[idx] }
+        sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx], 'contextinput':self.contextinput[idx], 'trialtypeinput':self.trialtypeinput[idx] }
         return sample
 
 # ---------------------------------------------------------------------------- #
@@ -125,19 +123,27 @@ def loadInputData(fileloc,datasetname):
 
 # ---------------------------------------------------------------------------- #
 
-def generateTrialSequence():
-    # for generating a sequence of trials combining both the filler task and the compare task, as in Fabrice's experiment
-    # This will be used in createSeparateInputData()
-    # - HRS note that this sequence will always be 120 trials long
-
+def generateTrialSequence(include_fillers=True):
+    """
+    For generating a sequence of trials combining both the filler task and the compare task, as in Fabrice's experiment
+    This will be used in createSeparateInputData()
+     - HRS note that this sequence will always be 120 trials long
+     - include_fillers flag determines whether our dataset will contain some filler
+    trials like Fabrice used, or whether we have trials solely of the type 'compare'.
+     """
     L3_trialtype, L4_trialtype, L5_trialtype= [ [] for i in range(3)]
 
     # generate 30 sequences, each will different numbers of full range filler trials
     for i in range(10):
         # the type of trials in the sequence
-        L3_trialtype.append([ 'compare','filler','filler'])
-        L4_trialtype.append([ 'compare','filler','filler','filler'])
-        L5_trialtype.append([ 'compare','filler','filler','filler','filler'])
+        if include_fillers:
+            L3_trialtype.append([ 'compare','filler','filler'])
+            L4_trialtype.append([ 'compare','filler','filler','filler'])
+            L5_trialtype.append([ 'compare','filler','filler','filler','filler'])
+        else:
+            L3_trialtype.append([ 'compare','compare','compare'])
+            L4_trialtype.append([ 'compare','compare','compare','compare'])
+            L5_trialtype.append([ 'compare','compare','compare','compare','compare'])
 
     # concatenate and permute the ordering of these sequences
     type_sequence = [L3_trialtype, L4_trialtype, L5_trialtype]
@@ -152,12 +158,14 @@ def generateTrialSequence():
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, labelContext='true'):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext='true'):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
     - 18/02 updated for training on sequences with BPTT
     - 19/02 BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len < block length
+    - HRS this function is long and messy, should really be divided up into more manageable chunks
+
     """
 
     # note that if there is no context blocking, we can't have sequential AB training structure.
@@ -204,8 +212,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
         contexts = np.empty((Mblocks, int(N/Mblocks),Ncontexts))
         contextdigits = np.empty((Mblocks, int(N/Mblocks),1))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
-        trialTypes = np.empty((Mblocks, int(N/Mblocks), BPTT_len), dtype='str')
-        trialTypeInputs = np.empty((Mblocks, int(N/Mblocks),1))
+        trialTypes = np.empty((Mblocks, int(N/Mblocks), BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
+        trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len))
 
         fillerRange = [1,15]        # the range of numbers spanned by all filler trials
 
@@ -230,12 +238,13 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
             for sample in range(int(N/Mblocks)):
                 input_sequence = []
-                type_sequence  = generateTrialSequence() # the order of filler trial and compare trials
+                type_sequence  = generateTrialSequence(include_fillers) # the order of filler trial and compare trials
+                trialtypeinput = [0 for i in range(len(type_sequence))]
 
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
                 for item in range(BPTT_len):
-                    trial_type = type_sequence[item]  # filler or compare trial
-                    trialtypeinput = 1 if trial_type=='compare' else 0    # provide a bit-flip input to say whether its a filler or compare trial
+                    trial_type = type_sequence[item]
+                    trialtypeinput[item] = 1 if trial_type=='compare' else 0    # provide a bit-flip input to say whether its a filler or compare trial
 
                     if trial_type == 'compare':
                         if sequentialABTraining:
@@ -315,7 +324,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
         if phase=='train':
 
             # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
-            input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypes, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypes, trialTypeInputs, random_state=0)
+            input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs, random_state=0)
 
             # now flatten across the first dim of the structure
             input = flattenFirstDim(input)
@@ -327,17 +336,16 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
             trainindices = flattenFirstDim(trainindices)
             blocks = flattenFirstDim(blocks)
             contextinputs = flattenFirstDim(contextinputs)
-            trialTypes  = flattenFirstDim(trialTypes)
             trialTypeInputs  = flattenFirstDim(trialTypeInputs)
 
             # if you want to destroy the trial by trial sequential context and all other structure, then shuffle again across the trial order
             if not blockedTraining:
-                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypes, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypes, trialTypeInputs, random_state=0)
-            trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialTypes":trialTypes, "trialTypeInputs":trialTypeInputs }
+                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs, random_state=0)
+            trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
         else:
 
             # now shuffle the training block order so that we temporally separate contexts a bit but still blocked
-            input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypes, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypes, trialTypeInputs,  random_state=0)
+            input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypeInputs,  random_state=0)
 
             # now flatten across the first dim of the structure
             input = flattenFirstDim(input)
@@ -349,13 +357,12 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
             testindices = flattenFirstDim(testindices)
             blocks = flattenFirstDim(blocks)
             contextinputs = flattenFirstDim(contextinputs)
-            trialTypes  = flattenFirstDim(trialTypes)
             trialTypeInputs  = flattenFirstDim(trialTypeInputs)
 
             # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
             if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
-                input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypes, trialTypeInputs  = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypes, trialTypeInputs,  random_state=0)
-            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialTypes":trialTypes, "trialTypeInputs":trialTypeInputs }
+                input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypeInputs  = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypeInputs,  random_state=0)
+            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
 
     # save the dataset so  we can use it again
     dat = {"trainset":trainset, "testset":testset}

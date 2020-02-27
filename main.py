@@ -41,14 +41,15 @@ import argparse
 
 # ---------------------------------------------------------------------------- #
 
-def trainAndSaveANetwork(params, createNewDataset):
+def trainAndSaveANetwork(params, createNewDataset, include_fillers):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
     datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
 
     if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, labelContext)
+        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext)
+        #trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
@@ -172,7 +173,8 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
+    include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                            # global
     blockTrain = True                 # whether to block the training by context
@@ -190,7 +192,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset)
+        trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
         # Analyse the trained network
         args, _, _ = mnet.defineHyperparams() # network training hyperparams
