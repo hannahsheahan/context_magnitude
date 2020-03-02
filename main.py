@@ -93,40 +93,46 @@ def analyseNetwork(fileloc, args, params):
         # pass each input through the model and determine the hidden unit activations
         #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
-        activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
-        dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-        sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+        for whichTrialType in ['compare', 'filler']:
 
-        # How bout if we average activations over the difference values!
-        diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+            activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader, whichTrialType)
+            dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
+            sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
-        # do MDS on the activations for the training set
-        print('Performing MDS...')
-        tic = time.time()
-        randseed = 3 # so that we get the same MDS each time
-        embedding = MDS(n_components=3, random_state=randseed)
-        MDS_activations = embedding.fit_transform(activations)
-        sl_embedding = MDS(n_components=3, random_state=randseed)
-        MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+            # How bout if we average activations over the difference values!
+            diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
-        diff_sl_embedding = MDS(n_components=3, random_state=randseed)
-        MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
+            # do MDS on the activations for the training set
+            print('Performing MDS on trials of type: {}...'.format(whichTrialType))
+            tic = time.time()
+            randseed = 3 # so that we get the same MDS each time
+            embedding = MDS(n_components=3, random_state=randseed)
+            MDS_activations = embedding.fit_transform(activations)
+            sl_embedding = MDS(n_components=3, random_state=randseed)
+            MDS_slactivations = sl_embedding.fit_transform(sl_activations)
 
+            diff_sl_embedding = MDS(n_components=3, random_state=randseed)
+            MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
 
-        # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
-        #print(drift["temporal_activation_drift"].shape)
-        #embedding = MDS(n_components=3, random_state=randseed)
-        #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
-        #print(drift["MDS_latentstate"].shape)
+            # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
+            #print(drift["temporal_activation_drift"].shape)
+            #embedding = MDS(n_components=3, random_state=randseed)
+            #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
+            #print(drift["MDS_latentstate"].shape)
 
-        toc = time.time()
-        print('MDS fitting completed, took (s): {:.2f}'.format(toc-tic))
+            toc = time.time()
+            print('MDS fitting on trial types {} completed, took (s): {:.2f}'.format(whichTrialType, toc-tic))
 
-        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
-                    "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
-                    "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
-                    "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
-                    "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
+            dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
+                        "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
+                        "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
+                        "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
+                        "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
+
+            if whichTrialType=='compare':
+                MDS_dict = dict
+            else:
+                MDS_dict["filler_dict"] = dict
 
         # save the analysis for next time
         print('Saving network analysis...')
@@ -143,16 +149,17 @@ def generatePlots(MDS_dict, args, params):
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
     labelNumerosity = True    # numerosity vs outcome labels
     params.append(saveFig)
+    whichTrialType = 'filler'
 
     # Label activations by mean number A numerosity
-    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code) # mean MDS of our hidden activations (averaged across number B)
-    MDSplt.plot3MDS(MDS_dict, args, params)      # the full MDS cloud, coloured by different labels
+    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
+    MDSplt.plot3MDS(MDS_dict, args, params, whichTrialType)      # the full MDS cloud, coloured by different labels
 
     # Label activations by the difference code numerosity
     plot_diff_code = True
-    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
+    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType)
 
     # Plot checks on the training data sequencing
     #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
@@ -173,7 +180,7 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                            # global
@@ -192,7 +199,7 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
 
         # Train the network from scratch
-        trainAndSaveANetwork(params, createNewDataset, include_fillers)
+        #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
         # Analyse the trained network
         args, _, _ = mnet.defineHyperparams() # network training hyperparams

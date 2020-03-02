@@ -303,7 +303,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                         else:
                             target[block, sample, i] = None  # default dont do anything
 
-                    allJValues[i] = np.squeeze(turnOneHot(judgeValue, totalMaxNumerosity))
+                    allJValues[i] = np.squeeze(turnOneHot(turnOneHotToInteger(input_sequence[i]), totalMaxNumerosity))
                     if rValue is None:
                         allRValues[i] = np.zeros((15,))
                     else:

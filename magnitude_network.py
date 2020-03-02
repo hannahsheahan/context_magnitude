@@ -74,7 +74,7 @@ def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
 
     # save figure of gradient flow (this will take ages if you do it every loop)
     networkStyle, noise_std, blockTrain, seqTrain, givenContext, retainHiddenState = params
-    MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, True)
+    MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
 
@@ -319,19 +319,10 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     TRIAL_COMPARE = 1
     TRIAL_TYPE = TRIAL_COMPARE if whichType=='compare' else TRIAL_FILLER
 
-    print('now inside getActivations()...')
-
-    # Just do this for the compare trials for now
-
     # determine the unique inputs for the training set (there are repeats)
     # consider activations at all instances, then average these activations to get the mean per unique input.
     trainset_input_n_context, seq_record = [[] for i in range(2)]
     for seq in range(len(trainset["input"])):
-        plt.figure()
-        plt.plot([dset.turnOneHotToInteger(trainset["input"][seq,i])[:] for i in range(len(trainset["input"][seq]))], color='blue')
-        plt.plot(trainset["trialtypeinputs"][seq],color='pink')
-        plt.title(seq)
-        n = plt.savefig(str(seq))
 
         inputA, inputB = [None for i in range(2)]
         for item_idx in range(len(trainset["input"][seq])):
@@ -343,10 +334,6 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                     if inputB is not None:
                         if np.all(inputA==inputB):
                             print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
-                            print([dset.turnOneHotToInteger(trainset["input"][seq,i])[:] for i in range(len(trainset["input"][seq])) if trainset["trialtypeinputs"][seq,i]==1])
-                            print([dset.turnOneHotToInteger(trainset["refValue"][seq,i])[:] for i in range(len(trainset["refValue"][seq])) if trainset["trialtypeinputs"][seq,i]==1])
-                            print([dset.turnOneHotToInteger(trainset["judgementValue"][seq,i])[:] for i in range(len(trainset["judgementValue"][seq])) if trainset["trialtypeinputs"][seq,i]==1])
-                            print('-----')
                         context = trainset["context"][seq]  # the actual underlying range context, not the label
                         trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                         seq_record.append([seq, item_idx])
@@ -385,7 +372,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     rdim = trained_model.recurrent_size
     activations = np.empty((len(uniqueind), hdim))
     temporal_context = np.zeros((trainsize,))            # for tracking the evolution of context in the training set
-    temporal_trialtypes = np.zeros((trainsize,))
+    temporal_trialtypes = np.zeros((trainsize,sequenceLength))
     temporal_activation_drift = np.zeros((trainsize, rdim))
 
     #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
@@ -432,16 +419,15 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
         for batch_idx, data in enumerate(train_loader):
             #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
-            inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
-
+            inputs, labels, context, contextinput, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
             temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
-            print(data['trialtypeinput'].shape)
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
-                inputX = torch.cat((inputs[:, i], context, trialtype[:,i]),1)
+                inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
 
             h0activations = latentstate  # because we have overlapping sequential trials
@@ -451,16 +437,17 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             for item_idx in range(sequenceLength):
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
-                    latentstate = hidden.detach()
+                    latentstate = h0activations.detach()
 
                 # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
-                if TRIAL_TYPE == TRIAL_COMPARE:  # if we are looking at act. for the compare trials only
-                    if trialtype[0,item_idx]==TRIAL_COMPARE:
+                if trialtype[0,item_idx] == TRIAL_TYPE:
+                    if TRIAL_TYPE==TRIAL_COMPARE:    # if we are looking at act. for the compare trials only
                         inputA = recurrentinputs[item_idx][0][:15]
                         if inputB is not None:
                             input_n_context = np.append(np.append(inputA, inputB), context)  # actual underlying range context
                             for i in range(N_unique):
                                 if np.all(unique_inputs_n_context[i,:]==input_n_context):
+                                    #print('{}, {}, context {}'.format(dset.turnOneHotToInteger(inputA)[0],  dset.turnOneHotToInteger(inputB)[0] , np.squeeze(dset.turnOneHotToInteger(context))[0]  ))
                                     index = i
                                     break
 
@@ -472,8 +459,8 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                             time_index[index] = batch_idx
                         inputB = recurrentinputs[item_idx][0][:15]  # previous state <= current state
 
-                else:  # for filler trials only, consider just the current number and context
-                    if trialtype[0,item_idx]==TRIAL_FILLER:
+                    else:  # for filler trials only, consider just the current number and context
+
                         inputA = recurrentinputs[item_idx][0][:15]
                         input_n_context = np.append(inputA, context)  # actual underlying range context
                         for i in range(N_unique):
@@ -487,12 +474,12 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                         contexts[index] = dset.turnOneHotToInteger(unique_context[index])
                         time_index[index] = batch_idx
 
+                    if item_idx > 0:
+                        # Aggregate activity associated with each instance of each input
+                        aggregate_activations[index] += activations[index]
+                        counter[index] += 1    # captures how many instances of each unique input there are in the training set
 
-            temporal_activation_drift[batch_idx, :] = latentstate
-
-            # Aggregate activity associated with each instance of each input
-            aggregate_activations[index] += activations[index]
-            counter[index] += 1    # captures how many instances of each unique input there are in the training set
+            temporal_activation_drift[batch_idx, :] = latentstate   # HRS this is not correct yet since only taking end of sequence
 
         # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
         for i in range(counter.shape[0]):
