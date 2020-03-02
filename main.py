@@ -93,7 +93,7 @@ def analyseNetwork(fileloc, args, params):
         # pass each input through the model and determine the hidden unit activations
         #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
-        activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
+        activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader)
         dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
         sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
 
@@ -122,7 +122,7 @@ def analyseNetwork(fileloc, args, params):
         toc = time.time()
         print('MDS fitting completed, took (s): {:.2f}'.format(toc-tic))
 
-        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, \
+        MDS_dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
                     "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
                     "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
                     "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\

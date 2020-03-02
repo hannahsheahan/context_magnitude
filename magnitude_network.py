@@ -352,6 +352,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     rdim = trained_model.recurrent_size
     activations = np.empty((len(uniqueind), hdim))
     temporal_context = np.zeros((trainsize,))            # for tracking the evolution of context in the training set
+    temporal_trialtypes = np.zeros((trainsize,))
     temporal_activation_drift = np.zeros((trainsize, rdim))
     #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
     aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
@@ -409,6 +410,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
             #input_n_context = np.append(inputs[:, ABrange], context)  # concatenate the A,B input and the underlying context (but not context input)
             temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
+            temporal_trialtypes[batch_idx] = data['trialtypeinput'].numpy()
 
             h0activations = latentstate  # because we have overlapping sequential trials
 
@@ -473,7 +475,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
     drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
 
-    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
 
 # ---------------------------------------------------------------------------- #
 

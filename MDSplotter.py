@@ -533,18 +533,28 @@ def instanceCounter(MDS_dict, args, params):
 # ---------------------------------------------------------------------------- #
 
 def viewTrainingSequence(MDS_dict, args, params):
-    """Take the data loader and view how the contexts and latent states evolved in time in the training set."""
+    """Take the data loader and view how the contexts and latent states evolved in time in the training set.
+    Also plots the sequence of compare vs filler trials.
+    """
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
     MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
     temporal_context = MDS_dict["drift"]["temporal_context"]
+    temporal_trialtypes = MDS_dict["temporal_trialtypes"]
 
     # context in time/trials in training set
     plt.figure()
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Context (0: 1-15; 1: 1-10; 2: 6-15)')
-    n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, plot_diff_code, saveFig)
+    n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, saveFig)
+
+    # trial types changing with time in training set
+    plt.figure()
+    plt.plot(temporal_trialtypes.flatten())
+    plt.xlabel('Trials in training set')
+    plt.ylabel('Trial type: 0-filler; 1-compare')
+    n = autoSaveFigure('figures/temporaltrialtype_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, saveFig)
 
     # latent state drift in time/trials in training set
     fig,ax = plt.subplots(1,3, figsize=(18,5))
