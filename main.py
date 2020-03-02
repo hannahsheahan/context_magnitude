@@ -173,7 +173,7 @@ def generatePlots(MDS_dict, args, params):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = False          # re-generate the random train/test dataset each time?
+    createNewDataset = True          # re-generate the random train/test dataset each time?
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                            # global

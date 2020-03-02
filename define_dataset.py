@@ -236,7 +236,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
-            for sample in range(int(N/Mblocks)):
+            for sample in range(int(N/Mblocks)):    # each sequence
                 input_sequence = []
                 type_sequence  = generateTrialSequence(include_fillers) # the order of filler trial and compare trials
                 trialtypeinput = [0 for i in range(len(type_sequence))]
@@ -248,38 +248,28 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
 
                     if trial_type == 'compare':
                         if sequentialABTraining:
-                            if firstTrialInContext and item==0:
+                            if (firstTrialInContext and (item==0)):
                                 refValue = random.randint(minNumerosity,maxNumerosity)
+                                if trial_type == 'filler':
+                                    print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
                             else:
                                 refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
                         else:
                             refValue = random.randint(minNumerosity,maxNumerosity)
 
-
                         judgementValue = random.randint(minNumerosity,maxNumerosity)
                         while refValue==judgementValue:    # make sure we dont do inputA==inputB for two adjacent inputs
                             judgementValue = random.randint(minNumerosity,maxNumerosity)
 
-                        input1 = turnOneHot(refValue, totalMaxNumerosity)
                         input2 = turnOneHot(judgementValue, totalMaxNumerosity)
 
-                        if np.all(input1==input2):
-                            print('Warning: trial in dataset has two adjacent inputs the same number')
-                            print('State of firstTrialInContext: {}'.format(firstTrialInContext))
-
                     else:  # filler trial
-                        # leave the filler numbers unconstrained just spanning the full range
-                        input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity)
+                        input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
 
                     # add our new inputs to our sequence
-                    if firstTrialInContext and item==0:
-                        if trial_type == 'filler':
-                            print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
-                        input_sequence.append(input1)
                     input_sequence.append(input2)
 
                 if firstTrialInContext:
-                    input_sequence = input_sequence[:-1]  # make sure all sequences are the same length
                     judgementValue = turnOneHotToInteger(input_sequence[-1])  # and then make sure that the next sequence starts where this one left off (bit of a hack)
                     firstTrialInContext = False
 
@@ -294,25 +284,40 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                     contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
-                refValue = None
+                rValue = None
+                judgeValue = None
+                allJValues = np.zeros((BPTT_len, totalMaxNumerosity))
+                allRValues = np.zeros((BPTT_len, totalMaxNumerosity))
                 for i in range(BPTT_len):
-                    if i==0:
-                        target[block, sample, i] = None  # there is no feedback for the first presented number in sequence
-                    else:
-                        refValue = turnOneHotToInteger(input_sequence[i-1])
-                        judgementValue = turnOneHotToInteger(input_sequence[i])
+                    trialtype = trialtypeinput[i]
+                    if trialtype==1:  # compare
+                        judgeValue = turnOneHotToInteger(input_sequence[i])
+                        if rValue is not None:
+                            if judgeValue==rValue:
+                                print('Warning: something gone wrong at index {}.'.format(i))
 
-                        if judgementValue > refValue:
-                            target[block, sample, i] = 1
+                            if judgeValue > rValue:
+                                target[block, sample, i] = 1
+                            else:
+                                target[block, sample, i] = 0
                         else:
-                            target[block, sample, i] = 0
+                            target[block, sample, i] = None  # default dont do anything
+
+                    allJValues[i] = np.squeeze(turnOneHot(judgeValue, totalMaxNumerosity))
+                    if rValue is None:
+                        allRValues[i] = np.zeros((15,))
+                    else:
+                        allRValues[i] = np.squeeze(turnOneHot(rValue, totalMaxNumerosity))
+
+                    if trialtype==1:
+                        rValue = turnOneHotToInteger(input_sequence[i])  # set the previous state to be the current state
+
+                if firstTrialInContext:
+                    judgementValue = copy.deepcopy(judgeValue)    # and then make sure that the next sequence starts with judgement where this one left off
 
                 contextdigits[block, sample] = context
-                judgementValues[block, sample] = np.squeeze(np.asarray(input_sequence))
-                tmp = copy.deepcopy(input_sequence)
-                tmp = tmp[-1:] + tmp[:-1]
-                tmp[0] = np.zeros((15,1)) # the first element in sequence does not have a reference element
-                refValues[block, sample] = np.squeeze(np.asarray(tmp))
+                judgementValues[block, sample] = np.squeeze(np.asarray(allJValues))
+                refValues[block, sample] = np.squeeze(np.asarray(allRValues))
                 contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
                 contextinputs[block, sample] = np.squeeze(contextinput)
                 #input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))  # for the MLP
