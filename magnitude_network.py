@@ -73,8 +73,8 @@ def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
     plt.title("Gradient flow, update #{}".format(batch_number))
 
     # save figure of gradient flow (this will take ages if you do it every loop)
-    networkStyle, noise_std, blockTrain, seqTrain, givenContext, retainHiddenState = params
-    MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
+    networkStyle, noise_std, blockTrain, seqTrain, givenContext, retainHiddenState, allFullRange = params
+    #MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
 
@@ -590,7 +590,7 @@ def defineHyperparams():
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
         parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
-        parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.001)')
+        parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
@@ -646,7 +646,7 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState):
+def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange):
 
     # conver the hyperparameter settings into a string ID
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
@@ -671,15 +671,18 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
     elif labelContext=='constant':
         contextlabelledtext = '_constcontextlabel'
 
-    datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext + '_bpl' + str(args.BPTT_len)
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
+    rangetxt = '_allfullrange' if allFullRange else ''
+
+
+    datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext+rangetxt + '_bpl' + str(args.BPTT_len)
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args
 
     if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
     else:
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+hiddenstate+str_args+'.pth'
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+str_args+'.pth'
 
-    trainingrecord_name = '_trainingrecord_'+ networkTxt + contextlabelledtext+blockedtext+seqtext+hiddenstate+'_n'+str(noise_std)+str_args
+    trainingrecord_name = '_trainingrecord_'+ networkTxt + contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
@@ -754,7 +757,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
      - the trained recurrent model is returned
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
-    _, noise_std, _, _, _, retainHiddenState = params
+    _, noise_std, _, _, _, retainHiddenState, _ = params
     _, _, _, trainingrecord_name = getDatasetName(args, *params)
 
     # Repeat the train/test model assessment for different sets of hyperparameters

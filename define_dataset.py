@@ -158,7 +158,7 @@ def generateTrialSequence(include_fillers=True):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext='true'):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -180,10 +180,14 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
         print('- network has randomly assigned context labelling')
     elif labelContext=='constant':
         print('- network has constant (1) context labelling')
+    if allFullRange:
+        print('- compare numbers are all drawn from the full 1:15 range')
+    else:
+        print('- compare numbers are drawn from temporally structured ranges')
     if blockedTraining:
         print('- training is blocked by context')
     else:
-        print('- training is temporally intermingled across contexts')
+        print('- training is temporally intermingled across contexts, loosing all A!=B structure and filler structure')
     if sequentialABTraining:
         print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
     else:
@@ -227,12 +231,20 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
 
             elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
                 context = 2
-                minNumerosity = 1
-                maxNumerosity = 10
+                if allFullRange:
+                    minNumerosity = 1
+                    maxNumerosity = 15
+                else:
+                    minNumerosity = 1
+                    maxNumerosity = 10
             else:                                # 16-23   # context C
                 context = 3
-                minNumerosity = 6
-                maxNumerosity = 15
+                if allFullRange:
+                    minNumerosity = 1
+                    maxNumerosity = 15
+                else:
+                    minNumerosity = 6
+                    maxNumerosity = 15
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
             firstTrialInContext = True              # reset the sequentialAB structure for each new context

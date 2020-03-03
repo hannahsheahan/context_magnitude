@@ -45,10 +45,10 @@ def trainAndSaveANetwork(params, createNewDataset, include_fillers):
     # define the network parameters
     args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
     datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
 
     if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext)
+        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext, allFullRange)
         #trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, blockTrain, seqTrain, labelContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
@@ -88,7 +88,7 @@ def analyseNetwork(fileloc, args, params):
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
         trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
-        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState = params
+        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
 
         # pass each input through the model and determine the hidden unit activations
         #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
@@ -137,7 +137,9 @@ def analyseNetwork(fileloc, args, params):
         # save the analysis for next time
         print('Saving network analysis...')
         np.save(analysis_name+'.npy', MDS_dict)                                          # the full MDS analysis
-        np.save('network_analysis/RDMs/RDM_'+analysis_name[29:]+'.npy', sl_activations)  # the RDM matrix only
+        np.save('network_analysis/RDMs/RDM_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
+        np.save('network_analysis/RDMs/RDM_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
+
 
     return MDS_dict
 
@@ -184,6 +186,7 @@ if __name__ == '__main__':
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                            # global
+    allFullRange = False               # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and fillers)
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
     labelContext = 'constant'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
@@ -196,7 +199,7 @@ if __name__ == '__main__':
     noiselevels = [0.0]
 
     for noise_std in noiselevels:
-        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState]
+        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange]
 
         # Train the network from scratch
         #trainAndSaveANetwork(params, createNewDataset, include_fillers)

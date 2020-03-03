@@ -68,7 +68,7 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compa
     Context order:  1-15, 1-10, 5-15
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -109,7 +109,7 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compa
 def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compare'):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -210,7 +210,7 @@ def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compa
 def plot3MDSContexts(MDS_dict, args, labelNumerosity, params, whichTrialType='compare'):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
 
@@ -255,7 +255,7 @@ def plot3MDSMean(MDS_dict, args, params, labelNumerosity=True, plot_diff_code=Fa
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -483,7 +483,7 @@ def animate3DMDS(MDS_dict, args, params, plot_diff_code=False, whichTrialType='c
      from different angles and optionally save it as a mp4 file.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -571,7 +571,7 @@ def viewTrainingSequence(MDS_dict, args, params, whichTrialType='compare'):
     Also plots the sequence of compare vs filler trials.
     """
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
     MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
     temporal_context = MDS_dict["drift"]["temporal_context"]
     temporal_trialtypes = MDS_dict["temporal_trialtypes"]
@@ -633,7 +633,7 @@ def animate3DdriftMDS(MDS_dict, args, params, whichTrialType='compare'):
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
     MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
