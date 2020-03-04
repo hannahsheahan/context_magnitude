@@ -103,7 +103,13 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
         loss = 0
 
         for i in range(sequenceLength):
-            inputX = torch.cat((inputs[:, i], context, trialtype[:,i]),1)
+            print(trialtype[:,i].shape)
+            if trialtype[0,i]==0:  # remove context indicator on the filler trials
+                context_in = torch.full_like(context, 0)
+            else:
+                context_in = copy.deepcopy(context)
+
+            inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
         if not retainHiddenState:
@@ -189,8 +195,16 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
             n_comparetrials = np.nansum(np.nansum(trialtype))
 
             for i in range(sequenceLength):
-                inputX = torch.cat((inputs[:, i], context, trialtype[:, i]),dim=1)
+                print(trialtype[:,i].shape)
+                if trialtype[0,i]==0:  # remove context indicator on the filler trials
+                    context_in = torch.full_like(context, 0)
+                else:
+                    context_in = copy.deepcopy(context)
+
+                inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
+
+
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
@@ -277,6 +291,9 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                         lesionRecord[i] = 1
                     else:
                         lesionRecord[i] = 0
+                else:
+                    inputcontext = torch.full_like(context, 0)  # all filler trials should have no context input to it
+
                 inputX = torch.cat((inputs[:, i], inputcontext, trialtype[:, i]),dim=1)
                 recurrentinputs.append(inputX)
 

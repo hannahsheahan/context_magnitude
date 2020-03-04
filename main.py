@@ -272,11 +272,11 @@ if __name__ == '__main__':
         params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange]
 
         # Train the network from scratch
-        #trainAndSaveANetwork(params, createNewDataset, include_fillers)
+        trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
         # Perform lesion tests on the network
-        lesionBins = 20
-        performLesionTests(params, lesionBins)
+        #lesionBins = 20
+        #performLesionTests(params, lesionBins)
 
         # Analyse the trained network
         #args, _, _ = mnet.defineHyperparams() # network training hyperparams
