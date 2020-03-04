@@ -180,7 +180,17 @@ def generatePlots(MDS_dict, args, params):
 
 # ---------------------------------------------------------------------------- #
 
-def assessLesionedNetwork(params, whichLesion, lesionFrequency):
+def testTrainedNetwork(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput):
+    """
+    Test the standard trained network with no lesions.
+    """
+    # evalate lesioned and regular test performance
+    normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
+    print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+
+# ---------------------------------------------------------------------------- #
+
+def setupTestParameters(params):
     """
     Evaluate a network on the test set with either the context or the numerical input stream lesioned (set to zero).
     Compare to performance when the network is evaluated as normal on the test set.
@@ -198,16 +208,44 @@ def assessLesionedNetwork(params, whichLesion, lesionFrequency):
     criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
     printOutput = True
 
-    # evalate lesioned and regular test performance
-    #normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
-    #print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
-    normal_testaccuracy = 100
+    testParams = [args, trained_model, device, testloader, criterion, retainHiddenState, printOutput]
 
-    lesioned_testloss, lesioned_testaccuracy = mnet.recurrent_lesion_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput, whichLesion, lesionFrequency)
-    print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
+    return testParams
 
+# ---------------------------------------------------------------------------- #
 
-    return normal_testaccuracy, lesioned_testaccuracy
+def performLesionTests(params, lesionBins):
+    """
+    Lesion the network test inputs with different frequencies, and assess performance.
+    """
+
+    X = lesionBins
+    freq = np.linspace(0,1,X)
+    lesioned_tests = []
+    testParams = setupTestParameters(params)
+    whichLesion = 'number'
+
+    for i in range(X):
+        if i==0:
+            # evaluate regular test performance
+            _, normal_testaccuracy = mnet.recurrent_test(*testParams)
+            print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+            lesioned_tests.append(normal_testaccuracy)
+        else:
+            # evaluate network at test with lesions
+            lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
+            _, lesioned_testaccuracy = mnet.recurrent_lesion_test(*testParams, whichLesion, lesionFrequency)
+            print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
+            lesioned_tests.append(lesioned_testaccuracy)
+
+    plt.figure()
+    plt.plot(freq, lesioned_tests, '.', color='blue' )
+    plt.plot(freq, lesioned_tests, color='blue')
+    plt.xlabel('Lesion frequency (0-1)')
+    plt.ylabel('Perf. post-lesion trial')
+
+    plt.savefig('lesionFrequencyTest_numberlesion_constantcontext.pdf',bbox_inches='tight')
+    plt.title('RNN w/ no context label, BPTT120: lesion tests')
 
 # ---------------------------------------------------------------------------- #
 
@@ -235,44 +273,10 @@ if __name__ == '__main__':
 
         # Train the network from scratch
         #trainAndSaveANetwork(params, createNewDataset, include_fillers)
-        X = 20
-        freq = np.linspace(0,1,X)
-        print(freq)
-        lesioned_tests = []
 
-        args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
-        datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
-        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
-
-        # load the test set appropriate for the dataset our model was trained on
-        trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
-        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-        # load our trained model
-        trained_model = torch.load(trained_modelname)
-        criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-        printOutput = True
-
-        # evalate lesioned and regular test performance
-        normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
-
-        whichLesion = 'number'
-        for i in range(X):
-            if i==0:
-                lesioned_tests.append(normal_testaccuracy)
-            else:
-                lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
-                normal_testaccuracy, lesioned_testaccuracy = assessLesionedNetwork(params, whichLesion, lesionFrequency)
-                lesioned_tests.append(lesioned_testaccuracy)
-
-        plt.figure()
-        plt.plot(freq, lesioned_tests, '.', color='blue' )
-        plt.plot(freq, lesioned_tests, color='blue')
-        plt.xlabel('Lesion frequency (0-1)')
-        plt.ylabel('Perf. post-lesion trial')
-
-        plt.savefig('lesionFrequencyTest_numberlesion_constantcontext.pdf',bbox_inches='tight')
-        plt.title('RNN w/ no context label, BPTT120: lesion tests')
+        # Perform lesion tests on the network
+        lesionBins = 20
+        performLesionTests(params, lesionBins)
 
         # Analyse the trained network
         #args, _, _ = mnet.defineHyperparams() # network training hyperparams
