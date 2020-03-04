@@ -151,31 +151,63 @@ def generatePlots(MDS_dict, args, params):
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
     labelNumerosity = True    # numerosity vs outcome labels
     params.append(saveFig)
-    whichTrialType = 'filler'
+    trialTypes = ['compare', 'filler']
 
-    # Label activations by mean number A numerosity
-    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
-    MDSplt.plot3MDS(MDS_dict, args, params, whichTrialType)      # the full MDS cloud, coloured by different labels
+    for whichTrialType in trialTypes:
+        # Label activations by mean number A numerosity
+        MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
+        MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
+        MDSplt.plot3MDS(MDS_dict, args, params, whichTrialType)      # the full MDS cloud, coloured by different labels
 
-    # Label activations by the difference code numerosity
-    plot_diff_code = True
-    MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
-    MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType)
+        # Label activations by the difference code numerosity
+        #plot_diff_code = True
+        #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
+        #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType)
 
-    # Plot checks on the training data sequencing
-    #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
-    #MDSplt.viewTrainingSequence(MDS_dict, args, params)  # Plot the context sequencing in the training set through time
-    #MDSplt.instanceCounter(MDS_dict, args, params)  # Check how many samples we have of each unique input (should be context-ordered)
+        # Plot checks on the training data sequencing
+        #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
+        #MDSplt.viewTrainingSequence(MDS_dict, args, params)  # Plot the context sequencing in the training set through time
+        #MDSplt.instanceCounter(MDS_dict, args, params)  # Check how many samples we have of each unique input (should be context-ordered)
 
-    # MDS with output labels (true/false labels)
-    #labelNumerosity = False
-    #MDSplt.plot3MDS(MDS_dict, args, params, labelNumerosity, plot_diff_code)
-    #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args, params)  # plot the MDS with context labels. ***HRS obsolete?
+        # MDS with output labels (true/false labels)
+        #labelNumerosity = False
+        #MDSplt.plot3MDS(MDS_dict, args, params, labelNumerosity, plot_diff_code)
+        #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args, params)  # plot the MDS with context labels. ***HRS obsolete?
 
-    # 3D Animations
-    #MDSplt.animate3DMDS(MDS_dict, args, params, plot_diff_code)  # plot a 3D version of the MDS constructions
-    #MDSplt.animate3DdriftMDS(MDS_dict, args, params)             # plot a 3D version of the latent state MDS
+        # 3D Animations
+        #MDSplt.animate3DMDS(MDS_dict, args, params, plot_diff_code)  # plot a 3D version of the MDS constructions
+        #MDSplt.animate3DdriftMDS(MDS_dict, args, params)             # plot a 3D version of the latent state MDS
+
+# ---------------------------------------------------------------------------- #
+
+def assessLesionedNetwork(params, whichLesion, lesionFrequency):
+    """
+    Evaluate a network on the test set with either the context or the numerical input stream lesioned (set to zero).
+    Compare to performance when the network is evaluated as normal on the test set.
+    """
+    args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+
+    # load the test set appropriate for the dataset our model was trained on
+    trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+    # load our trained model
+    trained_model = torch.load(trained_modelname)
+    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
+    printOutput = True
+
+    # evalate lesioned and regular test performance
+    #normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
+    #print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+    normal_testaccuracy = 100
+
+    lesioned_testloss, lesioned_testaccuracy = mnet.recurrent_lesion_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput, whichLesion, lesionFrequency)
+    print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
+
+
+    return normal_testaccuracy, lesioned_testaccuracy
 
 # ---------------------------------------------------------------------------- #
 
@@ -189,7 +221,7 @@ if __name__ == '__main__':
     allFullRange = False               # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and fillers)
     blockTrain = True                 # whether to block the training by context
     seqTrain = True                   # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'constant'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
+    labelContext = 'true'          # 'true', 'random', 'constant', does the input contain true markers of context (1-3) or random ones (still 1-3)?
     retainHiddenState = True          # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled
@@ -203,12 +235,50 @@ if __name__ == '__main__':
 
         # Train the network from scratch
         #trainAndSaveANetwork(params, createNewDataset, include_fillers)
+        X = 20
+        freq = np.linspace(0,1,X)
+        print(freq)
+        lesioned_tests = []
+
+        args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
+        datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
+        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+
+        # load the test set appropriate for the dataset our model was trained on
+        trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+        # load our trained model
+        trained_model = torch.load(trained_modelname)
+        criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
+        printOutput = True
+
+        # evalate lesioned and regular test performance
+        normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
+
+        whichLesion = 'number'
+        for i in range(X):
+            if i==0:
+                lesioned_tests.append(normal_testaccuracy)
+            else:
+                lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
+                normal_testaccuracy, lesioned_testaccuracy = assessLesionedNetwork(params, whichLesion, lesionFrequency)
+                lesioned_tests.append(lesioned_testaccuracy)
+
+        plt.figure()
+        plt.plot(freq, lesioned_tests, '.', color='blue' )
+        plt.plot(freq, lesioned_tests, color='blue')
+        plt.xlabel('Lesion frequency (0-1)')
+        plt.ylabel('Perf. post-lesion trial')
+
+        plt.savefig('lesionFrequencyTest_numberlesion_constantcontext.pdf',bbox_inches='tight')
+        plt.title('RNN w/ no context label, BPTT120: lesion tests')
 
         # Analyse the trained network
-        args, _, _ = mnet.defineHyperparams() # network training hyperparams
-        MDS_dict = analyseNetwork(fileloc, args, params)
+        #args, _, _ = mnet.defineHyperparams() # network training hyperparams
+        #MDS_dict = analyseNetwork(fileloc, args, params)
 
         # Visualise the resultant network activations (RDMs and MDS)
-        generatePlots(MDS_dict, args, params)
+        #generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #

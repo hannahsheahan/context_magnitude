@@ -48,7 +48,7 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
     labeltext = '_number' if labelNumerosity else '_outcomes'
     contexts = '_contexts' if labelContexts else ''
     networkTxt = 'RNN' if networkStyle == 'recurrent' else 'MLP'
-    trialtypetxt = 'compare' if whichTrialType == '_compare' else '_filler'
+    trialtypetxt = '_compare' if whichTrialType == 'compare' else '_filler'
     if givenContext=='true':
         contextlabelledtext = '_truecontextlabel'
     elif givenContext=='random':

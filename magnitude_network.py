@@ -223,7 +223,107 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
     test_loss /= len(test_loader.dataset)*(n_comparetrials-1)  # there are n_comparetrials-1 instances of feedback per sequence
     accuracy = 100. * correct / (len(test_loader.dataset)*(n_comparetrials-1))
     if printOutput:
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
+        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset)*(n_comparetrials-1), accuracy))
+    return test_loss, accuracy
+
+# ---------------------------------------------------------------------------- #
+
+
+def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True, whichLesion='context', lesionFrequency=1):
+    """Test a recurrent neural network on the test set.
+    Note that this will need to be modified such that it tracks test performance JUST
+    on the subset of trials towards the end of each block (initially for a proof of concept)
+    and then later across all trials regardless of position in block. So the later trials in a block
+    will have a clearer context signal because of the stats of previous inputs held in the recurrent hidden state.
+
+    - with lesioned inputs: either the context part of the input, or the number input
+    - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'
+    """
+    model.eval()
+    test_loss = 0
+    correct = 0
+
+    # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+    hidden = torch.zeros(args.batch_size, model.recurrent_size)
+    latentstate = torch.zeros(args.batch_size, model.recurrent_size)
+    totaln_lesiontrials = 0
+
+    with torch.no_grad():  # dont track the gradients
+        for batch_idx, data in enumerate(test_loader):
+            inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+
+            # decide which input to lesion (set to zero)
+            #if lesionFrequency==1:
+            #    if whichLesion=='context':
+            #        context = torch.full_like(context, 0)
+            #    else:
+            #        inputs = torch.full_like(inputs, 0)
+
+            # reformat the input sequences for our recurrent model
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+            lesionRecord = np.zeros((sequenceLength,))
+            n_comparetrials = np.nansum(np.nansum(trialtype))
+
+            for i in range(sequenceLength):
+                inputcontext = copy.deepcopy(context)
+                if trialtype[0,i]==1: # compare trial that we can lesion
+                    if (random.random() < lesionFrequency) and (i>0):
+                        # lesion the input, but dont lesion the first input
+                        if whichLesion=='context':
+                            inputcontext = torch.full_like(context, 0)
+                        else:
+                            inputs[:,i] = torch.full_like(inputs[:,i], 0)
+                        lesionRecord[i] = 1
+                    else:
+                        lesionRecord[i] = 0
+                inputX = torch.cat((inputs[:, i], inputcontext, trialtype[:, i]),dim=1)
+                recurrentinputs.append(inputX)
+
+            n_lesiontrials = np.sum(lesionRecord)  # how many trials we will record performance after
+
+            if not retainHiddenState:  # only if you want to reset hidden state between trials
+                hidden = torch.zeros(args.batch_size, model.recurrent_size)
+            else:
+                hidden = latentstate
+
+            wasLesioned = False
+            # perform a N-step recurrence for the whole sequence of numbers in the input
+            for item_idx in range(sequenceLength):
+
+                # inject some noise ~= forgetting of the previous number
+                noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                hidden.add_(noise)
+                output, hidden = model(recurrentinputs[item_idx], hidden)
+
+                if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
+                    latentstate = hidden.detach()
+
+                if item_idx>0 and (trialtype[0,item_idx]==1):
+
+                    # was the previous compare trial lesioned?
+                    if wasLesioned:
+                        test_loss += criterion(output, labels[item_idx]).item()
+                        output = np.squeeze(output, axis=1)
+                        pred = np.zeros((output.size()))
+                        for i in range((output.size()[0])):
+                            if output[i]>0.5:
+                                pred[i] = 1
+                            else:
+                                pred[i] = 0
+
+                        tmp = np.squeeze(np.asarray(labels[item_idx]))
+                        correct += (pred==tmp).sum().item()
+
+                    # was this input lesioned? (keeping track for the next compare trial)
+                    wasLesioned = True if lesionRecord[item_idx]==1 else False
+
+            totaln_lesiontrials += n_lesiontrials
+
+    test_loss /= totaln_lesiontrials  # there are n_lesiontrials-1 instances of feedback per sequence
+    accuracy = 100. * correct / (totaln_lesiontrials)
+    if printOutput:
+        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, totaln_lesiontrials, accuracy))
     return test_loss, accuracy
 
 # ---------------------------------------------------------------------------- #
@@ -586,10 +686,10 @@ def defineHyperparams():
         parser = argparse.ArgumentParser(description='PyTorch network settings')
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
-        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.001])
+        parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.00005])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
