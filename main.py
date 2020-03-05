@@ -257,10 +257,10 @@ if __name__ == '__main__':
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                           # global: max numerosity for creating one-hot vectors. HRS to turn local, this wont be changed.
-    allFullRange = False             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
+    allFullRange = True             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
     blockTrain = True                # whether to block the training by context
     seqTrain = True                  # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'constant'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
+    labelContext = 'true'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
     retainHiddenState = True         # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled. HRS to deprecate seqTrain, this will always be true.
@@ -278,10 +278,10 @@ if __name__ == '__main__':
     #performLesionTests(params, lesionBins)
 
     # Analyse the trained network
-    #args, _, _ = mnet.defineHyperparams() # network training hyperparams
-    #MDS_dict = analyseNetwork(fileloc, args, params)
+    args, _, _ = mnet.defineHyperparams() # network training hyperparams
+    MDS_dict = analyseNetwork(fileloc, args, params)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #generatePlots(MDS_dict, args, params)
+    generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #

@@ -231,20 +231,18 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
 
             elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
                 context = 2
-                if allFullRange:
-                    minNumerosity = 1
-                    maxNumerosity = 15
-                else:
-                    minNumerosity = 1
-                    maxNumerosity = 10
+                minNumerosity = 1
+                maxNumerosity = 10
             else:                                # 16-23   # context C
                 context = 3
-                if allFullRange:
-                    minNumerosity = 1
-                    maxNumerosity = 15
-                else:
-                    minNumerosity = 6
-                    maxNumerosity = 15
+                minNumerosity = 6
+                maxNumerosity = 15
+
+            if allFullRange:
+                tmpDistribution = [[i for i in range(1, 15+1)],[i for i in range(1, 10+1)], [i for i in range(6, 15+1)] ]
+                randNumDistribution = [i for sublist in tmpDistribution for i in sublist]  # non-uniform distr. over all 3 context ranges together
+            else:
+                randNumDistribution = [i for i in range(minNumerosity, maxNumerosity+1)]  # uniform between min and max
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
@@ -261,21 +259,21 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                     if trial_type == 'compare':
                         if sequentialABTraining:
                             if (firstTrialInContext and (item==0)):
-                                refValue = random.randint(minNumerosity,maxNumerosity)
+                                refValue = random.choice(randNumDistribution)
                                 if trial_type == 'filler':
                                     print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
                             else:
                                 refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
                         else:
-                            refValue = random.randint(minNumerosity,maxNumerosity)
+                            refValue = random.choice(randNumDistribution)
 
-                        judgementValue = random.randint(minNumerosity,maxNumerosity)
+                        judgementValue = random.choice(randNumDistribution)
                         while refValue==judgementValue:    # make sure we dont do inputA==inputB for two adjacent inputs
-                            judgementValue = random.randint(minNumerosity,maxNumerosity)
+                            judgementValue = random.choice(randNumDistribution)
 
                         input2 = turnOneHot(judgementValue, totalMaxNumerosity)
 
-                    else:  # filler trial
+                    else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
 
                     # add our new inputs to our sequence
