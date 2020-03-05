@@ -38,7 +38,7 @@ import argparse
 
 def printProgress(i, numiter):
     """This function prints to the screen the optimisation progress (at each iteration i, out of a total of numiter iterations)."""
-    j = (i + 1) / numiter
+    j = i/numiter
     sys.stdout.write('\r')
     sys.stdout.write("[%-20s] %d%% " % ('-'*int(20*j), 100*j))
     sys.stdout.flush()
@@ -103,7 +103,6 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
         loss = 0
 
         for i in range(sequenceLength):
-            print(trialtype[:,i].shape)
             if trialtype[0,i]==0:  # remove context indicator on the filler trials
                 context_in = torch.full_like(context, 0)
             else:
@@ -195,7 +194,6 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
             n_comparetrials = np.nansum(np.nansum(trialtype))
 
             for i in range(sequenceLength):
-                print(trialtype[:,i].shape)
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
                     context_in = torch.full_like(context, 0)
                 else:
@@ -251,7 +249,12 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
     will have a clearer context signal because of the stats of previous inputs held in the recurrent hidden state.
 
     - with lesioned inputs: either the context part of the input, or the number input
-    - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'
+    - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'.
+       The prediction is that even if we assess performance only on trials immediately after a lesion,
+       as the number of lesions in the dataset increases, the ability to determine the context will decrease and performance should approach 50% chance.
+    - another way to test this prediction is just to look at the impact of lesioning a single trial in the dataset, and testing on the compare trial immediately following, but vary the position in the sequence at which the lesion happens.
+
+    - should make sure that the lesioned inputs are not used to evaluate performance on (unless you explicitly want to test the impact of distance from previous number to context mean)
     """
     model.eval()
     test_loss = 0
@@ -265,13 +268,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
             inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
-
-            # decide which input to lesion (set to zero)
-            #if lesionFrequency==1:
-            #    if whichLesion=='context':
-            #        context = torch.full_like(context, 0)
-            #    else:
-            #        inputs = torch.full_like(inputs, 0)
 
             # reformat the input sequences for our recurrent model
             recurrentinputs = []
@@ -297,7 +293,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                 inputX = torch.cat((inputs[:, i], inputcontext, trialtype[:, i]),dim=1)
                 recurrentinputs.append(inputX)
 
-            n_lesiontrials = np.sum(lesionRecord)  # how many trials we will record performance after
 
             if not retainHiddenState:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
@@ -305,6 +300,8 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                 hidden = latentstate
 
             wasLesioned = False
+            n_lesionAssessmentTrials = 0
+
             # perform a N-step recurrence for the whole sequence of numbers in the input
             for item_idx in range(sequenceLength):
 
@@ -318,8 +315,9 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
 
                 if item_idx>0 and (trialtype[0,item_idx]==1):
 
-                    # was the previous compare trial lesioned?
-                    if wasLesioned:
+                    # the current trial NOT a lesioned trial, but was the previous compare trial WAS lesioned?
+                    if wasLesioned and (lesionRecord[item_idx]==0):
+                        n_lesionAssessmentTrials += 1
                         test_loss += criterion(output, labels[item_idx]).item()
                         output = np.squeeze(output, axis=1)
                         pred = np.zeros((output.size()))
@@ -335,9 +333,12 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                     # was this input lesioned? (keeping track for the next compare trial)
                     wasLesioned = True if lesionRecord[item_idx]==1 else False
 
-            totaln_lesiontrials += n_lesiontrials
+            totaln_lesiontrials += n_lesionAssessmentTrials
 
-    test_loss /= totaln_lesiontrials  # there are n_lesiontrials-1 instances of feedback per sequence
+    # prevent divide by zero
+    if totaln_lesiontrials == 0:
+        totaln_lesiontrials = 1
+    test_loss /= totaln_lesiontrials  # there are n_lesiontrials instances of feedback per sequence
     accuracy = 100. * correct / (totaln_lesiontrials)
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, totaln_lesiontrials, accuracy))
@@ -544,6 +545,11 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
+                if trialtype[0,i]==0:  # remove context indicator on the filler trials
+                    contextinput = torch.full_like(context, 0)
+                else:
+                    contextinput = copy.deepcopy(context)
+
                 inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
 
@@ -706,7 +712,7 @@ def defineHyperparams():
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.00005])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -788,7 +794,7 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
     elif labelContext=='constant':
         contextlabelledtext = '_constcontextlabel'
 
-    rangetxt = '_allfullrange' if allFullRange else ''
+    rangetxt = '_numrangeintermingled' if allFullRange else '_numrangeblocked'
 
 
     datasetname = 'dataset'+contextlabelledtext+blockedtext+seqtext+rangetxt + '_bpl' + str(args.BPTT_len)
@@ -858,7 +864,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
             test_perf = [test_loss, test_accuracy]
             print(standard_train_accuracy, test_accuracy)
             logPerformance(writer, epoch, train_perf, test_perf)
-            printProgress(epoch-1, n_epochs)
+            printProgress(epoch, n_epochs)
 
         print("Training complete.")
 
@@ -936,7 +942,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
             testPerformance.append(test_accuracy)
             print('Train: {:.2f}%, Test: {:.2f}%'.format(standard_train_accuracy, test_accuracy))
             logPerformance(writer, epoch, train_perf, test_perf)
-            printProgress(epoch-1, n_epochs)
+            printProgress(epoch, n_epochs)
 
         print("Training complete.")
         # save this training curve
