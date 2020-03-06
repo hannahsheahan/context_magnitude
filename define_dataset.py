@@ -158,6 +158,18 @@ def generateTrialSequence(include_fillers=True):
 
 # ---------------------------------------------------------------------------- #
 
+def turnIndexToContext(randind):
+    """Get the context from the randomly sampled index for when contexts are intermingled"""
+    if randind < 15:
+        context = 1
+    elif randind < 25:
+        context = 2
+    else:
+        context = 3
+    return context
+
+# ---------------------------------------------------------------------------- #
+
 def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts.
@@ -244,6 +256,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
             else:
                 randNumDistribution = [i for i in range(minNumerosity, maxNumerosity+1)]  # uniform between min and max
 
+            indexDistribution = [i for i in range(len(randNumDistribution))]  # this is going to allow us to know which context a sample which have been drawn from if intermingled
+
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
             for sample in range(int(N/Mblocks)):    # each sequence
@@ -259,22 +273,32 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                     if trial_type == 'compare':
                         if sequentialABTraining:
                             if (firstTrialInContext and (item==0)):
-                                refValue = random.choice(randNumDistribution)
+                                randind = random.choice(indexDistribution)
+                                refValue = randNumDistribution[randind]
                                 if trial_type == 'filler':
                                     print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
                             else:
                                 refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
                         else:
-                            refValue = random.choice(randNumDistribution)
+                            randind = random.choice(indexDistribution)
+                            refValue = randNumDistribution[randind]
 
-                        judgementValue = random.choice(randNumDistribution)
+                        randind = random.choice(indexDistribution)
+                        judgementValue = randNumDistribution[randind]
+
                         while refValue==judgementValue:    # make sure we dont do inputA==inputB for two adjacent inputs
-                            judgementValue = random.choice(randNumDistribution)
+                            randind = random.choice(indexDistribution)
+                            judgementValue = randNumDistribution[randind]
 
                         input2 = turnOneHot(judgementValue, totalMaxNumerosity)
+                        if allFullRange:  # if intermingling contexts, then we need to know which context this number was sampled from
+                            context = turnIndexToContext(randind)
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
+                        # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time
+                        if allFullRange:
+                            context = random.randint(1,3)
 
                     # add our new inputs to our sequence
                     input_sequence.append(input2)
