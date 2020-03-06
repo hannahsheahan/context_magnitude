@@ -223,10 +223,10 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
         refValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
         judgementValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
         input = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
-        contextinputs = np.empty((Mblocks, int(N/Mblocks), Ncontexts ))
+        contextinputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len, Ncontexts ))
         target = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
-        contexts = np.empty((Mblocks, int(N/Mblocks),Ncontexts))
-        contextdigits = np.empty((Mblocks, int(N/Mblocks),1))
+        contexts = np.empty((Mblocks, int(N/Mblocks), BPTT_len, Ncontexts))
+        contextdigits = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
         trialTypes = np.empty((Mblocks, int(N/Mblocks), BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
         trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len))
@@ -251,7 +251,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 maxNumerosity = 15
 
             if allFullRange:
-                tmpDistribution = [[i for i in range(1, 15+1)],[i for i in range(1, 10+1)], [i for i in range(6, 15+1)] ]
+                tmpDistribution = [[i for i in range(1, 15+1)],[j for j in range(1, 10+1)], [k for k in range(6, 15+1)] ]
                 randNumDistribution = [i for sublist in tmpDistribution for i in sublist]  # non-uniform distr. over all 3 context ranges together
             else:
                 randNumDistribution = [i for i in range(minNumerosity, maxNumerosity+1)]  # uniform between min and max
@@ -264,6 +264,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 input_sequence = []
                 type_sequence  = generateTrialSequence(include_fillers) # the order of filler trial and compare trials
                 trialtypeinput = [0 for i in range(len(type_sequence))]
+                contextsequence = []
+                contextinputsequence = []
 
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
                 for item in range(BPTT_len):
@@ -300,22 +302,24 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                         if allFullRange:
                             context = random.randint(1,3)
 
+                    # Define the context input to the network
+                    if labelContext=='true':
+                        contextinput = turnOneHot(context, 3)  # there are 3 different contexts
+                    elif labelContext=='random':
+                        # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
+                        contextinput = turnOneHot(random.randint(1,3), 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
+                    elif labelContext=='constant':
+                        # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
+                        contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
+
                     # add our new inputs to our sequence
                     input_sequence.append(input2)
+                    contextsequence.append(context)
+                    contextinputsequence.append(contextinput)
 
                 if firstTrialInContext:
                     judgementValue = turnOneHotToInteger(input_sequence[-1])  # and then make sure that the next sequence starts where this one left off (bit of a hack)
                     firstTrialInContext = False
-
-                # Define a single context for the whole sequence
-                if labelContext=='true':
-                    contextinput = turnOneHot(context, 3)  # we will investigate 3 different contexts
-                elif labelContext=='random':
-                    # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                    contextinput = turnOneHot(random.randint(1,3), 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
-                elif labelContext=='constant':
-                    # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                    contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
                 rValue = None
@@ -349,11 +353,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 if firstTrialInContext:
                     judgementValue = copy.deepcopy(judgeValue)    # and then make sure that the next sequence starts with judgement where this one left off
 
-                contextdigits[block, sample] = context
+                contextdigits[block, sample] = contextsequence
                 judgementValues[block, sample] = np.squeeze(np.asarray(allJValues))
                 refValues[block, sample] = np.squeeze(np.asarray(allRValues))
-                contexts[block, sample] = np.squeeze(turnOneHot(context, 3))  # still captures context here even if we dont feed context label into network
-                contextinputs[block, sample] = np.squeeze(contextinput)
+                contexts[block, sample] = np.squeeze([turnOneHot(contextsequence[i], 3) for i in range(len(contextsequence))])  # still captures context here even if we dont feed context label into network
+                contextinputs[block, sample] = np.squeeze(contextinputsequence)
                 #input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))  # for the MLP
                 input[block, sample] = np.squeeze(np.asarray(input_sequence))             # for the RNN with BPTT
                 blocks[block, sample] = block

@@ -93,7 +93,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
-        inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+        inputs, labels, contextsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
 
         # initialise everything for our recurrent model
         recurrentinputs = []
@@ -103,6 +103,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
         loss = 0
 
         for i in range(sequenceLength):
+            context = contextsequence[:,i]
             if trialtype[0,i]==0:  # remove context indicator on the filler trials
                 context_in = torch.full_like(context, 0)
             else:
@@ -185,7 +186,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            inputs, labels, contextsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
 
 
             # reformat the input sequences for our recurrent model
@@ -194,6 +195,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
             n_comparetrials = np.nansum(np.nansum(trialtype))
 
             for i in range(sequenceLength):
+                context = contextsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
                     context_in = torch.full_like(context, 0)
                 else:
@@ -267,7 +269,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, context, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            inputs, labels, contextsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
 
             # reformat the input sequences for our recurrent model
             recurrentinputs = []
@@ -276,6 +278,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
             n_comparetrials = np.nansum(np.nansum(trialtype))
 
             for i in range(sequenceLength):
+                context = contextsequence[:,i]
                 inputcontext = copy.deepcopy(context)
                 if trialtype[0,i]==1: # compare trial that we can lesion
                     if (random.random() < lesionFrequency) and (i>0):
@@ -452,7 +455,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                     if inputB is not None:
                         if np.all(inputA==inputB):
                             print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
-                        context = trainset["context"][seq]  # the actual underlying range context, not the label
+                        context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
                         trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                         seq_record.append([seq, item_idx])
 
@@ -461,7 +464,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             elif TRIAL_TYPE==TRIAL_FILLER:
                 if trialtype==TRIAL_TYPE:
                     inputA = trainset["input"][seq, item_idx]
-                    context = trainset["context"][seq]  # the actual underlying range context, not the label
+                    context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
                     trainset_input_n_context.append(np.append(inputA, context))
                     seq_record.append([seq, item_idx])
 
@@ -537,7 +540,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
         for batch_idx, data in enumerate(train_loader):
             #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
-            inputs, labels, context, contextinput, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            inputs, labels, contextsequence, contextinput, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
             #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
@@ -545,6 +548,8 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
+                print(contextsequence.shape)
+                context = contextsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
                     contextinput = torch.full_like(context, 0)
                 else:
@@ -561,6 +566,8 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = h0activations.detach()
+
+                context = contextsequence[:,i]
 
                 # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
                 if trialtype[0,item_idx] == TRIAL_TYPE:
