@@ -295,7 +295,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                         input2 = turnOneHot(judgementValue, totalMaxNumerosity)
                         if allFullRange:  # if intermingling contexts, then we need to know which context this number was sampled from
                             context = turnIndexToContext(randind)
-
+                            
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
                         # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time

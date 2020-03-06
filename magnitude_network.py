@@ -479,7 +479,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
     unique_inputs = np.asarray([trainset["input"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
     unique_labels = np.asarray([trainset["label"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-    unique_context = np.asarray([trainset["context"][sequence_id[i]] for i in range(len(sequence_id))])
+    unique_context = np.asarray([trainset["context"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
     unique_refValue = np.asarray([trainset["refValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
     unique_judgementValue = np.asarray([trainset["judgementValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
 
@@ -492,7 +492,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     hdim = trained_model.hidden_size
     rdim = trained_model.recurrent_size
     activations = np.empty((len(uniqueind), hdim))
-    temporal_context = np.zeros((trainsize,))            # for tracking the evolution of context in the training set
+    temporal_context = np.zeros((trainsize,sequenceLength))            # for tracking the evolution of context in the training set
     temporal_trialtypes = np.zeros((trainsize,sequenceLength))
     temporal_activation_drift = np.zeros((trainsize, rdim))
 
@@ -540,20 +540,19 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
         for batch_idx, data in enumerate(train_loader):
             #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
-            inputs, labels, contextsequence, contextinput, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
             #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
-            temporal_context[batch_idx] = (dset.turnOneHotToInteger(context[0]).numpy())
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
-                print(contextsequence.shape)
-                context = contextsequence[:,i]
+                temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextsequence[:,i])[0]
+                contextin = contextinputsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
-                    contextinput = torch.full_like(context, 0)
+                    contextinput = torch.full_like(contextin, 0)
                 else:
-                    contextinput = copy.deepcopy(context)
+                    contextinput = copy.deepcopy(contextin)
 
                 inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
@@ -567,7 +566,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = h0activations.detach()
 
-                context = contextsequence[:,i]
+                context = contextsequence[:,item_idx]
 
                 # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
                 if trialtype[0,item_idx] == TRIAL_TYPE:
