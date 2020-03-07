@@ -214,53 +214,79 @@ def setupTestParameters(params):
 
 # ---------------------------------------------------------------------------- #
 
-def performLesionTests(params, lesionBins):
+def performLesionTests(params, nlesionBins):
     """
     Lesion the network test inputs with different frequencies, and assess performance.
     """
 
-    X = lesionBins
-    freq = np.linspace(0,1,X)
+    X = nlesionBins
+    #freq = np.linspace(0,1,X)
+    freq = [0]
+    X = 1
+
     lesioned_tests = []
+    overall_lesioned_tests = []
     testParams = setupTestParameters(params)
+    args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+
     whichLesion = 'number'
 
     for i in range(X):
-        if i==0:
+        #if i==0:
             # evaluate regular test performance
-            _, normal_testaccuracy = mnet.recurrent_test(*testParams)
-            print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
-            lesioned_tests.append(normal_testaccuracy)
-        else:
-            # evaluate network at test with lesions
-            lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
-            _, lesioned_testaccuracy = mnet.recurrent_lesion_test(*testParams, whichLesion, lesionFrequency)
-            print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
-            lesioned_tests.append(lesioned_testaccuracy)
+            #_, normal_testaccuracy = mnet.recurrent_test(*testParams)
+            #print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+            #lesioned_tests.append(normal_testaccuracy)
+            #overall_lesioned_tests.append(normal_testaccuracy)
+        #    pass  # for now HRS
+        #else:
+        tic = time.time()
+        # evaluate network at test with lesions
+        lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
+        bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_lesion_test(*testParams, whichLesion, lesionFrequency)
+        print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
+        lesioned_tests.append(lesioned_testaccuracy)
+        overall_lesioned_tests.append(overall_lesioned_testaccuracy)
+        toc = time.time()
+        print('Lesion evaluation took {:.1f} sec'.format(toc-tic))
+        bigdict = {"bigdict_lesionperf":bigdict_lesionperf}
+
+        bigdict["lesioned_testaccuracy"] = lesioned_testaccuracy
+        bigdict["overall_lesioned_testaccuracy"] = overall_lesioned_testaccuracy
+
+        np.save('network_analysis/Lesiontests_blocked_contextcued_'+str(lesionFrequency)+'.npy', bigdict_lesionperf)
+
+
 
     plt.figure()
+    plt.plot(freq, overall_lesioned_tests, '.', color='black')
+    plt.plot(freq, overall_lesioned_tests, color='black')
+
     plt.plot(freq, lesioned_tests, '.', color='blue' )
     plt.plot(freq, lesioned_tests, color='blue')
-    plt.xlabel('Lesion frequency (0-1)')
+    plt.xlabel('Lesion frequency (0-1) prior to assessment lesion')
     plt.ylabel('Perf. post-lesion trial')
 
+
     #plt.savefig('lesionFrequencyTest_numberlesion_constantcontext.pdf',bbox_inches='tight')
-    plt.title('RNN w/ no context label, BPTT120: lesion tests')
-    MDSplt.autoSaveFigure('figures/lesionfreq_vs_testperf_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, plot_diff_code, whichTrialType, allFullRange, saveFig)
+    plt.title('RNN w/ context label, BPTT120: lesion tests')
+    whichTrialType = 'compare'
+    MDSplt.autoSaveFigure('figures/lesionfreq_vs_testperf_', args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, True)
 
 # ---------------------------------------------------------------------------- #
 
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     N = 15                           # global: max numerosity for creating one-hot vectors. HRS to turn local, this wont be changed.
-    allFullRange = True             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
+    allFullRange = False             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
     blockTrain = True                # whether to block the training by context
     seqTrain = True                  # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'constant'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
+    labelContext = 'true'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
     retainHiddenState = True         # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled. HRS to deprecate seqTrain, this will always be true.
@@ -271,17 +297,17 @@ if __name__ == '__main__':
     params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange]
 
     # Train the network from scratch
-    trainAndSaveANetwork(params, createNewDataset, include_fillers)
+    #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
-    #lesionBins = 2
-    #performLesionTests(params, lesionBins)
+    nlesionBins = 5
+    performLesionTests(params, nlesionBins)
 
     # Analyse the trained network
-    args, _, _ = mnet.defineHyperparams() # network training hyperparams
-    MDS_dict = analyseNetwork(fileloc, args, params)
+    #args, _, _ = mnet.defineHyperparams() # network training hyperparams
+    #MDS_dict = analyseNetwork(fileloc, args, params)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    generatePlots(MDS_dict, args, params)
+    #generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #

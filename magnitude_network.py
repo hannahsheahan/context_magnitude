@@ -242,18 +242,168 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
 # ---------------------------------------------------------------------------- #
 
-
 def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True, whichLesion='context', lesionFrequency=1):
-    """Test a recurrent neural network on the test set.
-    Note that this will need to be modified such that it tracks test performance JUST
-    on the subset of trials towards the end of each block (initially for a proof of concept)
-    and then later across all trials regardless of position in block. So the later trials in a block
-    will have a clearer context signal because of the stats of previous inputs held in the recurrent hidden state.
+    """
+    ***HRS new version that does it properly but will take ~120x longer to run.
 
-    - with lesioned inputs: either the context part of the input, or the number input
+    Test a recurrent neural network on the test set, while lesioning occasional inputs.
+
+    Lesioning inputs: either the context part of the input, or the number input can be lesioned
     - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'.
-       The prediction is that even if we assess performance only on trials immediately after a lesion,
+       The prediction is that (for a network in which no explicit indicator of context is provided) even if we assess performance only on trials immediately after a lesion,
        as the number of lesions in the dataset increases, the ability to determine the context will decrease and performance should approach 50% chance.
+       This should happen as the only way to use context to increase the P()
+    - another way to test this prediction is just to look at the impact of lesioning a single trial in the dataset, and testing on the compare trial immediately following, but vary the position in the sequence at which the lesion happens.
+
+    - should make sure that the lesioned inputs are not used to evaluate performance on (unless you explicitly want to test the impact of distance from previous number to context mean)
+    """
+    model.eval()
+
+    # reset hidden recurrent weights on the very first trial
+    hidden = torch.zeros(args.batch_size, model.recurrent_size)
+    latentstate = torch.zeros(args.batch_size, model.recurrent_size)
+    totaln_comparetrials = 0
+    overallcomparisons = 0
+    aggregateLesionPerf = 0
+    aggregatePerf = 0
+    allLesionAssessments = []
+
+    with torch.no_grad():  # dont track the gradients
+        # for each sequence
+        for batch_idx, data in enumerate(test_loader):
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            #print('Assessing lesions on sequence: {}'.format(batch_idx))
+            # setup
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+            sequenceAssessment = []
+
+            # organise the inputs for each trial in our sequence
+            for i in range(sequenceLength):
+                context = contextinputsequence[:,i]
+                inputcontext = copy.deepcopy(context)
+                if trialtype[0,i]==0:
+                    inputcontext = torch.full_like(context, 0)  # all filler trials should have no context input to it
+                inputX = torch.cat((inputs[:, i], inputcontext, trialtype[:, i]),dim=1)
+                recurrentinputs.append(inputX)
+
+            # consider each number in the sequence
+            for assess_idx in range(sequenceLength):
+                lesionRecord = np.zeros((sequenceLength,))  # reset out lesion record
+                context = dset.turnOneHotToInteger(contextsequence[:,assess_idx])[0]  # the true underlying context for this input
+
+                # each time we repeat this exercise we need to use the original hidden state from previous sequence
+                if not retainHiddenState:  # only if you want to reset hidden state between trials
+                    hidden = torch.zeros(args.batch_size, model.recurrent_size)
+                else:
+                    hidden = latentstate
+
+                # if its a comparison trial, we will use it to assess performance and lesion our sequence up to this point
+                if trialtype[:,assess_idx]==1:
+                    # Look backwards from the assessment point, lesion the immediately previous compare trial,
+                    # and then every prior compare trial with frequency F
+                    isPrevCompareTrial = True
+                    for item_idx in range(assess_idx-1,-1,-1):
+                         # lesion the compare trial immediately preceeding the assessment trial
+                        if (trialtype[:,item_idx]==1) and isPrevCompareTrial:
+                            lesionRecord[item_idx] = 1
+                            isPrevCompareTrial = False
+                        else:
+                            # now lesion each other compare trial with frequency F
+                            if (trialtype[:,item_idx]==1):
+                                if (random.random() < lesionFrequency):
+                                    lesionRecord[item_idx] = 1
+
+                    # now that we have performed our lesions up to our assessment trial, pass this sequence through the network and assess performance
+                    assess_number = dset.turnOneHotToInteger(inputs[:,assess_idx][0])[0]
+                    tmpinputs = copy.deepcopy(recurrentinputs)
+                    overallperf = 0
+                    ncomparetrials = 0
+
+                    # debug sanity checking that lesioning is working correctly. It seems to be! :)
+                    #print('Sequence #: {}'.format(batch_idx))
+                    #print('Assessment trial: {}'.format(assess_idx))
+                    #print(lesionRecord)
+                    #print('----')
+
+                    for trial in range(assess_idx+1):
+
+                        # if trial designated for lesioning, apply the lesion ***HRS to check these indices are correct for lesions
+                        if lesionRecord[trial]==1:
+                            if whichLesion=='number':
+                                tmpinputs[trial][0:15] = torch.full_like(tmpinputs[trial][0:15], 0)
+                            else:
+                                tmpinputs[trial][15:18] = torch.full_like(tmpinputs[trial][15:18], 0)
+
+                        # inject some noise ~= forgetting of the previous number
+                        noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                        hidden.add_(noise)
+                        output, hidden = model(tmpinputs[trial], hidden)
+
+                        # assess aggregate performance on whole sequence (including all lesions)
+                        if trialtype[:,trial]==1:
+                            ncomparetrials += 1
+                            output = np.squeeze(output, axis=1)
+                            pred = np.zeros((output.size()))
+                            for i in range((output.size()[0])):
+                                if output[i]>0.5:
+                                    pred[i] = 1
+                                else:
+                                    pred[i] = 0
+                            tmp = np.squeeze(np.asarray(labels[trial]))
+                            overallperf += (pred==tmp).sum().item()
+                            overallcomparisons += 1
+                            # once we get to the assessment trial, assess performance
+                            if trial==assess_idx:
+                                lesionperf = (pred==tmp).sum().item()
+
+                    # now record the actual lesion frequency prior to the immediately preceeding lesion (to compare to random process)
+                    nlesions = np.sum(lesionRecord) -1
+                    # prevent divide by zero
+                    if ncomparetrials == 2:
+                        actualLesionF = 1.0
+                    else:
+                        actualLesionF = nlesions / (ncomparetrials-2) # excluding the assessment trial and the compare trial before it
+
+                    mydict = {"assess_number":assess_number, "lesion_perf":lesionperf, "overall_perf":overallperf, "desired_lesionF":lesionFrequency, "actual_lesionF":actualLesionF, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials }
+                    sequenceAssessment.append(mydict)
+                    aggregateLesionPerf += lesionperf
+                    aggregatePerf += overallperf
+                    totaln_comparetrials += 1
+
+                # extract the hidden state just before the last input in the sequence is presented, for passing to next sequence
+                # since the network has only processed sequences up to compare trials, we need to pass the whole sequence through again now! inefficient, yes
+                if assess_idx==(sequenceLength-2):
+                    for i in range(assess_idx+1):
+                        noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                        hidden.add_(noise)
+                        output, hidden = model(tmpinputs[i], hidden)  # this should be the sequence of trials that are all lesioned with probability F
+                    latentstate = hidden.detach()  # ***HRS the exact trial and lesion sequence that this is passed on from will need checking, but should be approximately right
+
+            allLesionAssessments.append(sequenceAssessment)
+
+
+    # turn into numpy matrix
+    allLesionAssessments = np.asarray(allLesionAssessments)
+
+    # summary stats
+    summarylesionperf = 100. *(aggregateLesionPerf / totaln_comparetrials)
+    summaryperf = 100. *(aggregatePerf / overallcomparisons)
+    print('Mean lesion accuracy: {}/{} ({:.2f}%)'.format(aggregateLesionPerf, totaln_comparetrials, summarylesionperf))
+    print('Mean overall accuracy: {}/{} ({:.2f}%)'.format(aggregatePerf, overallcomparisons, summaryperf))
+
+    return allLesionAssessments, summarylesionperf, summaryperf
+
+# ---------------------------------------------------------------------------- #
+
+def _recurrent_lesion_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True, whichLesion='context', lesionFrequency=1):
+    """Test a recurrent neural network on the test set, while lesioning occasional inputs.
+
+    Lesioning inputs: either the context part of the input, or the number input can be lesioned
+    - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'.
+       The prediction is that (for a network in which no explicit indicator of context is provided) even if we assess performance only on trials immediately after a lesion,
+       as the number of lesions in the dataset increases, the ability to determine the context will decrease and performance should approach 50% chance.
+       This should happen as the only way to use context to increase the P()
     - another way to test this prediction is just to look at the impact of lesioning a single trial in the dataset, and testing on the compare trial immediately following, but vary the position in the sequence at which the lesion happens.
 
     - should make sure that the lesioned inputs are not used to evaluate performance on (unless you explicitly want to test the impact of distance from previous number to context mean)
@@ -261,11 +411,13 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
     model.eval()
     test_loss = 0
     correct = 0
+    overalltest_correct = 0
 
-    # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+    # reset hidden recurrent weights on the very first trial
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
     latentstate = torch.zeros(args.batch_size, model.recurrent_size)
     totaln_lesiontrials = 0
+    totaln_comparetrials = 0
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
@@ -277,6 +429,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
             lesionRecord = np.zeros((sequenceLength,))
             n_comparetrials = np.nansum(np.nansum(trialtype))
 
+            # organise the inputs for each trial in our sequence
             for i in range(sequenceLength):
                 context = contextsequence[:,i]
                 inputcontext = copy.deepcopy(context)
@@ -304,6 +457,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
 
             wasLesioned = False
             n_lesionAssessmentTrials = 0
+            n_totalAssessmentTrials = 0
 
             # perform a N-step recurrence for the whole sequence of numbers in the input
             for item_idx in range(sequenceLength):
@@ -318,7 +472,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
 
                 if item_idx>0 and (trialtype[0,item_idx]==1):
 
-                    # the current trial NOT a lesioned trial, but was the previous compare trial WAS lesioned?
+                    # the current trial NOT a lesioned trial, but was the previous compare trial WAS lesioned
                     if wasLesioned and (lesionRecord[item_idx]==0):
                         n_lesionAssessmentTrials += 1
                         test_loss += criterion(output, labels[item_idx]).item()
@@ -336,16 +490,32 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                     # was this input lesioned? (keeping track for the next compare trial)
                     wasLesioned = True if lesionRecord[item_idx]==1 else False
 
+                    # now take the overall performance as a sanity check
+                    n_totalAssessmentTrials +=1
+                    output = np.squeeze(output, axis=1)
+                    pred = np.zeros((output.size()))
+                    for i in range((output.size()[0])):
+                        if output[i]>0.5:
+                            pred[i] = 1
+                        else:
+                            pred[i] = 0
+
+                    tmp = np.squeeze(np.asarray(labels[item_idx]))
+                    overalltest_correct += (pred==tmp).sum().item()
+
             totaln_lesiontrials += n_lesionAssessmentTrials
+            totaln_comparetrials += n_totalAssessmentTrials
 
     # prevent divide by zero
     if totaln_lesiontrials == 0:
         totaln_lesiontrials = 1
     test_loss /= totaln_lesiontrials  # there are n_lesiontrials instances of feedback per sequence
     accuracy = 100. * correct / (totaln_lesiontrials)
+    overalltest_accuracy = 100. * overalltest_correct / (totaln_comparetrials)
+
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, totaln_lesiontrials, accuracy))
-    return test_loss, accuracy
+    return test_loss, accuracy, overalltest_accuracy
 
 # ---------------------------------------------------------------------------- #
 
