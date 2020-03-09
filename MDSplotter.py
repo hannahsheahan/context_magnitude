@@ -668,3 +668,77 @@ def animate3DdriftMDS(MDS_dict, args, params, whichTrialType='compare'):
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
+
+
+def performanceMean(number_differences, performance):
+    """
+    This function calculates the mean network performance as a function of the distance between the current number and some mean context signal
+    - the absolute difference |(current - mean)| signal is already in number_differences
+    """
+    unique_diffs = np.unique(number_differences)
+    tally = np.zeros((len(unique_diffs),))    # a counter for computing mean
+    aggregate_perf = np.zeros((len(unique_diffs),))
+    for i in range(len(unique_diffs)):
+        num = unique_diffs[i]
+        ind = np.argwhere([number_differences[i]==num for i in range(len(number_differences))])
+        tally[i] = len(ind)
+        for k in range(len(ind)):
+            aggregate_perf[i] += performance[ind[k][0]]
+    mean_performance = np.divide(aggregate_perf, tally)
+    return mean_performance, unique_diffs
+
+# ---------------------------------------------------------------------------- #
+
+def perfVdistContextMean(params, testParams):
+    """
+    Plot performance after just a single lesion vs the (absolute) distance of the seen number to the context mean
+    Also plot vs distance for the (absolute) distance to the global mean. We are hoping for some linear trends with
+     a stronger trend for the former (local context).
+    """
+    # set up lesioned network parameters
+    args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+    whichLesion = 'number'
+    lesionFrequency = 0.0  # just lesion the second to last compare trial and assess on the final compare trial in each sequence
+
+    # load analysis of network at test with lesions
+    blcktxt = '_interleaved' if allFullRange else '_temporalblocked'
+    contexttxt = '_contextcued' if labelContext=='true' else '_nocontextcued'
+    bigdict_lesionperf = np.load('network_analysis/Lesiontests'+blcktxt+contexttxt+str(lesionFrequency)+'.npy', allow_pickle=True)
+    tmp = [bigdict_lesionperf[i][0]["underlying_context"] for i in range(len(bigdict_lesionperf))]
+
+    # evaluate the context mean for each network assessment
+    contextmean = np.zeros((bigdict_lesionperf.shape[0],))
+    globalmean = 8
+    for i in range(bigdict_lesionperf.shape[0]):
+        context = bigdict_lesionperf[i][0]["underlying_context"]
+        if context==1:
+            contextmean[i] = 8
+        elif context==2:
+            contextmean[i] = 5.5
+        elif context==3:
+            contextmean[i] = 10.5
+
+    # calculate difference between current number and context or global mean
+    numberdiffs = [np.abs(np.asarray(bigdict_lesionperf[i][0]["assess_number"]-contextmean[i])) for i in range(bigdict_lesionperf.shape[0])]
+    globalnumberdiffs = [np.abs(np.asarray(bigdict_lesionperf[i][0]["assess_number"]-globalmean)) for i in range(bigdict_lesionperf.shape[0])]
+    perf = [bigdict_lesionperf[i][0]["lesion_perf"] for i in range(bigdict_lesionperf.shape[0])]
+
+    # assess mean performance vs local mean distance values, or global mean distance values
+    meanperf, uniquediffs = performanceMean(numberdiffs, perf)
+    global_meanperf, global_uniquediffs = performanceMean(globalnumberdiffs, perf)
+
+    # plot and save the figure
+    plt.figure()
+    ref, = plt.plot([0,7],[.5,1],linestyle='--',color='grey')
+    local_contextmean, = plt.plot(uniquediffs, meanperf, color='blue')
+    global_contextmean, = plt.plot(global_uniquediffs, global_meanperf, color='black')
+    plt.legend((ref, local_contextmean, global_contextmean), ('unity ref', 'dist. to local context mean','dist. to global mean'))
+    plt.ylabel('RNN performance')
+    plt.xlabel('|distance to mean|')
+    ax = plt.gca()
+    ax.set_ylim(0.45,1.05)
+    whichTrialType = 'compare'
+    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, True)
+
+# ---------------------------------------------------------------------------- #
