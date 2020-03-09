@@ -53,6 +53,46 @@ def batchToTorch(originalimages):
 
 # ---------------------------------------------------------------------------- #
 
+def answerCorrect(output, label):
+    """
+    This function compares the output to the label on that trial (or batch) and
+    determines whether it (or how many) match the target label.
+    """
+    output = np.squeeze(output, axis=1)
+    pred = np.zeros((output.size()))
+    for i in range((output.size()[0])):
+        if output[i]>0.5:
+            pred[i] = 1
+        else:
+            pred[i] = 0
+    tmp = np.squeeze(np.asarray(label))
+    return (pred==tmp).sum().item()
+
+# ---------------------------------------------------------------------------- #
+
+def setupTestParameters(fileloc, params):
+    """
+    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
+    """
+    args, device, multiparams = defineHyperparams() # training hyperparams for network (passed as args when called from command line)
+    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args, *params)
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+
+    # load the test set appropriate for the dataset our model was trained on
+    trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+    # load our trained model
+    trained_model = torch.load(trained_modelname)
+    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
+    printOutput = True
+
+    testParams = [args, trained_model, device, testloader, criterion, retainHiddenState, printOutput]
+
+    return testParams
+
+# ---------------------------------------------------------------------------- #
+
 def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
     """
     This function will take a look at the gradients in all layers of our model during training.
@@ -129,16 +169,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
             # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
             if item_idx>0 and (trialtype[0,item_idx]==1):
                 loss += criterion(output, labels[item_idx])   # accumulate the loss (autograd should sort this out for us: https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
-                output = np.squeeze(output, axis=1)
-                pred = np.zeros((output.size()))
-                for i in range((output.size()[0])):
-                    if output[i]>0.5:
-                        pred[i] = 1
-                    else:
-                        pred[i] = 0
-
-                tmp = np.squeeze(np.asarray(labels[item_idx]))
-                correct += (pred==tmp).sum().item()
+                correct += answerCorrect(output, labels[item_idx])
 
         loss.backward()             # passes the loss backwards to compute the dE/dW gradients
 
@@ -223,22 +254,137 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
                 if item_idx>0 and (trialtype[0,item_idx]==1):
                     test_loss += criterion(output, labels[item_idx]).item()
-                    output = np.squeeze(output, axis=1)
-                    pred = np.zeros((output.size()))
-                    for i in range((output.size()[0])):
-                        if output[i]>0.5:
-                            pred[i] = 1
-                        else:
-                            pred[i] = 0
-
-                    tmp = np.squeeze(np.asarray(labels[item_idx]))
-                    correct += (pred==tmp).sum().item()
+                    correct += answerCorrect(output, labels[item_idx])
 
     test_loss /= len(test_loader.dataset)*(n_comparetrials-1)  # there are n_comparetrials-1 instances of feedback per sequence
     accuracy = 100. * correct / (len(test_loader.dataset)*(n_comparetrials-1))
     if printOutput:
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset)*(n_comparetrials-1), accuracy))
     return test_loss, accuracy
+
+# ---------------------------------------------------------------------------- #
+
+def recurrent_mostsimplelesion_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput, whichLesion='number', lesionHowMany='one'):
+    """
+    ***HRS new version that does it properly and will not take so long to run. We will just use the final compare trial in the sequence as our assessment trial.
+    In this MOST simple lesion version, each sequence just has one assessment and its pretty straight forward.
+    Test a recurrent neural network on the test set, while lesioning occasional inputs.
+    Lesioning inputs: either the context part of the input, or the number input can be lesioned
+    - lesionHowMany:  'one' or 'all'. If 'one' then just the lesion to last gets lesioned and we asses performance immediately after.
+    """
+    model.eval()
+
+    # reset hidden recurrent weights on the very first trial
+    hidden = torch.zeros(args.batch_size, model.recurrent_size)
+    latentstate = torch.zeros(args.batch_size, model.recurrent_size)
+    totaln_comparetrials = 0
+    overallcomparisons = 0
+    aggregateLesionPerf = 0
+    aggregatePerf = 0
+    allLesionAssessments = []
+
+    with torch.no_grad():  # dont track the gradients
+        # for each sequence
+        for batch_idx, data in enumerate(test_loader):
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            # setup
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+            sequenceAssessment = []
+
+            # organise the inputs for each trial in our sequence
+            for i in range(sequenceLength):
+                context = contextinputsequence[:,i]
+                inputcontext = copy.deepcopy(context)
+                if trialtype[0,i]==0:
+                    inputcontext = torch.full_like(context, 0)  # all filler trials should have no context input to it
+                else:
+                    assess_idx = copy.deepcopy(i)  # we should end up with this being the final compare trial in the sequence.
+                inputX = torch.cat((inputs[:, i], inputcontext, trialtype[:, i]),dim=1)
+                recurrentinputs.append(inputX)
+
+            lesionRecord = np.zeros((sequenceLength,))  # reset out lesion record
+            context = dset.turnOneHotToInteger(contextsequence[:,assess_idx][0])[0]  # the true underlying context for this input
+
+            if not retainHiddenState:  # only if you want to reset hidden state between trials
+                hidden = torch.zeros(args.batch_size, model.recurrent_size)
+            else:
+                hidden = latentstate
+
+            # if we are lesioning all then we will want to reset the hidden state between sequences too (so that you dont get contextual info passing between sequeneces)
+            if lesionHowMany=='all':
+                hidden = torch.zeros(args.batch_size, model.recurrent_size)
+
+            # if its a comparison trial, we will use it to assess performance and lesion our sequence up to this point
+            if trialtype[:,assess_idx]==1:
+                # Look backwards from the assessment point, lesion the immediately previous compare trial, and then (maybe) every prior compare trial
+                isPrevCompareTrial = True
+                for item_idx in range(assess_idx-1,-1,-1):
+                     # lesion the compare trial immediately preceeding the assessment trial
+                    if (trialtype[:,item_idx]==1) and isPrevCompareTrial:
+                        lesionRecord[item_idx] = 1
+                        isPrevCompareTrial = False
+                    else:
+                        # now lesion all other compare trials (if thats the setting we testing)
+                        if lesionHowMany=='all':
+                            if (trialtype[:,item_idx]==1):
+                                lesionRecord[item_idx] = 1
+
+                # now that we have performed our lesions up to our assessment trial, pass this sequence through the network and assess performance
+
+                # debug sanity checking that lesioning is working correctly. It seems to be! :)
+                #print('Sequence #: {}'.format(batch_idx))
+                #print('Assessment trial: {}'.format(assess_idx))
+                #print(lesionRecord)
+                #print('----')
+
+                assess_number = dset.turnOneHotToInteger(inputs[:,assess_idx][0])[0]
+                tmpinputs = copy.deepcopy(recurrentinputs)
+                overallperf = 0
+                ncomparetrials = 0
+
+                for trial in range(sequenceLength):
+                    # if trial designated for lesioning, apply the lesion
+                    if lesionRecord[trial]==1:
+                        if whichLesion=='number':
+                            tmpinputs[trial][0][0:15] = torch.full_like(tmpinputs[trial][0][0:15], 0)  # HRS this has also been checked and correctly lesions
+                        else:
+                            tmpinputs[trial][0][15:18] = torch.full_like(tmpinputs[trial][0][15:18], 0)
+
+                    # inject some noise ~= forgetting of the previous number
+                    noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
+                    hidden.add_(noise)
+                    output, hidden = model(tmpinputs[trial], hidden)
+
+                    # assess aggregate performance on whole sequence (including all lesions)
+                    if trialtype[:,trial]==1:
+                        ncomparetrials += 1
+                        overallperf += answerCorrect(output, labels[trial])
+                        overallcomparisons += 1
+                        # once we get to the assessment trial, assess performance
+                        if trial==assess_idx:
+                            lesionperf = answerCorrect(output, labels[trial])
+
+                mydict = {"assess_number":assess_number, "lesion_perf":lesionperf, "overall_perf":overallperf, "lesionHowMany":lesionHowMany, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials }
+                sequenceAssessment.append(mydict)
+                aggregateLesionPerf += lesionperf
+                aggregatePerf += overallperf
+                totaln_comparetrials += 1
+
+                # save latent state for passing into next sequence
+                if trial==(sequenceLength-2):
+                    latentstate = hidden.detach()
+
+            allLesionAssessments.append(sequenceAssessment)
+
+    # summary stats
+    allLesionAssessments = np.asarray(allLesionAssessments)
+    summarylesionperf = 100. *(aggregateLesionPerf / totaln_comparetrials)
+    summaryperf = 100. *(aggregatePerf / overallcomparisons)
+    print('Mean lesion accuracy: {}/{} ({:.2f}%)'.format(aggregateLesionPerf, totaln_comparetrials, summarylesionperf))
+    print('Mean overall accuracy: {}/{} ({:.2f}%)'.format(aggregatePerf, overallcomparisons, summaryperf))
+
+    return allLesionAssessments, summarylesionperf, summaryperf
 
 # ---------------------------------------------------------------------------- #
 
@@ -349,15 +495,7 @@ def recurrent_simplelesion_test(args, model, device, test_loader, criterion, ret
                     # assess aggregate performance on whole sequence (including all lesions)
                     if trialtype[:,trial]==1:
                         ncomparetrials += 1
-                        output = np.squeeze(output, axis=1)
-                        pred = np.zeros((output.size()))
-                        for i in range((output.size()[0])):
-                            if output[i]>0.5:
-                                pred[i] = 1
-                            else:
-                                pred[i] = 0
-                        tmp = np.squeeze(np.asarray(labels[trial]))
-                        overallperf += (pred==tmp).sum().item()
+                        overallperf += answerCorrect(output, labels[trial])
                         overallcomparisons += 1
                         # once we get to the assessment trial, assess performance
                         if trial==assess_idx:
@@ -503,15 +641,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                         # assess aggregate performance on whole sequence (including all lesions)
                         if trialtype[:,trial]==1:
                             ncomparetrials += 1
-                            output = np.squeeze(output, axis=1)
-                            pred = np.zeros((output.size()))
-                            for i in range((output.size()[0])):
-                                if output[i]>0.5:
-                                    pred[i] = 1
-                                else:
-                                    pred[i] = 0
-                            tmp = np.squeeze(np.asarray(labels[trial]))
-                            overallperf += (pred==tmp).sum().item()
+                            overallperf += answerCorrect(output, labels[trial])
                             overallcomparisons += 1
                             # once we get to the assessment trial, assess performance
                             if trial==assess_idx:
@@ -636,32 +766,14 @@ def _recurrent_lesion_test(args, model, device, test_loader, criterion, retainHi
                     if wasLesioned and (lesionRecord[item_idx]==0):
                         n_lesionAssessmentTrials += 1
                         test_loss += criterion(output, labels[item_idx]).item()
-                        output = np.squeeze(output, axis=1)
-                        pred = np.zeros((output.size()))
-                        for i in range((output.size()[0])):
-                            if output[i]>0.5:
-                                pred[i] = 1
-                            else:
-                                pred[i] = 0
-
-                        tmp = np.squeeze(np.asarray(labels[item_idx]))
-                        correct += (pred==tmp).sum().item()
+                        correct += answerCorrect(output, labels[item_idx])
 
                     # was this input lesioned? (keeping track for the next compare trial)
                     wasLesioned = True if lesionRecord[item_idx]==1 else False
 
                     # now take the overall performance as a sanity check
                     n_totalAssessmentTrials +=1
-                    output = np.squeeze(output, axis=1)
-                    pred = np.zeros((output.size()))
-                    for i in range((output.size()[0])):
-                        if output[i]>0.5:
-                            pred[i] = 1
-                        else:
-                            pred[i] = 0
-
-                    tmp = np.squeeze(np.asarray(labels[item_idx]))
-                    overalltest_correct += (pred==tmp).sum().item()
+                    overalltest_correct += answerCorrect(output, labels[item_idx])
 
             totaln_lesiontrials += n_lesionAssessmentTrials
             totaln_comparetrials += n_totalAssessmentTrials
@@ -680,7 +792,9 @@ def _recurrent_lesion_test(args, model, device, test_loader, criterion, retainHi
 # ---------------------------------------------------------------------------- #
 
 def train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
-    """ Train a neural network on the training set """
+    """
+    * HRS this is obsolete: only used for MLP *
+    Train a neural network on the training set """
     model.train()
     train_loss = 0
     correct = 0
@@ -719,7 +833,9 @@ def train(args, model, device, train_loader, optimizer, criterion, epoch, printO
 # ---------------------------------------------------------------------------- #
 
 def test(args, model, device, test_loader, criterion, printOutput=True):
-    """Test a neural network on the test set. """
+    """
+    * HRS this is obsolete: only used for MLP *
+    Test a neural network on the test set. """
     model.eval()
     test_loss = 0
     correct = 0
@@ -980,8 +1096,9 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
 
 class separateinputMLP(nn.Module):
     """
+    * HRS this is obsolete and no longer used *
         This is a simple 3-layer MLP which compares the magnitude of input nodes A (4) to input nodes B (4)
-        """
+    """
     def __init__(self, D_in):
         super(separateinputMLP, self).__init__()
         self.hidden_size = 500   # was 60, now increase to 500 to prevent bottleneck in capacity.
@@ -1148,7 +1265,9 @@ def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelCon
 # ---------------------------------------------------------------------------- #
 
 def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
-    """This function performs the train/test loop for different parameter settings
+    """
+    * HRS this is obsolete and no longer used *
+    This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
      - Train/test performance is logged with a SummaryWriter
      - the trained model is returned
@@ -1210,7 +1329,8 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, N, params):
 # ---------------------------------------------------------------------------- #
 
 def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, params):
-    """This function performs the train/test loop for different parameter settings
+    """
+    This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
      - Train/test performance is logged with a SummaryWriter
      - the trained recurrent model is returned
@@ -1291,28 +1411,5 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, param
 
     writer.close()
     return model
-
-# ---------------------------------------------------------------------------- #
-
-def setupTestParameters(fileloc, params):
-    """
-    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    """
-    args, device, multiparams = defineHyperparams() # training hyperparams for network (passed as args when called from command line)
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args, *params)
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
-
-    # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
-    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-    # load our trained model
-    trained_model = torch.load(trained_modelname)
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-    printOutput = True
-
-    testParams = [args, trained_model, device, testloader, criterion, retainHiddenState, printOutput]
-
-    return testParams
 
 # ---------------------------------------------------------------------------- #

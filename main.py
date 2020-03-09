@@ -199,7 +199,7 @@ def performLesionTests(params, nlesionBins):
     freq = np.linspace(0,1,X)
     lesioned_tests = []
     overall_lesioned_tests = []
-    testParams = mnet.setupTestParameters(params)
+    testParams = mnet.setupTestParameters(fileloc, params)
     args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
 
@@ -210,7 +210,9 @@ def performLesionTests(params, nlesionBins):
         # evaluate network at test with lesions
         lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
         #bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_lesion_test(*testParams, whichLesion, lesionFrequency)
-        bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_simplelesion_test(*testParams, whichLesion, lesionFrequency)
+        #bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_simplelesion_test(*testParams, whichLesion, lesionFrequency)
+        lesionHowMany = 'one'
+        bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_mostsimplelesion_test(*testParams, whichLesion, lesionHowMany)
         print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
         lesioned_tests.append(lesioned_testaccuracy)
         overall_lesioned_tests.append(overall_lesioned_testaccuracy)
@@ -263,7 +265,7 @@ if __name__ == '__main__':
     allFullRange = False              # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
     blockTrain = True                # whether to block the training by context
     seqTrain = True                  # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'true'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
+    labelContext = 'true'        # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
     retainHiddenState = True         # initialise the hidden state for each pair as the hidden state of the previous pair
     if not blockTrain:
         seqTrain = False              # cant have sequential AB training structure if contexts are intermingled. HRS to deprecate seqTrain, this will always be true.
@@ -277,8 +279,8 @@ if __name__ == '__main__':
     #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
-    #nlesionBins = 2
-    #performLesionTests(params, nlesionBins)
+    nlesionBins = 1
+    performLesionTests(params, nlesionBins)
 
     # Assess performance after a lesion as a function of the 'seen' number
     testParams = mnet.setupTestParameters(fileloc, params)

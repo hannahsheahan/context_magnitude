@@ -733,9 +733,9 @@ def perfVdistContextMean(params, testParams):
     ref, = plt.plot([0,7],[.5,1],linestyle='--',color='grey')
     local_contextmean, = plt.plot(uniquediffs, meanperf, color='blue')
     global_contextmean, = plt.plot(global_uniquediffs, global_meanperf, color='black')
-    plt.legend((ref, local_contextmean, global_contextmean), ('unity ref', 'dist. to local context mean','dist. to global mean'))
-    plt.ylabel('RNN performance')
-    plt.xlabel('|distance to mean|')
+    plt.legend((ref, local_contextmean, global_contextmean), ('unity ref', 'dist. to local context \u03BC','dist. to global \u03BC'))
+    plt.ylabel('RNN perf. immediately post-lesion')
+    plt.xlabel('|current# - \u03BC|')
     ax = plt.gca()
     ax.set_ylim(0.45,1.05)
     whichTrialType = 'compare'
