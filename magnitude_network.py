@@ -331,9 +331,11 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                         # if trial designated for lesioning, apply the lesion ***HRS to check these indices are correct for lesions
                         if lesionRecord[trial]==1:
                             if whichLesion=='number':
-                                tmpinputs[trial][0:15] = torch.full_like(tmpinputs[trial][0:15], 0)
+                                print(tmpinputs[trial][0][0:15])
+                                tmpinputs[trial][0][0:15] = torch.full_like(tmpinputs[trial][0][0:15], 0)
+                                print(tmpinputs[trial][0][0:15])
                             else:
-                                tmpinputs[trial][15:18] = torch.full_like(tmpinputs[trial][15:18], 0)
+                                tmpinputs[trial][0][15:18] = torch.full_like(tmpinputs[trial][0][15:18], 0)
 
                         # inject some noise ~= forgetting of the previous number
                         noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))

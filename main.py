@@ -233,14 +233,6 @@ def performLesionTests(params, nlesionBins):
     whichLesion = 'number'
 
     for i in range(X):
-        #if i==0:
-            # evaluate regular test performance
-            #_, normal_testaccuracy = mnet.recurrent_test(*testParams)
-            #print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
-            #lesioned_tests.append(normal_testaccuracy)
-            #overall_lesioned_tests.append(normal_testaccuracy)
-        #    pass  # for now HRS
-        #else:
         tic = time.time()
         # evaluate network at test with lesions
         lesionFrequency =  freq[i] # fraction of compare trials to lesion (0-1)
@@ -258,8 +250,12 @@ def performLesionTests(params, nlesionBins):
         np.save('network_analysis/Lesiontests_blocked_contextcued_'+str(lesionFrequency)+'.npy', bigdict_lesionperf)
 
 
+    # and evaluate the unlesioned performance as a benchmark
+    _, normal_testaccuracy = mnet.recurrent_test(*testParams)
+    print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
 
     plt.figure()
+    plt.plot(0, normal_testaccuracy, 'x', color='red')
     plt.plot(freq, overall_lesioned_tests, '.', color='black')
     plt.plot(freq, overall_lesioned_tests, color='black')
 
@@ -300,7 +296,7 @@ if __name__ == '__main__':
     #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
-    nlesionBins = 5
+    nlesionBins = 2
     performLesionTests(params, nlesionBins)
 
     # Analyse the trained network
