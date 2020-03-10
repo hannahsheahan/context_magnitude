@@ -704,7 +704,8 @@ def perfVdistContextMean(params, testParams):
     # load analysis of network at test with lesions
     blcktxt = '_interleaved' if allFullRange else '_temporalblocked'
     contexttxt = '_contextcued' if labelContext=='true' else '_nocontextcued'
-    bigdict_lesionperf = np.load('network_analysis/Lesiontests'+blcktxt+contexttxt+str(lesionFrequency)+'.npy', allow_pickle=True)
+    data = (np.load('network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+str(lesionFrequency)+'.npy', allow_pickle=True)).item()
+    bigdict_lesionperf = data["bigdict_lesionperf"]
     tmp = [bigdict_lesionperf[i][0]["underlying_context"] for i in range(len(bigdict_lesionperf))]
 
     # evaluate the context mean for each network assessment
