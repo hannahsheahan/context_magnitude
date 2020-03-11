@@ -55,8 +55,10 @@ def flattenAllFirstDimArrays(*allarrays):
 # ---------------------------------------------------------------------------- #
 
 def flattenFirstDim(array):
-    """This function with return a numpy array which flattens the first two dimensions together. Only works for 3d np arrays."""
-    if len(array.shape) == 3:
+    """This function with return a numpy array which flattens the first two dimensions together. Only works for 2d-4d np arrays."""
+    if len(array.shape) == 2:
+        return array.reshape(array.shape[0]*array.shape[1], )
+    elif len(array.shape) == 3:
         return array.reshape(array.shape[0]*array.shape[1], array.shape[2])
     elif len(array.shape) == 4:
         return array.reshape(array.shape[0]*array.shape[1], array.shape[2], array.shape[3])
@@ -295,7 +297,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                         input2 = turnOneHot(judgementValue, totalMaxNumerosity)
                         if allFullRange:  # if intermingling contexts, then we need to know which context this number was sampled from
                             context = turnIndexToContext(randind)
-                            
+
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
                         # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time
