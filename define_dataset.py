@@ -172,9 +172,9 @@ def turnIndexToContext(randind):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange):
+def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange, whichContext):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
-    - There are 3 contexts.
+    - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
     - 18/02 updated for training on sequences with BPTT
     - 19/02 BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len < block length
@@ -188,6 +188,14 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
         sequentialABTraining = False
 
     print('Generating dataset...')
+    if whichContext==0:
+        print('- all contexts included')
+    elif whichContext==1:
+        print('- context range: 1-15')
+    elif whichContext==2:
+        print('- context range: 1-10')
+    elif whichContext==3:
+        print('- context range: 6-15')
     if labelContext=='true':
         print('- network has correct context labelling')
     elif labelContext=='random':
@@ -237,17 +245,31 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
 
         for block in range(Mblocks):
 
-            # divide the blocks evenly across the 3 contexts
-            if block < Mblocks/Ncontexts:        # 0-7     # context A
+            if whichContext==0:
+                # divide the blocks evenly across the 3 contexts
+                if block < Mblocks/Ncontexts:        # 0-7     # context A
+                    context = 1
+                    minNumerosity = 1
+                    maxNumerosity = 15
+
+                elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
+                    context = 2
+                    minNumerosity = 1
+                    maxNumerosity = 10
+                else:                                # 16-23   # context C
+                    context = 3
+                    minNumerosity = 6
+                    maxNumerosity = 15
+            # single context options
+            elif whichContext==1:     # context A
                 context = 1
                 minNumerosity = 1
                 maxNumerosity = 15
-
-            elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
+            elif whichContext==2:     # context B
                 context = 2
                 minNumerosity = 1
                 maxNumerosity = 10
-            else:                                # 16-23   # context C
+            elif whichContext==3:     # context C
                 context = 3
                 minNumerosity = 6
                 maxNumerosity = 15
@@ -257,7 +279,6 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 randNumDistribution = [i for sublist in tmpDistribution for i in sublist]  # non-uniform distr. over all 3 context ranges together
             else:
                 randNumDistribution = [i for i in range(minNumerosity, maxNumerosity+1)]  # uniform between min and max
-
             indexDistribution = [i for i in range(len(randNumDistribution))]  # this is going to allow us to know which context a sample which have been drawn from if intermingled
 
             # generate some random numerosity data and label whether the random judgement integers are larger than the refValue

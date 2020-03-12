@@ -34,13 +34,21 @@ def get_cmap(n, name='hsv'):
 
 # ---------------------------------------------------------------------------- #
 
-def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, plot_diff_code, whichTrialType, allFullRange, saveFig):
+def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNumerosity, givenContext, labelContexts, noise_std, retainHiddenState, plot_diff_code, whichTrialType, allFullRange, whichContext, saveFig):
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
 
     # automatic save file title details
+    if whichContext==0:
+        whichcontexttext = ''
+    elif whichContext==1:
+        whichcontexttext = '_fullrange_1-15_only'
+    elif whichContext==2:
+        whichcontexttext = '_lowrange_1-10_only'
+    elif whichContext==3:
+        whichcontexttext = '_highrange_6-15_only'
     diffcodetext = '_diffcode' if plot_diff_code else ''
     retainstatetext = '_retainstate' if retainHiddenState else '_resetstate'
     blockedtext = '_blck' if blockTrain else ''
@@ -58,9 +66,9 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
         contextlabelledtext =  '_constcontextlabel'
 
     if saveFig:
-        plt.savefig(basetitle+networkTxt+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
+        plt.savefig(basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args+'.pdf',bbox_inches='tight')
 
-    return basetitle+networkTxt+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
+    return basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+blockedtext+seqtext+labeltext+contexts+retainstatetext+'_n'+str(noise_std)+str_args
 
 # ---------------------------------------------------------------------------- #
 
@@ -69,7 +77,7 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compa
     Context order:  1-15, 1-10, 5-15
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -103,14 +111,14 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compa
     ax.set_yticks(ticks)
     ax.set_yticklabels(labelticks)
 
-    n = autoSaveFigure('figures/RDM_'+differenceCodeText, args, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/RDM_'+differenceCodeText, args, networkStyle, blockTrain, seqTrain, False, labelContext, False, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
 def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compare'):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -204,14 +212,14 @@ def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compa
 
                 ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
 
-        n = autoSaveFigure('figures/3MDS60_'+tx, args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+        n = autoSaveFigure('figures/3MDS60_'+tx, args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
 def plot3MDSContexts(MDS_dict, args, labelNumerosity, params, whichTrialType='compare'):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
 
@@ -247,7 +255,7 @@ def plot3MDSContexts(MDS_dict, args, labelNumerosity, params, whichTrialType='co
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/3MDS60_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -256,7 +264,7 @@ def plot3MDSMean(MDS_dict, args, params, labelNumerosity=True, plot_diff_code=Fa
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -327,7 +335,7 @@ def plot3MDSMean(MDS_dict, args, params, labelNumerosity=True, plot_diff_code=Fa
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
             ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, networkStyle, blockTrain, seqTrain, labelNumerosity, labelContext, True, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -484,7 +492,7 @@ def animate3DMDS(MDS_dict, args, params, plot_diff_code=False, whichTrialType='c
      from different angles and optionally save it as a mp4 file.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
@@ -542,7 +550,7 @@ def animate3DMDS(MDS_dict, args, params, plot_diff_code=False, whichTrialType='c
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/MDS_3Danimation_'+ differenceCodeText, args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, False)
+        strng = autoSaveFigure('animations/MDS_3Danimation_'+ differenceCodeText, args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, plot_diff_code, whichTrialType, allFullRange, whichContext, False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
@@ -550,7 +558,7 @@ def animate3DMDS(MDS_dict, args, params, plot_diff_code=False, whichTrialType='c
 def instanceCounter(MDS_dict, args, params, whichTrialType='compare'):
     """ Plot a histogram showing the number of times each unique input (reference averaged) and context was in the generated training set."""
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, whichContext, saveFig = params
     plt.figure()
     rangeA = np.arange(15)
     rangeB = np.arange(15,25)
@@ -563,7 +571,7 @@ def instanceCounter(MDS_dict, args, params, whichTrialType='compare'):
     plt.xlabel('Numbers and contexts')
     plt.ylabel('Instances in training set')
 
-    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -572,7 +580,7 @@ def viewTrainingSequence(MDS_dict, args, params, whichTrialType='compare'):
     Also plots the sequence of compare vs filler trials.
     """
 
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
     MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
     temporal_context = MDS_dict["drift"]["temporal_context"]
     temporal_trialtypes = MDS_dict["temporal_trialtypes"]
@@ -582,14 +590,14 @@ def viewTrainingSequence(MDS_dict, args, params, whichTrialType='compare'):
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Context (0: 1-15; 1: 1-10; 2: 6-15)')
-    n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
     # trial types changing with time in training set
     plt.figure()
     plt.plot(temporal_trialtypes.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Trial type: 0-filler; 1-compare')
-    n = autoSaveFigure('figures/temporaltrialtype_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/temporaltrialtype_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
     # latent state drift in time/trials in training set
     fig,ax = plt.subplots(1,3, figsize=(18,5))
@@ -625,7 +633,7 @@ def viewTrainingSequence(MDS_dict, args, params, whichTrialType='compare'):
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/latentstatedrift_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, saveFig)
+    n = autoSaveFigure('figures/latentstatedrift_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -634,7 +642,7 @@ def animate3DdriftMDS(MDS_dict, args, params, whichTrialType='compare'):
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
     """
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, saveFig = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
     MDS_latentstate = MDS_dict["drift"]["MDS_latentstate"]
@@ -664,7 +672,7 @@ def animate3DdriftMDS(MDS_dict, args, params, whichTrialType='compare'):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure('animations/latentdrift_MDS_3Danimation_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, False)
+        strng = autoSaveFigure('animations/latentdrift_MDS_3Danimation_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
@@ -697,14 +705,30 @@ def perfVdistContextMean(params, testParams):
     """
     # set up lesioned network parameters
     args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext  = params
     whichLesion = 'number'
     lesionFrequency = 0.0  # just lesion the second to last compare trial and assess on the final compare trial in each sequence
 
     # load analysis of network at test with lesions
+    if whichContext==0:
+        range_txt = ''
+    elif whichContext==1:
+        range_txt = '_fullrangeonly'
+    elif whichContext==2:
+        range_txt = '_lowrangeonly'
+    elif whichContext==3:
+        range_txt = '_highrangeonly'
     blcktxt = '_interleaved' if allFullRange else '_temporalblocked'
     contexttxt = '_contextcued' if labelContext=='true' else '_nocontextcued'
-    data = (np.load('network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+str(lesionFrequency)+'.npy', allow_pickle=True)).item()
+
+    if whichContext==0:  # proceed as normal
+        nmodels = 1
+    else:
+        nmodels = 3      # load in models trained on just a single context and compare them
+        whichContexttxt = '_contextmodelstrainedseparately'
+        context_handles = []
+
+    data = (np.load('network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+str(lesionFrequency)+'.npy', allow_pickle=True)).item()
     data = data["bigdict_lesionperf"]
 
     # evaluate the context mean for each network assessment
@@ -776,6 +800,6 @@ def perfVdistContextMean(params, testParams):
     ax.set_ylim(0.45,1.05)
     plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+')')
     whichTrialType = 'compare'
-    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, True)
+    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, whichContext, True)
 
 # ---------------------------------------------------------------------------- #
