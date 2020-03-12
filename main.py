@@ -334,12 +334,12 @@ if __name__ == '__main__':
     #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
-    nlesionBins = 2
-    performLesionTests(params, nlesionBins)
+    #nlesionBins = 2
+    #performLesionTests(params, nlesionBins)
 
     # Assess performance after a lesion as a function of the 'seen' number
-    #testParams = mnet.setupTestParameters(fileloc, params)
-    #MDSplt.perfVdistContextMean(params, testParams)
+    testParams = mnet.setupTestParameters(fileloc, params)
+    MDSplt.perfVdistContextMean(params, testParams)
 
     # Analyse the trained network
     #args, _, _ = mnet.defineHyperparams() # network training hyperparams

@@ -769,11 +769,12 @@ def perfVdistContextMean(params, testParams):
     local_contextmean_context2, = plt.plot(context2_uniquediffs, context2_meanperf, color='dodgerblue')
     local_contextmean_context3, = plt.plot(context3_uniquediffs, context3_meanperf, color='orangered')
 
-    plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', 'dist. to global \u03BC', 'dist. local \u03BC | context A, 1:15','dist. local \u03BC | context B, 1:10','dist. local \u03BC | context C, 6-15'))
+    plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', '\u03BC = global median', '\u03BC = local median | context A, 1:15','\u03BC = local median | context B, 1:10','\u03BC = local median | context C, 6-15'))
     plt.ylabel('RNN perf. immediately post-lesion (just 1 lesion)')
-    plt.xlabel('|current# - median|')
+    plt.xlabel('|current# - \u03BC|')
     ax = plt.gca()
     ax.set_ylim(0.45,1.05)
+    plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+')')
     whichTrialType = 'compare'
     autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, True)
 
