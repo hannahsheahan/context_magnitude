@@ -13,6 +13,7 @@
 import magnitude_network as mnet
 import define_dataset as dset
 import MDSplotter as MDSplt
+import constants as const
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,15 +49,15 @@ def trainAndSaveANetwork(params, createNewDataset, include_fillers):
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
 
     if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(N, fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext, allFullRange, whichContext)
+        trainset, testset = dset.createSeparateInputData(fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext, allFullRange, whichContext)
     else:
         trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
 
     # define and train a neural network model, log performance and output trained model
     if networkStyle == 'recurrent':
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, N, params)
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, params)
     else:
-        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, N, params)
+        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, params)
 
     # save the trained weights so we can easily look at them
     print(trained_modelname)
@@ -197,7 +198,7 @@ def performLesionTests(params, nlesionBins):
 
     X = nlesionBins
     freq = np.linspace(0,1,X)
-    context_tests = np.zeros((X,3))
+    context_tests = np.zeros((X,const.NCONTEXTS))
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
 
     if whichContext==0:  # proceed as normal
@@ -287,15 +288,15 @@ def performLesionTests(params, nlesionBins):
 
             if whichContext==0:
                 # let's also split it up to look at performance based on the different contexts
-                perf = np.zeros((3,))
-                counts = np.zeros((3,))
+                perf = np.zeros((const.NCONTEXTS,))
+                counts = np.zeros((const.NCONTEXTS,))
                 for seq in range(data.shape[0]):
                     for compare_idx in range(data[i].shape[0]):
                         context = data[seq][compare_idx]["underlying_context"]-1
                         perf[context] += data[seq][compare_idx]["lesion_perf"]
                         counts[context] += 1
                 meanperf = 100 * np.divide(perf, counts)
-                for context in range(3):
+                for context in range(const.NCONTEXTS):
                     print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context], counts[context], meanperf[context]))
                     context_tests[i][context] = meanperf[context]
         # and evaluate the unlesioned performance as a benchmark
@@ -323,7 +324,7 @@ def performLesionTests(params, nlesionBins):
 
             # plot the performance divided up by context too
             context_handles = []
-            for context in range(3):
+            for context in range(const.NCONTEXTS):
                 x = [freq[i]-offsets[context] for i in range(len(freq))]
                 y = [context_tests[i][context] for i in range(context_tests.shape[0])]
                 tmp, = plt.plot(x, y, '.', color=colours[context], markersize=8)
@@ -357,11 +358,10 @@ def performLesionTests(params, nlesionBins):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = False          # re-generate the random train/test dataset each time?
+    createNewDataset = True          # re-generate the random train/test dataset each time?
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
-    N = 15                           # global: max numerosity for creating one-hot vectors. HRS to turn local, this wont be changed.
-    whichContext = 1                # 0: default, uses all 3 contexts in dataset i.e. all ranges. 1-3: just a single context, 1: 1-15; 2: 1-10; 3: 6-15.
+    whichContext = 0                 # 0: default, uses all 3 contexts in dataset i.e. all ranges. 1-3: just a single context, 1: 1-15; 2: 1-10; 3: 6-15.
     allFullRange = False             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
     blockTrain = True                # whether to block the training by context
     seqTrain = True                  # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
@@ -378,21 +378,21 @@ if __name__ == '__main__':
     params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext]
 
     # Train the network from scratch
-    #trainAndSaveANetwork(params, createNewDataset, include_fillers)
+    trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
     #nlesionBins = 2
     #performLesionTests(params, nlesionBins)
 
     # Assess performance after a lesion as a function of the 'seen' number
-    testParams = mnet.setupTestParameters(fileloc, params)
-    MDSplt.perfVdistContextMean(params, testParams)
+    #testParams = mnet.setupTestParameters(fileloc, params)
+    #MDSplt.perfVdistContextMean(params, testParams)
 
     # Analyse the trained network
-    #args, _, _ = mnet.defineHyperparams() # network training hyperparams
-    #MDS_dict = analyseNetwork(fileloc, args, params)
+    args, _, _ = mnet.defineHyperparams() # network training hyperparams
+    MDS_dict = analyseNetwork(fileloc, args, params)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #generatePlots(MDS_dict, args, params)
+    generatePlots(MDS_dict, args, params)
 
 # ---------------------------------------------------------------------------- #

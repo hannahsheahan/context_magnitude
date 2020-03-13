@@ -10,6 +10,7 @@ Issues: N/A
 """
 # ---------------------------------------------------------------------------- #
 import matplotlib.pyplot as plt
+import constants as const
 import numpy as np
 import sys
 import torch
@@ -162,9 +163,9 @@ def generateTrialSequence(include_fillers=True):
 
 def turnIndexToContext(randind):
     """Get the context from the randomly sampled index for when contexts are intermingled"""
-    if randind < 16:
+    if randind < const.FULLR_ULIM:  # 16
         context = 1
-    elif randind < 28:
+    elif randind < const.FULLR_ULIM + const.LOWR_ULIM:  # 27
         context = 2
     else:
         context = 3
@@ -172,7 +173,7 @@ def turnIndexToContext(randind):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange, whichContext):
+def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange, whichContext):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -191,11 +192,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
     if whichContext==0:
         print('- all contexts included')
     elif whichContext==1:
-        print('- context range: 1-15')
+        print('- context range: 1-16')
     elif whichContext==2:
-        print('- context range: 1-10')
+        print('- context range: 1-11')
     elif whichContext==3:
-        print('- context range: 6-15')
+        print('- context range: 6-16')
     if labelContext=='true':
         print('- network has correct context labelling')
     elif labelContext=='random':
@@ -219,7 +220,6 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
     Ntrain = 2880        # 8:2 train:test split
     Ntest = totalN - Ntrain
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
-    Ncontexts = 3
     trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
     testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
@@ -230,52 +230,52 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
             N = totalN - Ntrain
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
-        refValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
-        judgementValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
-        input = np.empty((Mblocks, int(N/Mblocks),BPTT_len, totalMaxNumerosity))
-        contextinputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len, Ncontexts ))
+        refValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
+        judgementValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
+        input = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
+        contextinputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len, const.NCONTEXTS ))
         target = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
-        contexts = np.empty((Mblocks, int(N/Mblocks), BPTT_len, Ncontexts))
+        contexts = np.empty((Mblocks, int(N/Mblocks), BPTT_len, const.NCONTEXTS))
         contextdigits = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
         trialTypes = np.empty((Mblocks, int(N/Mblocks), BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
         trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len))
 
-        fillerRange = [1,15]        # the range of numbers spanned by all filler trials
+        fillerRange = [const.FULLR_LLIM,const.FULLR_ULIM]        # the range of numbers spanned by all filler trials
 
         for block in range(Mblocks):
 
             if whichContext==0:
                 # divide the blocks evenly across the 3 contexts
-                if block < Mblocks/Ncontexts:        # 0-7     # context A
+                if block < Mblocks/const.NCONTEXTS:        # 0-7     # context A
                     context = 1
-                    minNumerosity = 1
-                    maxNumerosity = 15
+                    minNumerosity = const.FULLR_LLIM
+                    maxNumerosity = const.FULLR_ULIM
 
-                elif block < 2*(Mblocks/Ncontexts):  # 8-15    # context B
+                elif block < 2*(Mblocks/const.NCONTEXTS):  # 8-15    # context B
                     context = 2
-                    minNumerosity = 1
-                    maxNumerosity = 10
+                    minNumerosity = const.LOWR_LLIM
+                    maxNumerosity = const.LOWR_ULIM
                 else:                                # 16-23   # context C
                     context = 3
-                    minNumerosity = 6
-                    maxNumerosity = 15
+                    minNumerosity = const.HIGHR_LLIM
+                    maxNumerosity = const.HIGHR_ULIM
             # single context options
             elif whichContext==1:     # context A
                 context = 1
-                minNumerosity = 1
-                maxNumerosity = 15
+                minNumerosity = const.FULLR_LLIM
+                maxNumerosity = const.FULLR_ULIM
             elif whichContext==2:     # context B
                 context = 2
-                minNumerosity = 1
-                maxNumerosity = 10
+                minNumerosity = const.LOWR_LLIM
+                maxNumerosity = const.LOWR_ULIM
             elif whichContext==3:     # context C
                 context = 3
-                minNumerosity = 6
-                maxNumerosity = 15
+                minNumerosity = const.HIGHR_LLIM
+                maxNumerosity = const.HIGHR_ULIM
 
             if allFullRange:
-                tmpDistribution = [[i for i in range(1, 15+1)],[j for j in range(1, 10+1)], [k for k in range(6, 15+1)] ]
+                tmpDistribution = [[i for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)],[j for j in range(const.LOWR_LLIM, const.LOWR_ULIM+1)], [k for k in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)] ]
                 randNumDistribution = [i for sublist in tmpDistribution for i in sublist]  # non-uniform distr. over all 3 context ranges together
             else:
                 randNumDistribution = [i for i in range(minNumerosity, maxNumerosity+1)]  # uniform between min and max
@@ -315,25 +315,25 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                             randind = random.choice(indexDistribution)
                             judgementValue = randNumDistribution[randind]
 
-                        input2 = turnOneHot(judgementValue, totalMaxNumerosity)
+                        input2 = turnOneHot(judgementValue, const.TOTALMAXNUM)
                         if allFullRange:  # if intermingling contexts, then we need to know which context this number was sampled from
                             context = turnIndexToContext(randind)
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
-                        input2 = turnOneHot(random.randint(*fillerRange), totalMaxNumerosity) # leave the filler numbers unconstrained just spanning the full range
+                        input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
                         # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time
                         if allFullRange:
                             context = random.randint(1,3)
 
                     # Define the context input to the network
                     if labelContext=='true':
-                        contextinput = turnOneHot(context, 3)  # there are 3 different contexts
+                        contextinput = turnOneHot(context, const.NCONTEXTS)  # there are 3 different contexts
                     elif labelContext=='random':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                        contextinput = turnOneHot(random.randint(1,3), 3)  # randomly assign each example to a context, (shuffling examples across context markers in training)
+                        contextinput = turnOneHot(random.randint(1,3), const.NCONTEXTS)  # randomly assign each example to a context, (shuffling examples across context markers in training)
                     elif labelContext=='constant':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                        contextinput = turnOneHot(1, 3) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
+                        contextinput = turnOneHot(1, const.NCONTEXTS) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                     # add our new inputs to our sequence
                     input_sequence.append(input2)
@@ -347,8 +347,8 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
                 rValue = None
                 judgeValue = None
-                allJValues = np.zeros((BPTT_len, totalMaxNumerosity))
-                allRValues = np.zeros((BPTT_len, totalMaxNumerosity))
+                allJValues = np.zeros((BPTT_len, const.TOTALMAXNUM))
+                allRValues = np.zeros((BPTT_len, const.TOTALMAXNUM))
                 for i in range(BPTT_len):
                     trialtype = trialtypeinput[i]
                     if trialtype==1:  # compare
@@ -364,11 +364,11 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                         else:
                             target[block, sample, i] = None  # default dont do anything
 
-                    allJValues[i] = np.squeeze(turnOneHot(turnOneHotToInteger(input_sequence[i]), totalMaxNumerosity))
+                    allJValues[i] = np.squeeze(turnOneHot(turnOneHotToInteger(input_sequence[i]), const.TOTALMAXNUM))
                     if rValue is None:
-                        allRValues[i] = np.zeros((15,))
+                        allRValues[i] = np.zeros((const.TOTALMAXNUM,))
                     else:
-                        allRValues[i] = np.squeeze(turnOneHot(rValue, totalMaxNumerosity))
+                        allRValues[i] = np.squeeze(turnOneHot(rValue, const.TOTALMAXNUM))
 
                     if trialtype==1:
                         rValue = turnOneHotToInteger(input_sequence[i])  # set the previous state to be the current state
@@ -379,7 +379,7 @@ def createSeparateInputData(totalMaxNumerosity, fileloc, filename, BPTT_len, blo
                 contextdigits[block, sample] = contextsequence
                 judgementValues[block, sample] = np.squeeze(np.asarray(allJValues))
                 refValues[block, sample] = np.squeeze(np.asarray(allRValues))
-                contexts[block, sample] = np.squeeze([turnOneHot(contextsequence[i], 3) for i in range(len(contextsequence))])  # still captures context here even if we dont feed context label into network
+                contexts[block, sample] = np.squeeze([turnOneHot(contextsequence[i], const.NCONTEXTS) for i in range(len(contextsequence))])  # still captures context here even if we dont feed context label into network
                 contextinputs[block, sample] = np.squeeze(contextinputsequence)
                 #input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))  # for the MLP
                 input[block, sample] = np.squeeze(np.asarray(input_sequence))             # for the RNN with BPTT
