@@ -173,7 +173,7 @@ def turnIndexToContext(randind):
 
 # ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequentialABTraining, include_fillers, labelContext, allFullRange, whichContext):
+def createSeparateInputData(filename, args):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
@@ -182,39 +182,27 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
     - HRS this function is long and messy, should really be divided up into more manageable chunks
 
     """
-
-    # note that if there is no context blocking, we can't have sequential AB training structure.
-    # Double Check this:
-    if not blockedTraining:
-        sequentialABTraining = False
-
     print('Generating dataset...')
-    if whichContext==0:
+    if args.which_context==0:
         print('- all contexts included')
-    elif whichContext==1:
+    elif args.which_context==1:
         print('- context range: 1-16')
-    elif whichContext==2:
+    elif args.which_context==2:
         print('- context range: 1-11')
-    elif whichContext==3:
+    elif args.which_context==3:
         print('- context range: 6-16')
-    if labelContext=='true':
+    if args.label_context=='true':
         print('- network has correct context labelling')
-    elif labelContext=='random':
+    elif args.label_context=='random':
         print('- network has randomly assigned context labelling')
-    elif labelContext=='constant':
+    elif args.label_context=='constant':
         print('- network has constant (1) context labelling')
-    if allFullRange:
+    if args.all_fullrange:
         print('- compare numbers are all drawn from the full 1:15 range')
     else:
         print('- compare numbers are drawn from temporally structured ranges')
-    if blockedTraining:
-        print('- training is blocked by context')
-    else:
-        print('- training is temporally intermingled across contexts, loosing all A!=B structure and filler structure')
-    if sequentialABTraining:
-        print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
-    else:
-        print('- training chooses random A and B at each time step')
+    print('- training is blocked by context')
+    print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
 
     totalN = 3840         # how many examples we want to use (each of these is a sequence on numbers)
     Ntrain = 2880        # 8:2 train:test split
@@ -230,22 +218,22 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
             N = totalN - Ntrain
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
-        refValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
-        judgementValues = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
-        input = np.empty((Mblocks, int(N/Mblocks),BPTT_len, const.TOTALMAXNUM))
-        contextinputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len, const.NCONTEXTS ))
-        target = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
-        contexts = np.empty((Mblocks, int(N/Mblocks), BPTT_len, const.NCONTEXTS))
-        contextdigits = np.empty((Mblocks, int(N/Mblocks),BPTT_len))
+        refValues = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len, const.TOTALMAXNUM))
+        judgementValues = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len, const.TOTALMAXNUM))
+        input = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len, const.TOTALMAXNUM))
+        contextinputs = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len, const.NCONTEXTS ))
+        target = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len))
+        contexts = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len, const.NCONTEXTS))
+        contextdigits = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len))
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
-        trialTypes = np.empty((Mblocks, int(N/Mblocks), BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
-        trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), BPTT_len))
+        trialTypes = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
+        trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len))
 
         fillerRange = [const.FULLR_LLIM,const.FULLR_ULIM]        # the range of numbers spanned by all filler trials
 
         for block in range(Mblocks):
 
-            if whichContext==0:
+            if args.which_context==0:
                 # divide the blocks evenly across the 3 contexts
                 if block < Mblocks/const.NCONTEXTS:        # 0-7     # context A
                     context = 1
@@ -261,20 +249,20 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
                     minNumerosity = const.HIGHR_LLIM
                     maxNumerosity = const.HIGHR_ULIM
             # single context options
-            elif whichContext==1:     # context A
+            elif args.which_context==1:     # context A
                 context = 1
                 minNumerosity = const.FULLR_LLIM
                 maxNumerosity = const.FULLR_ULIM
-            elif whichContext==2:     # context B
+            elif args.which_context==2:     # context B
                 context = 2
                 minNumerosity = const.LOWR_LLIM
                 maxNumerosity = const.LOWR_ULIM
-            elif whichContext==3:     # context C
+            elif args.which_context==3:     # context C
                 context = 3
                 minNumerosity = const.HIGHR_LLIM
                 maxNumerosity = const.HIGHR_ULIM
 
-            if allFullRange:
+            if args.all_fullrange:
                 tmpDistribution = [[i for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)],[j for j in range(const.LOWR_LLIM, const.LOWR_ULIM+1)], [k for k in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)] ]
                 randNumDistribution = [i for sublist in tmpDistribution for i in sublist]  # non-uniform distr. over all 3 context ranges together
             else:
@@ -285,28 +273,24 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
             for sample in range(int(N/Mblocks)):    # each sequence
                 input_sequence = []
-                type_sequence  = generateTrialSequence(include_fillers) # the order of filler trial and compare trials
+                type_sequence  = generateTrialSequence(args.include_fillers) # the order of filler trial and compare trials
                 trialtypeinput = [0 for i in range(len(type_sequence))]
                 contextsequence = []
                 contextinputsequence = []
 
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
-                for item in range(BPTT_len):
+                for item in range(args.BPTT_len):
                     trial_type = type_sequence[item]
                     trialtypeinput[item] = 1 if trial_type=='compare' else 0    # provide a bit-flip input to say whether its a filler or compare trial
 
                     if trial_type == 'compare':
-                        if sequentialABTraining:
-                            if (firstTrialInContext and (item==0)):
-                                randind = random.choice(indexDistribution)
-                                refValue = randNumDistribution[randind]
-                                if trial_type == 'filler':
-                                    print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
-                            else:
-                                refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
-                        else:
+                        if (firstTrialInContext and (item==0)):
                             randind = random.choice(indexDistribution)
                             refValue = randNumDistribution[randind]
+                            if trial_type == 'filler':
+                                print('Warning: sequence starting with a filler trial. This should not happen and will cause a bug in sequence generation.')
+                        else:
+                            refValue = copy.deepcopy(judgementValue)  # use the previous number and make sure its a copy not a reference to same piece of memory
 
                         randind = random.choice(indexDistribution)
                         judgementValue = randNumDistribution[randind]
@@ -316,22 +300,22 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
                             judgementValue = randNumDistribution[randind]
 
                         input2 = turnOneHot(judgementValue, const.TOTALMAXNUM)
-                        if allFullRange:  # if intermingling contexts, then we need to know which context this number was sampled from
+                        if args.all_fullrange:  # if intermingling contexts, then we need to know which context this number was sampled from
                             context = turnIndexToContext(randind)
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
                         # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time
-                        if allFullRange:
+                        if args.all_fullrange:
                             context = random.randint(1,3)
 
                     # Define the context input to the network
-                    if labelContext=='true':
+                    if args.label_context=='true':
                         contextinput = turnOneHot(context, const.NCONTEXTS)  # there are 3 different contexts
-                    elif labelContext=='random':
+                    elif args.label_context=='random':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
                         contextinput = turnOneHot(random.randint(1,3), const.NCONTEXTS)  # randomly assign each example to a context, (shuffling examples across context markers in training)
-                    elif labelContext=='constant':
+                    elif args.label_context=='constant':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
                         contextinput = turnOneHot(1, const.NCONTEXTS) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
@@ -347,9 +331,9 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
                 rValue = None
                 judgeValue = None
-                allJValues = np.zeros((BPTT_len, const.TOTALMAXNUM))
-                allRValues = np.zeros((BPTT_len, const.TOTALMAXNUM))
-                for i in range(BPTT_len):
+                allJValues = np.zeros((args.BPTT_len, const.TOTALMAXNUM))
+                allRValues = np.zeros((args.BPTT_len, const.TOTALMAXNUM))
+                for i in range(args.BPTT_len):
                     trialtype = trialtypeinput[i]
                     if trialtype==1:  # compare
                         judgeValue = turnOneHotToInteger(input_sequence[i])
@@ -404,9 +388,6 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
             contextinputs = flattenFirstDim(contextinputs)
             trialTypeInputs  = flattenFirstDim(trialTypeInputs)
 
-            # if you want to destroy the trial by trial sequential context and all other structure, then shuffle again across the trial order
-            if not blockedTraining:
-                input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs, random_state=0)
             trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
         else:
 
@@ -425,14 +406,11 @@ def createSeparateInputData(fileloc, filename, BPTT_len, blockedTraining, sequen
             contextinputs = flattenFirstDim(contextinputs)
             trialTypeInputs  = flattenFirstDim(trialTypeInputs)
 
-            # now shuffle the first axis of the dataset (consistently across the dataset) before we divide into train/test sets
-            if not blockedTraining: # this shuffling will destroy the trial by trial sequential context and all other structure
-                input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypeInputs  = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, contextinputs, trialTypeInputs,  random_state=0)
             testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
 
     # save the dataset so  we can use it again
     dat = {"trainset":trainset, "testset":testset}
-    np.save(fileloc+filename+'.npy', dat)
+    np.save(args.fileloc+filename+'.npy', dat)
 
     # turn out datasets into pytorch Datasets
     trainset = createDataset(trainset)

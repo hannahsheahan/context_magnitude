@@ -71,16 +71,14 @@ def answerCorrect(output, label):
 
 # ---------------------------------------------------------------------------- #
 
-def setupTestParameters(fileloc, params):
+def setupTestParameters(fileloc, args, device):
     """
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
     """
-    args, device, multiparams = defineHyperparams() # training hyperparams for network (passed as args when called from command line)
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args, *params)
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
+    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
 
     # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+    trainset, testset, _, _ = dset.loadInputData(args.fileloc, datasetname)
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
     # load our trained model
@@ -88,13 +86,13 @@ def setupTestParameters(fileloc, params):
     criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
     printOutput = True
 
-    testParams = [args, trained_model, device, testloader, criterion, retainHiddenState, printOutput]
+    testParams = [args, trained_model, device, testloader, criterion, args.retain_hidden_state, printOutput]
 
     return testParams
 
 # ---------------------------------------------------------------------------- #
 
-def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
+def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     """
     This function will take a look at the gradients in all layers of our model during training.
     This will help us to see whether our gradients are flowing well through our RNN
@@ -114,12 +112,11 @@ def plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_number):
     plt.title("Gradient flow, update #{}".format(batch_number))
 
     # save figure of gradient flow (this will take ages if you do it every loop)
-    networkStyle, noise_std, blockTrain, seqTrain, givenContext, retainHiddenState, allFullRange, whichContext = params
     #MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_train(params, args, model, device, train_loader, optimizer, criterion, epoch, retainHiddenState, printOutput=True):
+def recurrent_train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
     """ Train a recurrent neural network on the training set.
     This now trains whilst retaining the hidden state across all trials in the training sequence
     but being evaluated just on pairs of inputs and considering each input pair as a trial for minibatching.
@@ -153,7 +150,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
             inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
-        if not retainHiddenState:
+        if not args.retain_hidden_state:
             hidden = torch.zeros(args.batch_size, model.recurrent_size)  # only if you want to reset hidden recurrent weights
         else:
             hidden = latentstate # keep hidden state to reflect recent statistics of previous inputs
@@ -185,7 +182,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
                     else:
                         # this might just trigger on leaf variables
                         print("Warning: p.grad gradient is type None at batch {} in sequence of length {}".format(batch_idx, sequenceLength) )
-            plot_grad_flow(params, args, layers, ave_grads, max_grads, batch_idx)   # plot our gradients to check that they are flowing well through the RNN
+            plot_grad_flow(args, layers, ave_grads, max_grads, batch_idx)   # plot our gradients to check that they are flowing well through the RNN
 
         optimizer.step()            # update our weights
         train_loss += loss.item()   # keep track for display purposes
@@ -201,7 +198,7 @@ def recurrent_train(params, args, model, device, train_loader, optimizer, criter
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True):
+def recurrent_test(args, model, device, test_loader, criterion, printOutput=True):
     """Test a recurrent neural network on the test set.
     Note that this will need to be modified such that it tracks test performance JUST
     on the subset of trials towards the end of each block (initially for a proof of concept)
@@ -238,7 +235,7 @@ def recurrent_test(args, model, device, test_loader, criterion, retainHiddenStat
 
 
 
-            if not retainHiddenState:  # only if you want to reset hidden state between trials
+            if not args.retain_hidden_state:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
             else:
                 hidden = latentstate
@@ -474,7 +471,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train_loader, whichType='compare'):
+def getActivations(trainset,trained_model, train_loader, whichType='compare'):
     """ This will determine the hidden unit activations for each *unique* input pair in the training set.
      There are many repeats of inputs in the training set.If retainHiddenState is set to True,
      then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
@@ -554,7 +551,7 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
     counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
 
     #  pass each input through the network and see what happens to the hidden layer activations
-    if not ((networkStyle=='recurrent') and retainHiddenState):
+    if not ((args.network_style=='recurrent') and args.retain_hidden_state):
         for sample in range(len(uniqueind)):
             sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
             sample_label = unique_labels[sample]
@@ -566,10 +563,10 @@ def getActivations(trainset,trained_model,networkStyle, retainHiddenState, train
             counter[sample] = 0     # we dont care how many instances of each unique input for these non-sequential cases
 
             # get the activations for that input
-            if networkStyle=='mlp':
+            if args.network_style=='mlp':
                 h1activations,h2activations,_ = trained_model.get_activations(sample_input)
-            elif networkStyle=='recurrent':
-                if not retainHiddenState:
+            elif args.network_style=='recurrent':
+                if not args.retain_hidden_state:
                     # reformat the paired input so that it works for our recurrent model
                     context = sample_input[contextrange]
                     inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
@@ -751,6 +748,41 @@ class OneStepRNN(nn.Module):
 
 # ---------------------------------------------------------------------------- #
 
+def query_yes_no(question, default=None):
+    """ RECIPE 577058: This function asks a yes/no question via input() and return their answer.
+        code from: http://code.activestate.com/recipes/577058/
+
+        "question" is a string that is presented to the user.
+        "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+        The "answer" return value is True for "yes" or False for "no".
+        """
+    valid = {"yes": True, "y": True, "ye": True,
+        "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
+
+#------------------------------------------------------------
+
 def defineHyperparams():
     """
     This will enable us to take different network training settings/hyperparameters in when we call main.py from the command line.
@@ -764,9 +796,26 @@ def defineHyperparams():
     device = torch.device("cuda" if use_cuda else "cpu")
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
+    #use_default = mt.query_yes_no("Use default hyperparameters? ")
+
     command_line = True  # if running from jupyter notebook, set this to false and adjust argsparser() instead
     if command_line:
         parser = argparse.ArgumentParser(description='PyTorch network settings')
+
+        # dataset hyperparameters
+        parser.add_argument('--network-style', default="recurrent", help='which network we want, "recurrent" or "mlp" (default: "recurrent")')
+        parser.add_argument('--new-dataset', dest='create_new_dataset', action='store_true', help='create a new dataset for this condition? (default: False)')   # re-generate the random train/test dataset each time?
+        parser.add_argument('--reuse-dataset', dest='create_new_dataset', action='store_false', help='reuse the existing dataset for this condition? (default: True)')
+        parser.add_argument('--remove-fillers', dest='include_fillers', action='store_false', default=True, help='remove fillers from the dataset? (default: False)')     # True: task is like Fabrice's with filler trials; False: solely compare trials
+        parser.add_argument('--fileloc', default="datasets/", help='folder location for storing datasets (default: "datasets/")')
+        parser.add_argument('--which_context', type=int, default=0, help='if we want to train on a single context range only: 0=all contexts, 1=full only, 2=low only, 3=high only (default: 0)')
+        parser.add_argument('--interleave', dest='all_fullrange', action='store_true', help='interleave training (default: False)')
+        parser.add_argument('--blockrange', dest='all_fullrange', action='store_false', help='block training by contextual number range (default: True)')
+        parser.add_argument('--reset-state', dest='retain_hidden_state', action='store_false', help='reset the hidden state between sequences (default: False)')
+        parser.add_argument('--retain-state', dest='retain_hidden_state', action='store_true', help='retain the hidden state between sequences (default: True)')
+        parser.add_argument('--label-context', default="true", help='label the context explicitly in the input stream? (default: "true", other options: "constant (1)", "random (1-3)")')
+
+        # network training hyperparameters
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.0001])
@@ -775,16 +824,21 @@ def defineHyperparams():
         parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
-        parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+        parser.add_argument('--no-cuda', action='store_true', help='disables CUDA training')
         parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
         parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
         parser.add_argument('--weight_decay', type=int, default=0.0000, metavar='N', help='weight-decay for l2 regularisation (default: 0)')
-        parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
+        parser.add_argument('--save-model', action='store_true', help='For Saving the current Model')
         parser.add_argument('--recurrent-size', type=int, default=200, metavar='N', help='number of nodes in recurrent layer (default: 33)')
         parser.add_argument('--hidden-size', type=int, default=200, metavar='N', help='number of nodes in hidden layer (default: 60)')
         parser.add_argument('--BPTT-len', type=int, default=120, metavar='N', help='length of sequences that we backprop through (default: 120 = whole block length)')
+        parser.add_argument('--noise_std', type=float, default=0.0, metavar='N', help='standard deviation of iid noise injected into the recurrent hiden state between numerical inputs (default: 0.0).')
+
+        parser.set_defaults(create_new_dataset=False, all_fullrange=False, retain_hidden_state=True)
         args = parser.parse_args()
 
+    if args.which_context>0:
+        args.all_fullrange = False         # cant intermingle over context ranges if you only have one context range
     multiparams = [args.batch_size_multi, args.lr_multi]
     return args, device, multiparams
 
@@ -829,58 +883,37 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
-def getDatasetName(args, networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext):
+def getDatasetName(args):
 
     # conver the hyperparameter settings into a string ID
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
+    networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
+    contextlabelledtext = '_'+args.label_context+'contextlabel'
+    hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
+    rangetxt = '_numrangeintermingled' if args.all_fullrange else '_numrangeblocked'
 
-    networkTxt = 'RNN' if networkStyle == 'recurrent' else 'MLP'
-    if blockTrain:
-        blockedtext = '_blck'
-    else:
-        blockedtext = ''
-    if seqTrain:
-        seqtext = '_seq'
-    else:
-        seqtext = ''
-    if retainHiddenState:
-        hiddenstate = '_retainstate'
-    else:
-        hiddenstate = '_resetstate'
-    if labelContext=='true':
-        contextlabelledtext = '_truecontextlabel'
-    elif labelContext=='random':
-        contextlabelledtext = '_randcontextlabel'
-    elif labelContext=='constant':
-        contextlabelledtext = '_constcontextlabel'
-
-    if whichContext==0:
+    if args.which_context==0:
         whichcontexttext = ''
-    elif whichContext==1:
+    elif args.which_context==1:
         whichcontexttext = '_fullrange_1-15_only'
-    elif whichContext==2:
+    elif args.which_context==2:
         whichcontexttext = '_lowrange_1-10_only'
-    elif whichContext==3:
+    elif args.which_context==3:
         whichcontexttext = '_highrange_6-15_only'
 
-    rangetxt = '_numrangeintermingled' if allFullRange else '_numrangeblocked'
-
-
-    datasetname = 'dataset'+whichcontexttext+contextlabelledtext+blockedtext+seqtext+rangetxt + '_bpl' + str(args.BPTT_len)
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args
-
-    if networkStyle=='recurrent':
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args+'.pth'
+    datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len)
+    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
+    trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
+    if args.network_style=='recurrent':
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+'.pth'
     else:
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+str_args+'.pth'
-
-    trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+blockedtext+seqtext+rangetxt+hiddenstate+'_n'+str(noise_std)+str_args
+        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+str_args+'.pth'
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
 # ---------------------------------------------------------------------------- #
 
-def trainMLPNetwork(args, device, multiparams, trainset, testset, params):
+def trainMLPNetwork(args, device, multiparams, trainset, testset):
     """
     * HRS this is obsolete and no longer used *
     This function performs the train/test loop for different parameter settings
@@ -889,7 +922,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, params):
      - the trained model is returned
      """
 
-    _, _, _, trainingrecord_name = getDatasetName(args, *params)
+    _, _, _, trainingrecord_name = getDatasetName(args)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -944,7 +977,7 @@ def trainMLPNetwork(args, device, multiparams, trainset, testset, params):
 
 # ---------------------------------------------------------------------------- #
 
-def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
+def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
     """
     This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
@@ -952,8 +985,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
      - the trained recurrent model is returned
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
-    _, noise_std, _, _, _, retainHiddenState, _, _ = params
-    _, _, _, trainingrecord_name = getDatasetName(args, *params)
+    _, _, _, trainingrecord_name = getDatasetName(args)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -966,7 +998,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
 
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
-        model = OneStepRNN(const.TOTALMAXNUM+const.NCONTEXTS+1, 1, noise_std, args.recurrent_size, args.hidden_size).to(device)
+        model = OneStepRNN(const.TOTALMAXNUM+const.NCONTEXTS+1, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
 
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -991,8 +1023,8 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
 
         # Take baseline performance measures
         optimizer.zero_grad()
-        _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
-        _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
+        _, base_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, printOutput)
+        _, base_test_accuracy = recurrent_test(args, model, device, testloader, criterion, printOutput)
         print('Baseline train: {:.2f}%, Baseline test: {:.2f}%'.format(base_train_accuracy, base_test_accuracy))
         trainingPerformance.append(base_train_accuracy)
         testPerformance.append(base_test_accuracy)
@@ -1001,11 +1033,11 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
 
             # train network
-            standard_train_loss, standard_train_accuracy = recurrent_train(params, args, model, device, trainloader, optimizer, criterion, epoch, retainHiddenState, printOutput)
+            standard_train_loss, standard_train_accuracy = recurrent_train(args, model, device, trainloader, optimizer, criterion, epoch, printOutput)
 
             # assess network
-            fair_train_loss, fair_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, retainHiddenState, printOutput)
-            test_loss, test_accuracy = recurrent_test(args, model, device, testloader, criterion, retainHiddenState, printOutput)
+            fair_train_loss, fair_train_accuracy = recurrent_test(args, model, device, trainloader, criterion, printOutput)
+            test_loss, test_accuracy = recurrent_test(args, model, device, testloader, criterion, printOutput)
 
             # log performance
             train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
@@ -1018,7 +1050,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset, params):
 
         print("Training complete.")
         # save this training curve
-        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args), "model":"recurrent_truecontext" }
+        record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args) }
         randnum = str(random.randint(0,10000))
         dat = json.dumps(record)
         f = open("trainingrecords/"+randnum + trainingrecord_name+".json","w")

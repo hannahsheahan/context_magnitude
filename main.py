@@ -42,22 +42,21 @@ import argparse
 
 # ---------------------------------------------------------------------------- #
 
-def trainAndSaveANetwork(params, createNewDataset, include_fillers):
+def trainAndSaveANetwork(args):
     # define the network parameters
-    args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
+    #args, device, multiparams = mnet.defineHyperparams() # training hyperparams for network (passed as args when called from command line)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
 
-    if createNewDataset:
-        trainset, testset = dset.createSeparateInputData(fileloc, datasetname, args.BPTT_len, blockTrain, seqTrain, include_fillers, labelContext, allFullRange, whichContext)
+    if args.create_new_dataset:
+        trainset, testset = dset.createSeparateInputData(datasetname, args)
     else:
-        trainset, testset, _, _ = dset.loadInputData(fileloc, datasetname)
+        trainset, testset, _, _ = dset.loadInputData(args.fileloc, datasetname)
 
     # define and train a neural network model, log performance and output trained model
-    if networkStyle == 'recurrent':
-        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset, params)
+    if args.network_style == 'recurrent':
+        model = mnet.trainRecurrentNetwork(args, device, multiparams, trainset, testset)
     else:
-        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset, params)
+        model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset)
 
     # save the trained weights so we can easily look at them
     print(trained_modelname)
@@ -65,14 +64,14 @@ def trainAndSaveANetwork(params, createNewDataset, include_fillers):
 
 # ---------------------------------------------------------------------------- #
 
-def analyseNetwork(fileloc, args, params):
+def analyseNetwork(args):
     """Perform MDS on:
         - the hidden unit activations (60-dim) for each unique input in each context.
         - the averaged hidden unit activations (60-dim), averaged across the unique judgement values in each context.
         - the recurrent latent states (33-dim), as they evolve across the 12k sequential trials.
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args, *params)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
 
     # load an existing dataset
     try:
@@ -87,20 +86,19 @@ def analyseNetwork(fileloc, args, params):
     if not preanalysed:
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
-        trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
-        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
+        trainset, testset, np_trainset, np_testset = dset.loadInputData(args.fileloc, datasetname)
 
         # pass each input through the model and determine the hidden unit activations
-        #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
+        #if (network_style=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
         train_loader = DataLoader(trainset, batch_size=1, shuffle=False)
         for whichTrialType in ['compare', 'filler']:
 
-            activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(np_trainset, trained_model, networkStyle, retainHiddenState, train_loader, whichTrialType)
+            activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(np_trainset, trained_model, train_loader, whichTrialType)
             dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-            sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+            sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, label_context, counter)
 
             # How bout if we average activations over the difference values!
-            diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, labelContext, counter)
+            diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, label_context, counter)
 
             # do MDS on the activations for the training set
             print('Performing MDS on trials of type: {}...'.format(whichTrialType))
@@ -145,38 +143,37 @@ def analyseNetwork(fileloc, args, params):
 
 # ---------------------------------------------------------------------------- #
 
-def generatePlots(MDS_dict, args, params):
+def generatePlots(MDS_dict, args):
     # This function just plots stuff and saves the generated figures
     saveFig = True
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
     labelNumerosity = True    # numerosity vs outcome labels
-    params.append(saveFig)
     trialTypes = ['compare', 'filler']
 
     for whichTrialType in trialTypes:
         # Label activations by mean number A numerosity
-        MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
-        MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
-        MDSplt.plot3MDS(MDS_dict, args, params, whichTrialType)      # the full MDS cloud, coloured by different labels
+        MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
+        MDSplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
         #plot_diff_code = True
-        #MDSplt.activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType)  # activations RSA
-        #MDSplt.plot3MDSMean(MDS_dict, args, params, labelNumerosity, plot_diff_code, whichTrialType)
+        #MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        #MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
 
         # Plot checks on the training data sequencing
         #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
-        #MDSplt.viewTrainingSequence(MDS_dict, args, params)  # Plot the context sequencing in the training set through time
-        #MDSplt.instanceCounter(MDS_dict, args, params)  # Check how many samples we have of each unique input (should be context-ordered)
+        #MDSplt.viewTrainingSequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
+        #MDSplt.instanceCounter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
 
         # MDS with output labels (true/false labels)
         #labelNumerosity = False
-        #MDSplt.plot3MDS(MDS_dict, args, params, labelNumerosity, plot_diff_code)
-        #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args, params)  # plot the MDS with context labels. ***HRS obsolete?
+        #MDSplt.plot3MDS(MDS_dict, args, labelNumerosity, plot_diff_code)
+        #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args)  # plot the MDS with context labels. ***HRS obsolete?
 
         # 3D Animations
-        #MDSplt.animate3DMDS(MDS_dict, args, params, plot_diff_code)  # plot a 3D version of the MDS constructions
-        #MDSplt.animate3DdriftMDS(MDS_dict, args, params)             # plot a 3D version of the latent state MDS
+        #MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
+        #MDSplt.animate3DdriftMDS(MDS_dict, args)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
 
@@ -199,18 +196,18 @@ def performLesionTests(params, nlesionBins):
     X = nlesionBins
     freq = np.linspace(0,1,X)
     context_tests = np.zeros((X,const.NCONTEXTS))
-    networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
+    network_style, noise_std, blockTrain, seqTrain, label_context, retainHiddenState, allFullRange, which_context = params
 
-    if whichContext==0:  # proceed as normal
+    if which_context==0:  # proceed as normal
         nmodels = 1
     else:
         nmodels = 3      # load in models trained on just a single context and compare them
-        whichContexttxt = '_contextmodelstrainedseparately'
+        which_contexttxt = '_contextmodelstrainedseparately'
         context_handles = []
 
     # file naming
     blcktxt = '_interleaved' if allFullRange else '_temporalblocked'
-    contexttxt = '_contextcued' if labelContext=='true' else '_nocontextcued'
+    contexttxt = '_contextcued' if label_context=='true' else '_nocontextcued'
 
     plt.figure(figsize=(5,6))
     colours = ['gold', 'dodgerblue', 'orangered', 'black']
@@ -218,7 +215,7 @@ def performLesionTests(params, nlesionBins):
 
     # plot baseline metrics
     ax = plt.gca()
-    if whichContext==0:
+    if which_context==0:
         dslope, = plt.plot([0,1],[100,50],'--',color='grey')  # the theoretical performance line if all that mattered was the number of nonlesioned trials
         localpolicy_optimal = ax.axhline(y=77.41, linestyle=':', color='lightpink')
         globalpolicy_optimal = ax.axhline(y=72.58, linestyle=':', color='lightblue')
@@ -235,21 +232,21 @@ def performLesionTests(params, nlesionBins):
     for whichmodel in range(nmodels):
         lesioned_tests = []
         overall_lesioned_tests = []
-        colourindex = 3 if  whichContext==0 else whichmodel
-        whichContext = whichmodel+1  # update to the context-specific model we want
-        if whichContext==0:
+        colourindex = 3 if  which_context==0 else whichmodel
+        which_context = whichmodel+1  # update to the context-specific model we want
+        if which_context==0:
             range_txt = ''
-        elif whichContext==1:
+        elif which_context==1:
             range_txt = '_fullrangeonly'
-        elif whichContext==2:
+        elif which_context==2:
             range_txt = '_lowrangeonly'
-        elif whichContext==3:
+        elif which_context==3:
             range_txt = '_highrangeonly'
         basefilename = 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt
         regularfilename = basefilename + '_regular.npy'
 
-        params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext]
-        testParams = mnet.setupTestParameters(fileloc, params)
+        params = [network_style, noise_std, blockTrain, seqTrain, label_context, retainHiddenState, allFullRange, which_context]
+        testParams = mnet.setupTestParameters(fileloc, params, args, device)
         args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
         whichLesion = 'number'
 
@@ -286,7 +283,7 @@ def performLesionTests(params, nlesionBins):
             overall_lesioned_tests.append(overall_lesioned_testaccuracy)
             data = lesiondata["bigdict_lesionperf"]
 
-            if whichContext==0:
+            if which_context==0:
                 # let's also split it up to look at performance based on the different contexts
                 perf = np.zeros((const.NCONTEXTS,))
                 counts = np.zeros((const.NCONTEXTS,))
@@ -315,7 +312,7 @@ def performLesionTests(params, nlesionBins):
         # unlesioned performance
         hnolesion, = plt.plot(0, normal_testaccuracy, 'x', color=colours[colourindex])
 
-        if whichContext==0:
+        if which_context==0:
             # lesioned network performance
             plt.plot(freq, overall_lesioned_tests, '.', color='black')
             htotal, = plt.plot(freq, overall_lesioned_tests, color='black')
@@ -339,7 +336,7 @@ def performLesionTests(params, nlesionBins):
 
     plt.xlabel('Compare trials lesioned immediately prior to assessment')
     plt.ylabel('Perf. post-lesion trial')
-    if whichContext==0:
+    if which_context==0:
         plt.legend((localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal, hnolesion, htotal, hlesion, context_handles[0], context_handles[1], context_handles[2], dslope),('Optimal | local \u03C0, local #distr.','Optimal | global \u03C0, local #distr.','Optimal | global \u03C0, global #distr.','Unlesioned, perf. across sequence', 'Lesioned, perf. across sequence', 'Lesioned, perf. immediately post-lesion','" "    context A: 1-15','" "    context B: 1-10','" "    context C: 6-15', '-unity slope ref'))
     else:
         plt.legend((oldbenchmark1, contextA_localpolicy, contextBC_localpolicy, hnolesion, context_handles[0], context_handles[1], context_handles[2]),('previous benchmarks','optimal | context A','optimal | context B or C','Unlesioned, perf. across sequence','Lesioned, perf. post-lesion; context A: 1-15','" "    context B: 1-10','" "    context C: 6-15'))
@@ -350,49 +347,30 @@ def performLesionTests(params, nlesionBins):
     #plt.savefig('lesionFrequencyTest_numberlesion_constantcontext.pdf',bbox_inches='tight')
     plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+whichContexttxt+')')
     whichTrialType = 'compare'
-    MDSplt.autoSaveFigure('figures/lesionfreq_vs_testperf_simple_'+whichContexttxt, args, networkStyle, blockTrain, seqTrain, True, labelContext, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, 0, True)
-
+    MDSplt.autoSaveFigure('figures/lesionfreq_vs_testperf_simple_'+whichContexttxt, args, network_style, blockTrain, seqTrain, True, label_context, False, noise_std, retainHiddenState, False, whichTrialType, allFullRange, 0, True)
 
 # ---------------------------------------------------------------------------- #
 
 if __name__ == '__main__':
 
-    # dataset parameters
-    createNewDataset = False          # re-generate the random train/test dataset each time?
-    include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
-    fileloc = 'datasets/'
-    whichContext = 0                 # 0: default, uses all 3 contexts in dataset i.e. all ranges. 1-3: just a single context, 1: 1-15; 2: 1-10; 3: 6-15.
-    allFullRange = False             # default: False. True: to randomise the context range on each trial (but preserve things like that current compare trial != prev compare trial, and filler spacing)
-    blockTrain = True                # whether to block the training by context
-    seqTrain = True                  # whether there is sequential structure linking inputs A and B i.e. if at trial t+1 input B (ref) == input A from trial t
-    labelContext = 'true'            # 'true', 'random', 'constant', does the input contain true markers of context (1-3), random ones (still 1-3), or constant (1)?
-    retainHiddenState = True         # initialise the hidden state for each pair as the hidden state of the previous pair
-    if not blockTrain:
-        seqTrain = False             # cant have sequential AB training structure if contexts are intermingled. HRS to deprecate seqTrain, this will always be true.
-    if whichContext>0:
-        allFullRange = False         # cant intermingle over context ranges if you only have one context range. This sorts out filenames
-
-    # which model we want to look at
-    networkStyle = 'recurrent'       # 'recurrent' or 'mlp'. MLP now  unused, hasnt been tested for several updates.
-    noise_std = 0.0                  # default: 0.0. Can be manipulated to inject iid noise into the recurrent hiden state between numerical inputs.
-    params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext]
+    # set up dataset and network hyperparams via command line
+    args, device, multiparams = mnet.defineHyperparams()
 
     # Train the network from scratch
-    #trainAndSaveANetwork(params, createNewDataset, include_fillers)
+    trainAndSaveANetwork(args)
 
     # Perform lesion tests on the network
-    #nlesionBins = 2
-    #performLesionTests(params, nlesionBins)
+    nlesionBins = 2
+    performLesionTests(args, nlesionBins)
 
     # Assess performance after a lesion as a function of the 'seen' number
-    #testParams = mnet.setupTestParameters(fileloc, params)
-    #MDSplt.perfVdistContextMean(params, testParams)
+    testParams = mnet.setupTestParameters(args, device)
+    MDSplt.perfVdistContextMean(testParams)
 
     # Analyse the trained network
-    args, _, _ = mnet.defineHyperparams() # network training hyperparams
-    MDS_dict = analyseNetwork(fileloc, args, params)
+    MDS_dict = analyseNetwork(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    generatePlots(MDS_dict, args, params)
+    generatePlots(MDS_dict, args)
 
 # ---------------------------------------------------------------------------- #
