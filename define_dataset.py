@@ -162,9 +162,9 @@ def generateTrialSequence(include_fillers=True):
 
 def turnIndexToContext(randind):
     """Get the context from the randomly sampled index for when contexts are intermingled"""
-    if randind < 15:
+    if randind < 16:
         context = 1
-    elif randind < 25:
+    elif randind < 28:
         context = 2
     else:
         context = 3
