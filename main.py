@@ -88,7 +88,7 @@ def analyseNetwork(fileloc, args, params):
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
         trainset, testset, np_trainset, np_testset = dset.loadInputData(fileloc, datasetname)
-        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange = params
+        networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext = params
 
         # pass each input through the model and determine the hidden unit activations
         #if (networkStyle=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
@@ -358,7 +358,7 @@ def performLesionTests(params, nlesionBins):
 if __name__ == '__main__':
 
     # dataset parameters
-    createNewDataset = True          # re-generate the random train/test dataset each time?
+    createNewDataset = False          # re-generate the random train/test dataset each time?
     include_fillers = True           # True: task is like Fabrice's with filler trials; False: solely compare trials
     fileloc = 'datasets/'
     whichContext = 0                 # 0: default, uses all 3 contexts in dataset i.e. all ranges. 1-3: just a single context, 1: 1-15; 2: 1-10; 3: 6-15.
@@ -378,7 +378,7 @@ if __name__ == '__main__':
     params = [networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext]
 
     # Train the network from scratch
-    trainAndSaveANetwork(params, createNewDataset, include_fillers)
+    #trainAndSaveANetwork(params, createNewDataset, include_fillers)
 
     # Perform lesion tests on the network
     #nlesionBins = 2

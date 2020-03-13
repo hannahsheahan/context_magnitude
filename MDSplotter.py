@@ -76,7 +76,7 @@ def autoSaveFigure(basetitle, args, networkStyle, blockTrain, seqTrain, labelNum
 
 def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compare'):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
-    Context order:  1-15, 1-10, 5-15
+    Context order:  1-16, 1-11, 5-16
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, allFullRange, whichContext, saveFig = params
@@ -89,16 +89,16 @@ def activationRDMs(MDS_dict, args, params, plot_diff_code, whichTrialType='compa
     if plot_diff_code:
         D = pairwise_distances(MDS_dict["diff_sl_activations"])
         labelticks = ['-15:+15', '-10:+10', '-10:+10']
-        ticks = [0,(const.FULLR_ULIM-1)*2, (const.FULLR_ULIM-1)*2 + (const.LOWR_ULIM-1)*2]
+        ticks = [0,(const.FULLR_SPAN-1)*2, (const.FULLR_SPAN-1)*2 + (const.LOWR_SPAN-1)*2]
         differenceCodeText = 'differencecode_'
     else:
         D = pairwise_distances(MDS_dict["sl_activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
         if whichTrialType == 'filler':
             labelticks = ['1-16', '1-16', '1-16']
-            ticks = [0,const.FULLR_ULIM,const.FULLR_ULIM*2]
+            ticks = [0,const.FULLR_SPAN,const.FULLR_SPAN*2]
         else:
-            labelticks = ['1-15', '1-10', '6-15']
-            ticks = [0, const.FULLR_ULIM, const.FULLR_ULIM+const.LOWR_ULIM]
+            labelticks = ['1-16', '1-11', '6-16']
+            ticks = [0, const.FULLR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN]
         differenceCodeText = ''
 
     im = plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
@@ -178,7 +178,7 @@ def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compa
                         if i == (MDS_act.shape[0])-1:
                             cbar = fig.colorbar(im, ticks=[0,1])
                             if labelNumerosity:
-                                cbar.ax.set_yticklabels(['1','15'])
+                                cbar.ax.set_yticklabels(['1','16'])
                 elif k==2:  # A values
                     #im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_judgeValues"][i])-1)), s=20)
@@ -186,7 +186,7 @@ def plot3MDS(MDS_dict, args, params, labelNumerosity=True, whichTrialType='compa
                         if i == (MDS_act.shape[0])-1:
                             cbar = fig.colorbar(im, ticks=[0,1])
                             if labelNumerosity:
-                                cbar.ax.set_yticklabels(['1','15'])
+                                cbar.ax.set_yticklabels(['1','16'])
                 elif k==3:  # context labels
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["labels_contexts"][i])-1], s=20)
 
@@ -306,18 +306,19 @@ def plot3MDSMean(MDS_dict, args, params, labelNumerosity=True, plot_diff_code=Fa
         ax[j].set_title('context')
 
         if plot_diff_code:
-            contextA = range((const.FULLR_ULIM-1)*2)
-            contextB = range((const.FULLR_ULIM-1)*2, (const.FULLR_ULIM-1)*2 + (const.LOWR_ULIM-1)*2)
-            contextC = range((const.FULLR_ULIM-1)*2 + (const.LOWR_ULIM-1)*2, (const.FULLR_ULIM-1)*2 + (const.LOWR_ULIM-1)*2 + (const.HIGHR_ULIM-1)*2)
+            contextA = range((const.FULLR_SPAN-1)*2)
+            contextB = range((const.FULLR_SPAN-1)*2, (const.FULLR_SPAN-1)*2 + (const.LOWR_SPAN-1)*2)
+            contextC = range((const.FULLR_SPAN-1)*2 + (const.LOWR_SPAN-1)*2, (const.FULLR_SPAN-1)*2 + (const.LOWR_SPAN-1)*2 + (const.HIGHR_SPAN-1)*2)
         else:
             if whichTrialType=='filler':
-                contextA = range(const.FULLR_ULIM)
-                contextB = range(const.FULLR_ULIM,const.FULLR_ULIM*2)
-                contextC = range(const.FULLR_ULIM*2, const.FULLR_ULIM*3)
+                contextA = range(const.FULLR_SPAN)
+                contextB = range(const.FULLR_SPAN,const.FULLR_SPAN*2)
+                contextC = range(const.FULLR_SPAN*2, const.FULLR_SPAN*3)
             else:
-                contextA = range(const.FULLR_ULIM)
-                contextB = range(const.FULLR_ULIM,const.FULLR_ULIM+const.LOWR_ULIM)
-                contextC = range(const.FULLR_ULIM+const.LOWR_ULIM, const.FULLR_ULIM+const.LOWR_ULIM+const.HIGHR_ULIM)
+                contextA = range(const.FULLR_SPAN)
+                contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+                contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+
             # only plot lines between the MDS dots when plotting the average A activations, not A-B difference code (A-B structured differently)
             ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
             ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
@@ -423,7 +424,7 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
     """
 
     # initializing
-    uniqueValues = [i for i in range(-const.FULLR_ULIM+1,const.FULLR_ULIM-1)] # hacked for now
+    uniqueValues = [i for i in range(-const.FULLR_SPAN+1,const.FULLR_SPAN-1)] # hacked for now
     #uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
     flat_activations = np.zeros((const.NCONTEXTS,len(uniqueValues),activations.shape[1]))
     flat_values = np.zeros((const.NCONTEXTS,len(uniqueValues),1))
@@ -504,22 +505,22 @@ def animate3DMDS(MDS_dict, args, params, plot_diff_code=False, whichTrialType='c
         labels = MDS_dict["sl_diffValues"]
         differenceCodeText = 'differencecode_'
         # which MDS points correspond to which contexts
-        contextA = range((const.FULLR_ULIM-1)*2)
-        contextB = range((const.FULLR_ULIM-1)*2,(const.FULLR_ULIM-1)*2+(const.LOWR_ULIM-1)*2)
-        contextC = range((const.FULLR_ULIM-1)*2+(const.LOWR_ULIM-1)*2, (const.FULLR_ULIM-1)*2+(const.LOWR_ULIM-1)*2+(const.HIGHR_ULIM-1)*2)
+        contextA = range((const.FULLR_SPAN-1)*2)
+        contextB = range((const.FULLR_SPAN-1)*2,(const.FULLR_SPAN-1)*2+(const.LOWR_SPAN-1)*2)
+        contextC = range((const.FULLR_SPAN-1)*2+(const.LOWR_SPAN-1)*2, (const.FULLR_SPAN-1)*2+(const.LOWR_SPAN-1)*2+(const.HIGHR_SPAN-1)*2)
     else:
         slMDS = MDS_dict["MDS_slactivations"]
         labels = MDS_dict["sl_judgeValues"]
         differenceCodeText = ''
         if whichTrialType=='filler':
-            contextA = range(const.FULLR_ULIM)
-            contextB = range(const.FULLR_ULIM,const.FULLR_ULIM*2)
-            contextC = range(const.FULLR_ULIM*2, const.FULLR_ULIM*3)
+            contextA = range(const.FULLR_SPAN)
+            contextB = range(const.FULLR_SPAN,const.FULLR_SPAN*2)
+            contextC = range(const.FULLR_SPAN*2, const.FULLR_SPAN*3)
 
         else:
-            contextA = range(const.FULLR_ULIM)
-            contextB = range(const.FULLR_ULIM,const.FULLR_ULIM+const.LOWR_ULIM)
-            contextC = range(const.FULLR_ULIM+const.LOWR_ULIM, const.FULLR_ULIM+const.LOWR_ULIM+const.HIGHR_ULIM)
+            contextA = range(const.FULLR_SPAN)
+            contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+            contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
 
 
     def init():
@@ -560,9 +561,9 @@ def instanceCounter(MDS_dict, args, params, whichTrialType='compare'):
 
     networkStyle, noise_std, blockTrain, seqTrain, labelContext, retainHiddenState, whichContext, saveFig = params
     plt.figure()
-    rangeA = np.arange(const.FULLR_ULIM)
-    rangeB = np.arange(const.FULLR_ULIM,const.FULLR_ULIM+const.LOWR_ULIM)
-    rangeC = np.arange(const.FULLR_ULIM+const.LOWR_ULIM, const.FULLR_ULIM+const.LOWR_ULIM+const.HIGHR_ULIM)
+    rangeA = np.arange(const.FULLR_SPAN)
+    rangeB = np.arange(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+    rangeC = np.arange(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
     y = MDS_dict["sl_counter"].flatten()
 
     plt.bar(rangeA, y[rangeA], color='gold', edgecolor = 'gold')
@@ -589,7 +590,7 @@ def viewTrainingSequence(MDS_dict, args, params, whichTrialType='compare'):
     plt.figure()
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
-    plt.ylabel('Context (0: 1-15; 1: 1-10; 2: 6-15)')
+    plt.ylabel('Context (0: 1-16; 1: 1-11; 2: 6-16)')
     n = autoSaveFigure('figures/temporalcontext_', args, networkStyle, blockTrain, seqTrain, True, labelContext, True, noise_std,  retainHiddenState, False, whichTrialType, allFullRange, whichContext, saveFig)
 
     # trial types changing with time in training set
@@ -838,13 +839,13 @@ def perfVdistContextMean(params, testParams):
     local_contextmean_context3, = plt.plot(context3_uniquediffs, context3_meanperf, color='orangered')
 
     if whichContext==0:
-        plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', '\u03BC = global median', '\u03BC = local median | context A, 1:15','\u03BC = local median | context B, 1:10','\u03BC = local median | context C, 6-15'))
+        plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', '\u03BC = global median', '\u03BC = local median | context A, 1:16','\u03BC = local median | context B, 1:11','\u03BC = local median | context C, 6-16'))
     else:
         allglobal_uniquediffs = dset.flattenFirstDim(np.asarray(allglobal_uniquediffs))
         allglobal_meanperf = dset.flattenFirstDim(np.asarray(allglobal_meanperf))
         meanglobal_meanperf, meanglobal_uniquediffs = performanceMean(allglobal_uniquediffs, allglobal_meanperf)
         totalglobal, = plt.plot(meanglobal_uniquediffs, meanglobal_meanperf, 'black')
-        plt.legend((ref7, totalglobal, context_handles[0], context_handles[1], context_handles[2], local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', 'global \u03BC | average across all 3 nets', 'global \u03BC | context A: 1-15','global \u03BC | context B: 1-10','global \u03BC | context C: 6-15', 'local \u03BC | context A: 1-15','local \u03BC | context B: 1-10','local \u03BC | context C: 6-15'))
+        plt.legend((ref7, totalglobal, context_handles[0], context_handles[1], context_handles[2], local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', 'global \u03BC | average across all 3 nets', 'global \u03BC | context A: 1-16','global \u03BC | context B: 1-11','global \u03BC | context C: 6-16', 'local \u03BC | context A: 1-16','local \u03BC | context B: 1-11','local \u03BC | context C: 6-16'))
 
     plt.ylabel('RNN perf. immediately post-lesion (just 1 lesion)')
     plt.xlabel('|current# - \u03BC|')
