@@ -71,7 +71,7 @@ def answerCorrect(output, label):
 
 # ---------------------------------------------------------------------------- #
 
-def setupTestParameters(fileloc, args, device):
+def setupTestParameters(args, device):
     """
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
     """
@@ -86,7 +86,7 @@ def setupTestParameters(fileloc, args, device):
     criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
     printOutput = True
 
-    testParams = [args, trained_model, device, testloader, criterion, args.retain_hidden_state, printOutput]
+    testParams = [args, trained_model, device, testloader, criterion, printOutput]
 
     return testParams
 
@@ -120,6 +120,10 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     """ Train a recurrent neural network on the training set.
     This now trains whilst retaining the hidden state across all trials in the training sequence
     but being evaluated just on pairs of inputs and considering each input pair as a trial for minibatching.
+    - 16/03/2020 we now lesion the number input on compare trails with frequency args.train_lesion_freq to see if this enhances the use of local context
+    - we will include in our total cost function the performance when assessed on a trial that is lesioned (should encourage use of context + previous trial data),
+     AND on the compare trial after a lesion (to encourage use of context and previous trial)
+
      """
     model.train()
     train_loss = 0
@@ -138,16 +142,21 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         sequenceLength = inputs.shape[1]
         n_comparetrials = np.nansum(np.nansum(trialtype))
         layers, ave_grads, max_grads = [[] for i in range(3)]
+        lesionRecord = np.zeros((sequenceLength,))
         loss = 0
 
         for i in range(sequenceLength):
             context = contextsequence[:,i]
+            lesionedinput = inputs[:,i]
             if trialtype[0,i]==0:  # remove context indicator on the filler trials
                 context_in = torch.full_like(context, 0)
             else:
                 context_in = copy.deepcopy(context)
+                if (random.random() < args.train_lesion_freq): # occasionally lesion the number input on compare trials
+                    lesionRecord[i] = 1
+                    lesionedinput = torch.full_like(inputs[:,i],0)
 
-            inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
+            inputX = torch.cat((lesionedinput, context_in, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
         if not args.retain_hidden_state:
@@ -262,7 +271,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
 # ---------------------------------------------------------------------------- #
 
-def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHiddenState, printOutput=True, whichLesion='number', lesionFrequency=1):
+def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutput=True, whichLesion='number', lesionFrequency=1):
     """
     Test a recurrent neural network on the test set, while lesioning occasional inputs.
 
@@ -312,7 +321,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, retainHid
                 context = dset.turnOneHotToInteger(contextsequence[:,assess_idx][0])[0]  # the true underlying context for this input
 
                 # each time we repeat this exercise we need to use the original hidden state from previous sequence
-                if not retainHiddenState:  # only if you want to reset hidden state between trials
+                if not args.retain_hidden_state:  # only if you want to reset hidden state between trials
                     hidden = torch.zeros(args.batch_size, model.recurrent_size)
                 else:
                     hidden = latentstate
@@ -471,7 +480,7 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(trainset,trained_model, train_loader, whichType='compare'):
+def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
     """ This will determine the hidden unit activations for each *unique* input pair in the training set.
      There are many repeats of inputs in the training set.If retainHiddenState is set to True,
      then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
@@ -817,11 +826,12 @@ def defineHyperparams():
 
         # network training hyperparameters
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
+        parser.add_argument('--train-lesion-freq', default=0.0, type=float, help='frequency of number lesions on compare trials, during training (default=0.0)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.0001])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
         parser.add_argument('--test-batch-size', type=int, default=1, metavar='N', help='input batch size for testing (default: 48)')
-        parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
+        parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
         parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.001)')
         parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
         parser.add_argument('--no-cuda', action='store_true', help='disables CUDA training')
@@ -880,13 +890,14 @@ class argsparser():
         self.recurrent_size = 33
         self.hidden_size = 60
         self.BPTT_len = 120
+        self.train_lesion_freq = 0.0
 
 # ---------------------------------------------------------------------------- #
 
 def getDatasetName(args):
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
     hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
@@ -895,11 +906,11 @@ def getDatasetName(args):
     if args.which_context==0:
         whichcontexttext = ''
     elif args.which_context==1:
-        whichcontexttext = '_fullrange_1-15_only'
+        whichcontexttext = '_fullrange_1-16_only'
     elif args.which_context==2:
-        whichcontexttext = '_lowrange_1-10_only'
+        whichcontexttext = '_lowrange_1-11_only'
     elif args.which_context==3:
-        whichcontexttext = '_highrange_6-15_only'
+        whichcontexttext = '_highrange_6-16_only'
 
     datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len)
     analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args

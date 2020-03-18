@@ -9,6 +9,7 @@ Issues: N/A
 # ---------------------------------------------------------------------------- #
 import define_dataset as dset
 import constants as const
+import magnitude_network as mnet
 
 from mpl_toolkits import mplot3d
 import numpy as np
@@ -25,7 +26,7 @@ from sklearn.manifold import MDS
 from sklearn.utils import shuffle
 
 # generic plotting settings
-contextcolours = ['gold', 'dodgerblue', 'orangered']   # 1-15, 1-10, 5-15 like fabrices colours
+contextcolours = ['gold', 'dodgerblue', 'orangered', 'black']   # 1-16, 1-11, 6-16 like fabrices colours
 
 # ---------------------------------------------------------------------------- #
 
@@ -40,7 +41,7 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
 
     # automatic save file title details
     if args.which_context==0:
@@ -71,7 +72,7 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
 
 # ---------------------------------------------------------------------------- #
 
-def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare'):
+def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', saveFig=True):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Context order:  1-16, 1-11, 5-16
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -112,7 +113,7 @@ def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare'):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare'):
+def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', saveFig=True):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     if whichTrialType=='filler':
@@ -211,7 +212,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare'):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare'):
+def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare', saveFig=True):
     """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
 
     if whichTrialType=='filler':
@@ -253,7 +254,7 @@ def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare'):
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare'):
+def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -323,7 +324,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(numberlabel[i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
-        if networkStyle=='mlp':
+        if args.network_style=='mlp':
             ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
         else:
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
@@ -478,7 +479,7 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare'):
+def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare', saveFig=True):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -565,7 +566,7 @@ def instanceCounter(MDS_dict, args, whichTrialType='compare'):
 
 # ---------------------------------------------------------------------------- #
 
-def viewTrainingSequence(MDS_dict, args, whichTrialType='compare'):
+def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True):
     """Take the data loader and view how the contexts and latent states evolved in time in the training set.
     Also plots the sequence of compare vs filler trials.
     """
@@ -626,7 +627,7 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare'):
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare'):
+def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
     """ This function will plot the latent state drift MDS projections
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -692,7 +693,8 @@ def perfVdistContextMean(testParams):
      a stronger trend for the former (local context).
     """
     # set up lesioned network parameters
-    args, trained_model, device, testloader, criterion, retainHiddenState, printOutput = testParams
+    args, trained_model, device, testloader, criterion, printOutput = testParams
+    original_which_context = copy.deepcopy(args.which_context)
     whichLesion = 'number'
     lesionFrequency = 0.0  # just lesion the second to last compare trial and assess on the final compare trial in each sequence
 
@@ -702,6 +704,7 @@ def perfVdistContextMean(testParams):
     darkcolours = ['darkgoldenrod','blue','darkred']
     if args.which_context==0:  # proceed as normal
         nmodels = 1
+        whichContexttxt = ''
     else:
         nmodels = 3      # load in models trained on just a single context and compare them
         whichContexttxt = '_contextmodelstrainedseparately'
@@ -757,14 +760,14 @@ def perfVdistContextMean(testParams):
     else:
         for whichmodel in range(nmodels):
             colourindex = 3 if  args.which_context==0 else whichmodel
-            whichContext = whichmodel+1  # update to the context-specific model we want
-            if whichContext==0:
+            args.which_context = whichmodel+1  # update to the context-specific model we want
+            if args.which_context==0:
                 range_txt = ''
-            elif whichContext==1:
+            elif args.which_context==1:
                 range_txt = '_fullrangeonly'
-            elif whichContext==2:
+            elif args.which_context==2:
                 range_txt = '_lowrangeonly'
-            elif whichContext==3:
+            elif args.which_context==3:
                 range_txt = '_highrangeonly'
             data = (np.load('network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+str(lesionFrequency)+'.npy', allow_pickle=True)).item()
             data = data["bigdict_lesionperf"]
@@ -823,7 +826,7 @@ def perfVdistContextMean(testParams):
     local_contextmean_context2, = plt.plot(context2_uniquediffs, context2_meanperf, color='dodgerblue')
     local_contextmean_context3, = plt.plot(context3_uniquediffs, context3_meanperf, color='orangered')
 
-    if whichContext==0:
+    if original_which_context==0:
         plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', '\u03BC = global median', '\u03BC = local median | context A, 1:16','\u03BC = local median | context B, 1:11','\u03BC = local median | context C, 6-16'))
     else:
         allglobal_uniquediffs = dset.flattenFirstDim(np.asarray(allglobal_uniquediffs))
@@ -838,6 +841,151 @@ def perfVdistContextMean(testParams):
     ax.set_ylim(0.45,1.05)
     plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+whichContexttxt+')')
     whichTrialType = 'compare'
-    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_'+whichContexttxt, args, True, False, whichTrialType, saveFig)
+    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_'+whichContexttxt, args, True, False, whichTrialType, True)
+    args.which_context = original_which_context
+
+# ---------------------------------------------------------------------------- #
+
+def plotOptimalReferencePerformance(ax, args):
+
+    if args.which_context==0:
+        localpolicy_optimal = ax.axhline(y=77.41, linestyle=':', color='lightpink')
+        globalpolicy_optimal = ax.axhline(y=72.58, linestyle=':', color='lightblue')
+        #globaldistpolicy_optimal = ax.axhline(y=76.5, linestyle=':', color='lightgreen')
+        #handles = [localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal]
+        handles = [localpolicy_optimal, globalpolicy_optimal]
+    else:
+        oldbenchmark1 = ax.axhline(y=77.41, linestyle=':', color='grey')
+        oldbenchmark2 = ax.axhline(y=72.58, linestyle=':', color='grey')
+        oldbenchmark3 = ax.axhline(y=76.5, linestyle=':', color='grey')
+        contextA_localpolicy = ax.axhline(y=76.67, color='gold')
+        contextBC_localpolicy = ax.axhline(y=77.78, color='orangered')
+        handles = [oldbenchmark1, oldbenchmark2, oldbenchmark3, contextA_localpolicy, contextBC_localpolicy]
+
+    return handles
+
+# ---------------------------------------------------------------------------- #
+
+def performLesionTests(args, testParams, basefilename):
+    """
+    This function performLesionTests() performs lesion tests on a single network
+    We will only consider performance after a single lesion, because the other metrics are boring sanity checks.
+    Plus it seems like performing more lesions in the sequence at test dont do much.
+    """
+    # lesion settings
+    whichLesion = 'number'    # default: 'number'. That's all we care about really
+
+    # file naming
+    blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+    contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+    regularfilename = basefilename + '_regular.npy'
+    filename = basefilename+'.npy'
+    # perform and save the lesion tests
+    try:
+        lesiondata = (np.load(filename, allow_pickle=True)).item()
+        print('Loaded existing lesion analysis: ('+filename+')')
+        print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesiondata["lesioned_testaccuracy"]))
+    except:
+        # evaluate network at test with lesions
+        print('Performing lesion tests...')
+        bigdict_lesionperf, lesioned_testaccuracy, overall_lesioned_testaccuracy = mnet.recurrent_lesion_test(*testParams, whichLesion, 0.0)
+        print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesioned_testaccuracy))
+
+        # save lesion analysis for next time
+        lesiondata = {"bigdict_lesionperf":bigdict_lesionperf}
+        lesiondata["lesioned_testaccuracy"] = lesioned_testaccuracy
+        lesiondata["overall_lesioned_testaccuracy"] = overall_lesioned_testaccuracy
+        np.save(filename, lesiondata)
+
+    # Evaluate the unlesioned performance as a benchmark
+    try:
+        regulartestdata = (np.load(regularfilename, allow_pickle=True)).item()
+        print('Loaded regular test performance...')
+        normal_testaccuracy = regulartestdata["normal_testaccuracy"]
+    except:
+        print('Evaluating regular network test performance...')
+        _, normal_testaccuracy = mnet.recurrent_test(*testParams)
+        regulartestdata = {"normal_testaccuracy":normal_testaccuracy}
+        np.save(regularfilename, regulartestdata)
+    print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+
+    return lesiondata, regulartestdata
+
+# ---------------------------------------------------------------------------- #
+
+def compareLesionTests(args, device):
+    """
+    This function compareLesionTests() compares the post-lesion test set performance of networks
+     which were trained with different frequencies of lesions in the training set.
+    """
+    plt.figure()
+    ax = plt.gca()
+    #localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal = plotOptimalReferencePerformance(ax, args)
+    localpolicy_optimal, globalpolicy_optimal = plotOptimalReferencePerformance(ax, args)
+    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]  # training frequencies of different networks to consider
+    offsets = [0.01,0.02,0.03]
+    overall_lesioned_tests = []
+
+    # file naming
+    blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+    contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+    range_txt = ''
+    if args.which_context==0:
+        range_txt = ''
+    elif args.which_context==1:
+        range_txt = '_fullrangeonly'
+    elif args.which_context==2:
+        range_txt = '_lowrangeonly'
+    elif args.which_context==3:
+        range_txt = '_highrangeonly'
+
+    for train_lesion_frequency in frequencylist:
+        args.train_lesion_freq = train_lesion_frequency
+        testParams = mnet.setupTestParameters(args, device)
+        basefilename = 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq)
+        filename = basefilename+'.npy'
+        context_tests = np.zeros((const.NCONTEXTS))
+
+        # perform or load the lesion tests
+        lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
+        data = lesiondata["bigdict_lesionperf"]
+
+        # evaluate performance on the different contexts
+        perf = np.zeros((const.NCONTEXTS,))
+        counts = np.zeros((const.NCONTEXTS,))
+        for seq in range(data.shape[0]):
+            for compare_idx in range(data[seq].shape[0]):
+                context = data[seq][compare_idx]["underlying_context"]-1
+                perf[context] += data[seq][compare_idx]["lesion_perf"]
+                counts[context] += 1
+        meanperf = 100 * np.divide(perf, counts)
+        for context in range(const.NCONTEXTS):
+            print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context], counts[context], meanperf[context]))
+            context_tests[context] = meanperf[context]
+
+        # plot unlesioned performance
+        hnolesion, = plt.plot(train_lesion_frequency, regulartestdata["normal_testaccuracy"], 'x', color='black')
+
+        # plot lesioned network performance
+        #plt.plot(train_lesion_frequency, overall_lesioned_tests, '.', color='black')
+        #htotal, = plt.plot(freq, overall_lesioned_tests, color='black')
+        hlesion, = plt.plot(train_lesion_frequency, lesiondata["lesioned_testaccuracy"], '.', color='black', markersize=13 )
+        #plt.text(train_lesion_frequency,lesioned_testaccuracy+1, '{:.2f}%'.format(lesioned_testaccuracy), color='blue')
+
+        # plot post-lesion performance divided up by context
+        context_handles = []
+        for context in range(const.NCONTEXTS):
+            y = context_tests[context]
+            tmp, = plt.plot(train_lesion_frequency+offsets[context], y, '.', color=contextcolours[context], markersize=8)
+            context_handles.append(tmp)
+        print('\n')
+
+    plt.xlabel('Lesion frequency during training')
+    plt.ylabel('Test perf. post-single lesion')
+    ax.set_ylim((50,103))
+    plt.legend((localpolicy_optimal, globalpolicy_optimal, hnolesion, hlesion, context_handles[0], context_handles[1], context_handles[2]),('Optimal | local \u03C0, local #distr.','Optimal | global \u03C0, local #distr.','Unlesioned perf. across whole sequence', 'Perf. immediately post-lesion','Perf. immediately post-lesion, context A: 1-16','Perf. immediately post-lesion, context B: 1-11','Perf. immediately post-lesion, context C: 6-16'))
+    plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+', trained with lesions)')
+    whichTrialType = 'compare'
+    autoSaveFigure('figures/lesionfreq_trainedlesions_', args, True, False, whichTrialType, True)
 
 # ---------------------------------------------------------------------------- #
