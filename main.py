@@ -191,16 +191,9 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-
+    print('all done!')
     # Train the network from scratch
     #trainAndSaveANetwork(args)
-
-    # Perform lesion tests on the network HRS this is obsolete
-    #MDSplt.performLesionTests(args)
-
-    # Assess performance after a lesion as a function of the 'seen' number
-    #testParams = mnet.setupTestParameters(args, device)
-    #MDSplt.perfVdistContextMean(testParams)
 
     # Analyse the trained network
     #MDS_dict = analyseNetwork(args)
@@ -208,7 +201,14 @@ if __name__ == '__main__':
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)
 
-    # compare the performance across the different lesion frequencies during training
-    MDSplt.compareLesionTests(args, device)
+    # Perform lesion tests on the network
+    #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+    #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+    #range_txt = ''
+    #testParams = mnet.setupTestParameters(args, device)
+    #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
+    #MDSplt.perfVdistContextMean(testParams)  # Assess performance after a lesion as a function of the 'seen' number
+    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+
 
 # ---------------------------------------------------------------------------- #
