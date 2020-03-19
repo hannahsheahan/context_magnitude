@@ -186,7 +186,6 @@ def testTrainedNetwork(args, trained_model, device, testloader, criterion, retai
 
 # ---------------------------------------------------------------------------- #
 
-
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
@@ -196,7 +195,7 @@ if __name__ == '__main__':
     #trainAndSaveANetwork(args)
 
     # Analyse the trained network
-    #MDS_dict = analyseNetwork(args)
+    MDS_dict = analyseNetwork(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)
