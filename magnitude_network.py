@@ -480,67 +480,111 @@ def test(args, model, device, test_loader, criterion, printOutput=True):
 
 # ---------------------------------------------------------------------------- #
 
-def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
-    """ This will determine the hidden unit activations for each *unique* input pair in the training set.
-     There are many repeats of inputs in the training set.If retainHiddenState is set to True,
-     then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
-     This will lead to slightly different activations for each instance of a particular input pair.
-     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
-      - HRS could change ativation assessment to be for the test set, but shouldn't make a big difference.
+def sortAllVarsbyX(allvars, sortind):
+    """This function sortAllVarsbyX() will sort all variables input in allvars according to the indices of sortind."""
+    sortedvars = []
+    for thisvar in allvars:
+        thisvar = np.take_along_axis(thisvar, sortedind, axis=0)
+        sortedvars.append(thisvar)
+    return sortedvars
 
-      - HRS note that this function could really do with a cleanup. It's a long ugly mess.
+# ---------------------------------------------------------------------------- #
 
+def sortActivations(allvars):
+    """This function sortActivations() just sorts all the activation- and label-related variables we care about,
+     first into context order and then input number order within each context
+     - HRS not sure if I need to make temporary variables first in line 509"""
+
+    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = allvars
+
+    # sort all variables first by context order
+    context_ind = np.argsort(contexts, axis=0)
+    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sortAllVarsbyX(allvars, context_ind)
+
+    # within each context, sort according to numerosity of the judgement value
+    for context in range(1,const.NCONTEXTS+1):
+        ind = [i for i in range(contexts.shape[0]) if contexts[i]==context]
+        numerosity_ind = np.argsort(labels_judgeValues[ind], axis=0) + ind[0]
+        allvars = [contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter] # important that this is updated in loop
+        contexts[ind], activations[ind], MDSlabels[ind], labels_refValues[ind], labels_judgeValues[ind], time_index[ind], counter[ind] = sortAllVarsbyX(allvars, numerosity_ind)
+
+    return contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter
+
+# ---------------------------------------------------------------------------- #
+
+def formatInputSequence(TRIAL_TYPE, testset):
+    """ This function formatInputSequence() is for tidying up getActivations(),
+    and will determine the unique inputs in the test set (there will be repeats in the original test set).
     """
-
-    # reformat the input sequences for our recurrent model
-    recurrentinputs = []
-    sequenceLength = trainset["input"].shape[1]
-
-    # constants
-    TRIAL_TYPE = const.TRIAL_COMPARE if whichType=='compare' else const.TRIAL_FILLER
-
-    # determine the unique inputs for the training set (there are repeats)
-    # consider activations at all instances, then average these activations to get the mean per unique input.
-    trainset_input_n_context, seq_record = [[] for i in range(2)]
-    for seq in range(len(trainset["input"])):
-
+    testset_input_n_context, seq_record = [[] for i in range(2)]
+    for seq in range(len(testset["input"])):
         inputA, inputB = [None for i in range(2)]
-        for item_idx in range(len(trainset["input"][seq])):
-            trialtype = trainset["trialtypeinputs"][seq, item_idx]
+        for item_idx in range(len(testset["input"][seq])):
+            trialtype = testset["trialtypeinputs"][seq, item_idx]
 
             if TRIAL_TYPE==const.TRIAL_COMPARE:
                 if trialtype==TRIAL_TYPE:
-                    inputA = trainset["input"][seq, item_idx]
+                    inputA = testset["input"][seq, item_idx]
                     if inputB is not None:
                         if np.all(inputA==inputB):
                             print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
-                        context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
-                        trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
+                        context = testset["context"][seq, item_idx]  # the actual underlying range context, not the label
+                        testset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                         seq_record.append([seq, item_idx])
 
-                    inputB = trainset["input"][seq, item_idx]  # set the previous state to be the current state
+                    inputB = testset["input"][seq, item_idx]  # set the previous state to be the current state
 
             elif TRIAL_TYPE==const.TRIAL_FILLER:
                 if trialtype==TRIAL_TYPE:
-                    inputA = trainset["input"][seq, item_idx]
-                    context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
-                    trainset_input_n_context.append(np.append(inputA, context))
+                    inputA = testset["input"][seq, item_idx]
+                    context = testset["context"][seq, item_idx]  # the actual underlying range context, not the label
+                    testset_input_n_context.append(np.append(inputA, context))
                     seq_record.append([seq, item_idx])
 
+    return seq_record, testset_input_n_context
 
-    #trainset_input_n_context = [np.append(trainset["input"][i, j],trainset["contextinput"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
-    unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
+# ---------------------------------------------------------------------------- #
+
+def flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys):
+    """
+    This function flattenListsToArrays() takes a list of dictionary keys and a test set,
+     and creates a list of squashed arrays from the elements accessed by those keys at particular
+     indices we care about (sequence_id, seqitem_id). For tidying up getActivations()
+    """
+    arrayvars = []
+    for key in allvarkeys:
+        thisvar = np.asarray([testset[key][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+        arrayvars.append(thisvar)
+
+    return arrayvars
+
+# ---------------------------------------------------------------------------- #
+
+def getActivations(args, testset, trained_model, test_loader, whichType='compare'):
+    """ This will determine the hidden unit activations for each *unique* input pair in a test set.
+     There are many repeats of inputs in the test set.
+     If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
+     This will lead to slightly different activations for each instance of a particular input pair.
+     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
+      - HRS note that this function could really do with a cleanup. It's a long ugly mess.
+    """
+
+    # initialisation
+    sequenceLength = testset["input"].shape[1]
+    TRIAL_TYPE = const.TRIAL_COMPARE if whichType=='compare' else const.TRIAL_FILLER
+
+    # find the unique input/context combinations in the test set
+    seq_record, testset_input_n_context = formatInputSequence(TRIAL_TYPE, testset)
+    unique_inputs_n_context, uniqueind = np.unique(testset_input_n_context, axis=0, return_index=True)
     N_unique = (unique_inputs_n_context.shape)[0]
     sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
     seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
     num_unique = len(uniqueind)
-    trainsize = trainset["label"].shape[0]
+    trainsize = testset["label"].shape[0]
 
-    unique_inputs = np.asarray([trainset["input"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-    unique_labels = np.asarray([trainset["label"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-    unique_context = np.asarray([trainset["context"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-    unique_refValue = np.asarray([trainset["refValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
-    unique_judgementValue = np.asarray([trainset["judgementValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    # reformat some of our variables from the test set
+    allvarkeys = ["input", "label", "context", "refValue", "judgementValue"]
+    unique_inputs, unique_labels, unique_context, unique_refValue, unique_judgementValue = flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys)
 
     # preallocate some space...
     labels_refValues = np.empty((len(uniqueind),1))
@@ -548,15 +592,13 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
     contexts = np.empty((len(uniqueind),1))
     time_index = np.empty((len(uniqueind),1))
     MDSlabels = np.empty((len(uniqueind),1))
-    hdim = trained_model.hidden_size
-    rdim = trained_model.recurrent_size
-    activations = np.empty((len(uniqueind), hdim))
+    activations = np.empty((len(uniqueind), trained_model.hidden_size))
     temporal_context = np.zeros((trainsize,sequenceLength))            # for tracking the evolution of context in the training set
     temporal_trialtypes = np.zeros((trainsize,sequenceLength))
-    temporal_activation_drift = np.zeros((trainsize, rdim))
+    temporal_activation_drift = np.zeros((trainsize, trained_model.recurrent_size))
 
     #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
-    aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
+    aggregate_activations = np.zeros((len(uniqueind), trained_model.hidden_size))  # for adding each instance of activations to
     counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
 
     #  pass each input through the network and see what happens to the hidden layer activations
@@ -592,15 +634,11 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
     else:
         # Do a single pass through the whole training set and look out for ALL instances of each unique input.
         # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
-        # reset hidden recurrent weights on the very first trial ***HRS be careful with this
-
         h0activations = torch.zeros(1, trained_model.recurrent_size)
         latentstate = torch.zeros(1, trained_model.recurrent_size)
 
-        for batch_idx, data in enumerate(train_loader):
-            #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
+        for batch_idx, data in enumerate(test_loader):
             inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
-            #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
@@ -674,33 +712,11 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
             if counter[i]==0:
                 counter[i]=1  # prevent divide by zero
                 print('Warning: index ' + str(i) + ' input had no instances?')
-
         activations = np.divide(aggregate_activations, counter)
 
-    # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
-
-    # sort all variables first by context order
-    context_ind = np.argsort(contexts, axis=0)
-    contexts = np.take_along_axis(contexts, context_ind, axis=0)
-    activations = np.take_along_axis(activations, context_ind, axis=0)
-    MDSlabels = np.take_along_axis(MDSlabels, context_ind, axis=0)
-    labels_refValues = np.take_along_axis(labels_refValues, context_ind, axis=0)
-    labels_judgeValues = np.take_along_axis(labels_judgeValues, context_ind, axis=0)
-    time_index = np.take_along_axis(time_index, context_ind, axis=0)
-    counter = np.take_along_axis(counter, context_ind, axis=0)
-
-    # within each context, sort according to numerosity of the judgement value
-    for context in range(1,4):
-        ind = [i for i in range(contexts.shape[0]) if contexts[i]==context]
-        numerosity_ind = np.argsort(labels_judgeValues[ind], axis=0) + ind[0]
-        labels_judgeValues[ind] = np.take_along_axis(labels_judgeValues, numerosity_ind, axis=0)
-        labels_refValues[ind] = np.take_along_axis(labels_refValues, numerosity_ind, axis=0)
-        contexts[ind] = np.take_along_axis(contexts, numerosity_ind, axis=0)
-        MDSlabels[ind] = np.take_along_axis(MDSlabels, numerosity_ind, axis=0)
-        activations[ind] = np.take_along_axis(activations, numerosity_ind, axis=0)
-        time_index[ind] = np.take_along_axis(time_index, numerosity_ind, axis=0)
-        counter[ind] = np.take_along_axis(counter, numerosity_ind, axis=0)
-
+    # Finally, reshape the output activations and labels so that we can easily interpret RDMs on the activations
+    allvars = [contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter]
+    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sortActivations(allvars)
     drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
 
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes

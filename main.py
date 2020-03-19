@@ -65,9 +65,9 @@ def trainAndSaveANetwork(args):
 
 def analyseNetwork(args):
     """Perform MDS on:
-        - the hidden unit activations (60-dim) for each unique input in each context.
-        - the averaged hidden unit activations (60-dim), averaged across the unique judgement values in each context.
-        - the recurrent latent states (33-dim), as they evolve across the 12k sequential trials.
+        - the hidden unit activations for each unique input in each context.
+        - the averaged hidden unit activations, averaged across the unique judgement values in each context.
+        - the recurrent latent states as they evolve across the 12k sequential trials.
     """
     # load the MDS analysis if we already have it and move on
     datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
@@ -191,7 +191,7 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    print('all done!')
+
     # Train the network from scratch
     #trainAndSaveANetwork(args)
 
