@@ -204,18 +204,23 @@ def createSeparateInputData(filename, args):
     print('- training is blocked by context')
     print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
 
-    totalN = 3840         # how many examples we want to use (each of these is a sequence on numbers)
-    Ntrain = 2880        # 8:2 train:test split
-    Ntest = totalN - Ntrain
-    Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
-    trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
-    testindices = (np.asarray([i for i in range(Ntrain,totalN)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
-    for phase in ['train','test']:   # this method should balance context instances in train and test phases
+    Mtestsets = 2                          # each dataset will contain multiple test sets for cross-validation of activations
+    print('- {} tests sets generated for cross-validation'.format(Mtestsets))
+
+    Ntrain = 2880                          # how many examples we want to use (each of these is a sequence on numbers)
+    Ntest = 960                            # 75:25 train:test split
+    totalN = Ntrain + Mtestsets*Ntest        # how many sequences across training and test sets
+    Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
+    phases = ['train'  if i==0 else 'test' for i in range(Mtestsets+1)]
+    testsets = [[] for i in range(Mtestsets)]
+    whichtestset = 0                         # a counter
+
+    for phase in phases:   # this method should balance context instances in train and test phases
         if phase == 'train':
             N = Ntrain
         else:
-            N = totalN - Ntrain
+            N = Ntest
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
         refValues = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len, const.TOTALMAXNUM))
@@ -228,6 +233,8 @@ def createSeparateInputData(filename, args):
         blocks = np.empty((Mblocks, int(N/Mblocks),1))
         trialTypes = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len), dtype='str')  # 0='filler, 1='compare'; pytorch doesnt like string numpy arrays
         trialTypeInputs = np.empty((Mblocks, int(N/Mblocks), args.BPTT_len))
+        trainindices = (np.asarray([i for i in range(Ntrain)])).reshape((Mblocks, int(Ntrain/Mblocks),1))
+        testindices = (np.asarray([i for i in range(Ntest)])).reshape((Mblocks, int(Ntest/Mblocks),1))
 
         fillerRange = [const.FULLR_LLIM,const.FULLR_ULIM]        # the range of numbers spanned by all filler trials
 
@@ -406,10 +413,17 @@ def createSeparateInputData(filename, args):
             contextinputs = flattenFirstDim(contextinputs)
             trialTypeInputs  = flattenFirstDim(trialTypeInputs)
 
-            testset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
+            testsets[whichtestset] = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
+            whichtestset += 1
 
-    # save the dataset so  we can use it again
+    # save the dataset so we can use it again
+    testset = testsets[0]
+    testsetkeys = ['crossval_testset'+str(i) for i in range(Mtestsets-1)]
     dat = {"trainset":trainset, "testset":testset}
+    for i in range(len(testsetkeys)):
+        testkey = testsetkeys[i]
+        dat[testkey] = testsets[i+1]      # the first test set is the main one, the others are for crossval.
+
     np.save(args.fileloc+filename+'.npy', dat)
 
     # turn out datasets into pytorch Datasets

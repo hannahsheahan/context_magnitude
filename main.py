@@ -180,9 +180,9 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    
+
     # Train the network from scratch
-    #trainAndSaveANetwork(args)
+    trainAndSaveANetwork(args)
 
     # Analyse the trained network
     #MDS_dict = analyseNetwork(args)
