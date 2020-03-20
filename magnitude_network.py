@@ -484,7 +484,7 @@ def sortAllVarsbyX(allvars, sortind):
     """This function sortAllVarsbyX() will sort all variables input in allvars according to the indices of sortind."""
     sortedvars = []
     for thisvar in allvars:
-        thisvar = np.take_along_axis(thisvar, sortedind, axis=0)
+        thisvar = np.take_along_axis(thisvar, sortind, axis=0)
         sortedvars.append(thisvar)
     return sortedvars
 

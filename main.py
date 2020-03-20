@@ -176,26 +176,16 @@ def generatePlots(MDS_dict, args):
 
 # ---------------------------------------------------------------------------- #
 
-def testTrainedNetwork(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput):
-    """
-    Test the standard trained network with no lesions.
-    """
-    # evalate lesioned and regular test performance
-    normal_testloss, normal_testaccuracy = mnet.recurrent_test(args, trained_model, device, testloader, criterion, retainHiddenState, printOutput)
-    print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
-
-# ---------------------------------------------------------------------------- #
-
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-
+    
     # Train the network from scratch
     #trainAndSaveANetwork(args)
 
     # Analyse the trained network
-    MDS_dict = analyseNetwork(args)
+    #MDS_dict = analyseNetwork(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)
