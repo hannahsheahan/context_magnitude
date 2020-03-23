@@ -117,12 +117,14 @@ def loadInputData(fileloc,datasetname):
     data = np.load(fileloc+datasetname+'.npy', allow_pickle=True)
     numpy_trainset = data.item().get("trainset")
     numpy_testset = data.item().get("testset")
+    numpy_crossvalset = data.item().get("crossval_testset")
 
     # turn out datasets into pytorch Datasets
     trainset = createDataset(numpy_trainset)
     testset = createDataset(numpy_testset)
+    crossvalset = createDataset(numpy_crossvalset)
 
-    return trainset, testset, numpy_trainset, numpy_testset
+    return trainset, testset, crossvalset, numpy_trainset, numpy_testset, numpy_crossvalset
 
 # ---------------------------------------------------------------------------- #
 
@@ -205,11 +207,11 @@ def createSeparateInputData(filename, args):
     print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
 
 
-    Mtestsets = 2                          # each dataset will contain multiple test sets for cross-validation of activations
-    print('- {} tests sets generated for cross-validation'.format(Mtestsets))
+    Mtestsets = 2                          # have multiple test sets for cross-validation of activations (hardcoded for 2 right now HRS)
+    print('- {} test sets generated for cross-validation'.format(Mtestsets))
 
     Ntrain = 2880                          # how many examples we want to use (each of these is a sequence on numbers)
-    Ntest = 960                            # 75:25 train:test split
+    Ntest = 480                            # needs to be big enough to almost guarantee that we will get instances of all 460 comparisons (you get 29 comparisons per sequence)
     totalN = Ntrain + Mtestsets*Ntest        # how many sequences across training and test sets
     Mblocks = 24          # same as fabrices experiment - there are 24 blocks across 3 different contexts
     phases = ['train'  if i==0 else 'test' for i in range(Mtestsets+1)]
@@ -218,9 +220,9 @@ def createSeparateInputData(filename, args):
 
     for phase in phases:   # this method should balance context instances in train and test phases
         if phase == 'train':
-            N = Ntrain
+            N = copy.copy(Ntrain)
         else:
-            N = Ntest
+            N = copy.copy(Ntest)
 
         # perhaps set temporary N to N/24, then generate the data under each context and then shuffle order at the end?
         refValues = np.empty((Mblocks, int(N/Mblocks),args.BPTT_len, const.TOTALMAXNUM))
@@ -418,12 +420,8 @@ def createSeparateInputData(filename, args):
 
     # save the dataset so we can use it again
     testset = testsets[0]
-    testsetkeys = ['crossval_testset'+str(i) for i in range(Mtestsets-1)]
-    dat = {"trainset":trainset, "testset":testset}
-    for i in range(len(testsetkeys)):
-        testkey = testsetkeys[i]
-        dat[testkey] = testsets[i+1]      # the first test set is the main one, the others are for crossval.
-
+    crossvalset = testsets[1]
+    dat = {"trainset":trainset, "testset":testset, "crossval_testset":crossvalset}
     np.save(args.fileloc+filename+'.npy', dat)
 
     # turn out datasets into pytorch Datasets

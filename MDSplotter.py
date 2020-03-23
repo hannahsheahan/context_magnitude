@@ -352,6 +352,8 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     flat_counter = np.zeros((const.NCONTEXTS,len(uniqueValues),1))
     divisor = np.zeros((const.NCONTEXTS,len(uniqueValues)))
 
+    print('N unique: {}'.format(uniqueValues))
+
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     if dimKeep == 'reference':
@@ -373,6 +375,8 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
                         divisor[context,value-1] +=1
 
             # take the mean i.e. normalise by the number of instances that met that condition
+            print(context)
+            print(value)
             if int(divisor[context,value-1]) == 0:
                 flat_activations[context, value-1] = np.full_like(flat_activations[context, value-1], np.nan)
             else:

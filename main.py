@@ -49,7 +49,7 @@ def trainAndSaveANetwork(args):
     if args.create_new_dataset:
         trainset, testset = dset.createSeparateInputData(datasetname, args)
     else:
-        trainset, testset, _, _ = dset.loadInputData(args.fileloc, datasetname)
+        trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
 
     # define and train a neural network model, log performance and output trained model
     if args.network_style == 'recurrent':
@@ -67,7 +67,7 @@ def analyseNetwork(args):
     """Perform MDS on:
         - the hidden unit activations for each unique input in each context.
         - the averaged hidden unit activations, averaged across the unique judgement values in each context.
-        - the recurrent latent states as they evolve across the 12k sequential trials.
+        - the above for both the regular training set and the cross validation set
     """
     # load the MDS analysis if we already have it and move on
     datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
@@ -85,58 +85,67 @@ def analyseNetwork(args):
     if not preanalysed:
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
-        trainset, testset, np_trainset, np_testset = dset.loadInputData(args.fileloc, datasetname)
+        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(args.fileloc, datasetname)
 
         # pass each input through the model and determine the hidden unit activations
-        #if (network_style=='recurrent') and retainHiddenState: # pass the whole sequence of trials for the recurrent state
-        test_loader = DataLoader(testset, batch_size=1, shuffle=False)
-        for whichTrialType in ['compare', 'filler']:
+        setnames = ['test', 'crossval']
+        for set in setnames:
 
-            activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
-            dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-            sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+            # Assess the network activations on either the regular test set or the cross-validation set
+            if set=='test':
+                test_loader = DataLoader(testset, batch_size=1, shuffle=False)
+            elif set =='crossval':
+                test_loader = DataLoader(crossvalset, batch_size=1, shuffle=False)
 
-            # How bout if we average activations over the difference values!
-            diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+            for whichTrialType in ['compare', 'filler']:
+                activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
 
-            # do MDS on the activations for the training set
-            print('Performing MDS on trials of type: {}...'.format(whichTrialType))
-            tic = time.time()
-            randseed = 3 # so that we get the same MDS each time
-            embedding = MDS(n_components=3, random_state=randseed)
-            MDS_activations = embedding.fit_transform(activations)
-            sl_embedding = MDS(n_components=3, random_state=randseed)
-            MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+                dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
+                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
 
-            diff_sl_embedding = MDS(n_components=3, random_state=randseed)
-            MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
+                # do MDS on the activations for the training set
+                print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
+                tic = time.time()
+                randseed = 3 # so that we get the same MDS each time
+                embedding = MDS(n_components=3, random_state=randseed)
+                MDS_activations = embedding.fit_transform(activations)
+                sl_embedding = MDS(n_components=3, random_state=randseed)
+                MDS_slactivations = sl_embedding.fit_transform(sl_activations)
+                diff_sl_embedding = MDS(n_components=3, random_state=randseed)
+                MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
 
-            # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
-            #print(drift["temporal_activation_drift"].shape)
-            #embedding = MDS(n_components=3, random_state=randseed)
-            #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
-            #print(drift["MDS_latentstate"].shape)
+                # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
+                #print(drift["temporal_activation_drift"].shape)
+                #embedding = MDS(n_components=3, random_state=randseed)
+                #drift["MDS_latentstate"] = embedding.fit_transform(drift["temporal_activation_drift"])
+                #print(drift["MDS_latentstate"].shape)
 
-            toc = time.time()
-            print('MDS fitting on trial types {} completed, took (s): {:.2f}'.format(whichTrialType, toc-tic))
+                toc = time.time()
+                print('MDS fitting on trial types {} completed, took (s): {:.2f}'.format(whichTrialType, toc-tic))
 
-            dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
-                        "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
-                        "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
-                        "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
-                        "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
+                dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
+                            "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
+                            "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
+                            "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
+                            "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
 
-            if whichTrialType=='compare':
-                MDS_dict = dict
-            else:
-                MDS_dict["filler_dict"] = dict
+                if whichTrialType=='compare':
+                    MDS_dict = dict
+                else:
+                    MDS_dict["filler_dict"] = dict
+
+            # save our activation RDMs for easy access
+            np.save('network_analysis/RDMs/RDM_'+set+'_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
+            np.save('network_analysis/RDMs/RDM_'+set+'_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
+            if set=='test':
+                MDS_dict['testset_assessment'] = MDS_dict
+            elif set=='crossval':
+                MDS_dict['crossval_assessment'] = MDS_dict
 
         # save the analysis for next time
         print('Saving network analysis...')
         np.save(analysis_name+'.npy', MDS_dict)                                          # the full MDS analysis
-        np.save('network_analysis/RDMs/RDM_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
-        np.save('network_analysis/RDMs/RDM_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
-
 
     return MDS_dict
 
@@ -185,7 +194,7 @@ if __name__ == '__main__':
     trainAndSaveANetwork(args)
 
     # Analyse the trained network
-    #MDS_dict = analyseNetwork(args)
+    MDS_dict = analyseNetwork(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)

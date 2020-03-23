@@ -74,11 +74,12 @@ def answerCorrect(output, label):
 def setupTestParameters(args, device):
     """
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
+    - HRS beware this is set for the main test set but we may also want to use the crossval test set, so should change to pass this which set as input
     """
     datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
 
     # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _ = dset.loadInputData(args.fileloc, datasetname)
+    trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
     # load our trained model
@@ -715,7 +716,7 @@ def getSequentialActivations(TRIAL_TYPE, trained_model, test_loader, unique_inpu
     return [activations, labels_refValues, labels_judgeValues, MDSlabels, contexts, time_index, counter, drift, temporal_trialtypes]
 # ---------------------------------------------------------------------------- #
 
-def getActivations(args, testset, trained_model, test_loader, whichType='compare'):
+def _getActivations(args, testset, trained_model, test_loader, whichType='compare'):
     """ This will determine the hidden unit activations for each *unique* input pair in a test set.
      There are many repeats of inputs in the test set.
      If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
@@ -729,6 +730,9 @@ def getActivations(args, testset, trained_model, test_loader, whichType='compare
     # find the unique input/context combinations in the test set
     seq_record, testset_input_n_context = formatInputSequence(TRIAL_TYPE, testset)
     unique_inputs_n_context, uniqueind = np.unique(testset_input_n_context, axis=0, return_index=True)
+    print(whichType)
+    print(unique_inputs_n_context.shape)  # good
+
     sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
     seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
     num_unique = len(uniqueind)
@@ -750,6 +754,235 @@ def getActivations(args, testset, trained_model, test_loader, whichType='compare
     # Finally, reshape the output activations and labels so that we can easily interpret RDMs on the activations
     allvars = [contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter]
     contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sortActivations(allvars)
+
+    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
+
+# ---------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------- #
+
+def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
+    """ This will determine the hidden unit activations for each *unique* input pair in the training set.
+     There are many repeats of inputs in the training set.If retainHiddenState is set to True,
+     then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
+     This will lead to slightly different activations for each instance of a particular input pair.
+     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
+      - HRS could change ativation assessment to be for the test set, but shouldn't make a big difference.
+
+      - HRS note that this function could really do with a cleanup. It's a long ugly mess.
+
+    """
+
+    # reformat the input sequences for our recurrent model
+    recurrentinputs = []
+    sequenceLength = trainset["input"].shape[1]
+
+    # constants
+    TRIAL_TYPE = const.TRIAL_COMPARE if whichType=='compare' else const.TRIAL_FILLER
+
+    # determine the unique inputs for the training set (there are repeats)
+    # consider activations at all instances, then average these activations to get the mean per unique input.
+    trainset_input_n_context, seq_record = [[] for i in range(2)]
+    for seq in range(len(trainset["input"])):
+
+        inputA, inputB = [None for i in range(2)]
+        for item_idx in range(len(trainset["input"][seq])):
+            trialtype = trainset["trialtypeinputs"][seq, item_idx]
+
+            if TRIAL_TYPE==const.TRIAL_COMPARE:
+                if trialtype==TRIAL_TYPE:
+                    inputA = trainset["input"][seq, item_idx]
+                    if inputB is not None:
+                        if np.all(inputA==inputB):
+                            print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
+                        context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
+                        trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
+                        seq_record.append([seq, item_idx])
+
+                    inputB = trainset["input"][seq, item_idx]  # set the previous state to be the current state
+
+            elif TRIAL_TYPE==const.TRIAL_FILLER:
+                if trialtype==TRIAL_TYPE:
+                    inputA = trainset["input"][seq, item_idx]
+                    context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
+                    trainset_input_n_context.append(np.append(inputA, context))
+                    seq_record.append([seq, item_idx])
+
+
+    #trainset_input_n_context = [np.append(trainset["input"][i, j],trainset["contextinput"][i]) for i in range(len(trainset["input"]))]  # ignore the context label, but consider the true underlying context
+    unique_inputs_n_context, uniqueind = np.unique(trainset_input_n_context, axis=0, return_index=True)
+    N_unique = (unique_inputs_n_context.shape)[0]
+    sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
+    seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
+    num_unique = len(uniqueind)
+    trainsize = trainset["label"].shape[0]
+
+    unique_inputs = np.asarray([trainset["input"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_labels = np.asarray([trainset["label"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_context = np.asarray([trainset["context"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_refValue = np.asarray([trainset["refValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+    unique_judgementValue = np.asarray([trainset["judgementValue"][sequence_id[i]][seqitem_id[i]] for i in range(len(sequence_id))])
+
+    # preallocate some space...
+    labels_refValues = np.empty((len(uniqueind),1))
+    labels_judgeValues = np.empty((len(uniqueind),1))
+    contexts = np.empty((len(uniqueind),1))
+    time_index = np.empty((len(uniqueind),1))
+    MDSlabels = np.empty((len(uniqueind),1))
+    hdim = trained_model.hidden_size
+    rdim = trained_model.recurrent_size
+    activations = np.empty((len(uniqueind), hdim))
+    temporal_context = np.zeros((trainsize,sequenceLength))            # for tracking the evolution of context in the training set
+    temporal_trialtypes = np.zeros((trainsize,sequenceLength))
+    temporal_activation_drift = np.zeros((trainsize, rdim))
+
+    #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
+    aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
+    counter = np.zeros((len(uniqueind),1)) # for counting how many instances of each unique input/context we find
+
+    #  pass each input through the network and see what happens to the hidden layer activations
+    if not ((args.network_style=='recurrent') and args.retain_hidden_state):
+        for sample in range(len(uniqueind)):
+            sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
+            sample_label = unique_labels[sample]
+            labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
+            labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
+            MDSlabels[sample] = sample_label
+            contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
+            time_index[sample] = 0  # doesnt mean anything for these not-sequential cases
+            counter[sample] = 0     # we dont care how many instances of each unique input for these non-sequential cases
+
+            # get the activations for that input
+            if args.network_style=='mlp':
+                h1activations,h2activations,_ = trained_model.get_activations(sample_input)
+            elif args.network_style=='recurrent':
+                if not args.retain_hidden_state:
+                    # reformat the paired input so that it works for our recurrent model
+                    context = sample_input[contextrange]
+                    inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
+                    inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
+                    recurrentinputs = [inputA, inputB]
+                    h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+
+                    # pass inputs through the recurrent network
+                    for i in range(2):
+                        h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
+
+                    activations[sample] = h1activations.detach()
+
+    else:
+        # Do a single pass through the whole training set and look out for ALL instances of each unique input.
+        # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
+        # reset hidden recurrent weights on the very first trial ***HRS be careful with this
+
+        h0activations = torch.zeros(1, trained_model.recurrent_size)
+        latentstate = torch.zeros(1, trained_model.recurrent_size)
+
+        for batch_idx, data in enumerate(train_loader):
+            #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
+            recurrentinputs = []
+            sequenceLength = inputs.shape[1]
+            temporal_trialtypes[batch_idx] = data['trialtypeinput']
+
+            for i in range(sequenceLength):
+                temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextsequence[:,i])[0]
+                contextin = contextinputsequence[:,i]
+                if trialtype[0,i]==0:  # remove context indicator on the filler trials
+                    contextinput = torch.full_like(contextin, 0)
+                else:
+                    contextinput = copy.deepcopy(contextin)
+
+                inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
+                recurrentinputs.append(inputX)
+
+            h0activations = latentstate  # because we have overlapping sequential trials
+
+            inputA, inputB = [None for i in range(2)]
+            # perform N-steps of recurrence
+            for item_idx in range(sequenceLength):
+                h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
+                if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
+                    latentstate = h0activations.detach()
+
+                context = contextsequence[:,item_idx]
+
+                # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
+                if trialtype[0,item_idx] == TRIAL_TYPE:
+                    if TRIAL_TYPE==const.TRIAL_COMPARE:    # if we are looking at act. for the compare trials only
+                        inputA = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]
+                        if inputB is not None:
+                            input_n_context = np.append(np.append(inputA, inputB), context)  # actual underlying range context
+                            for i in range(N_unique):
+                                if np.all(unique_inputs_n_context[i,:]==input_n_context):
+                                    #print('{}, {}, context {}'.format(dset.turnOneHotToInteger(inputA)[0],  dset.turnOneHotToInteger(inputB)[0] , np.squeeze(dset.turnOneHotToInteger(context))[0]  ))
+                                    index = i
+                                    break
+
+                            activations[index] = h1activations.detach()
+                            labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
+                            labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+                            MDSlabels[index] = unique_labels[index]
+                            contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+                            time_index[index] = batch_idx
+                        inputB = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]  # previous state <= current state
+
+                    else:  # for filler trials only, consider just the current number and context
+
+                        inputA = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]
+                        input_n_context = np.append(inputA, context)  # actual underlying range context
+                        for i in range(N_unique):
+                            if np.all(unique_inputs_n_context[i,:]==input_n_context):
+                                index = i
+                                break
+                        activations[index] = h1activations.detach()
+                        labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
+                        labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+                        MDSlabels[index] = unique_labels[index]
+                        contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+                        time_index[index] = batch_idx
+
+
+                    if item_idx > 0:
+                        # Aggregate activity associated with each instance of each input
+                        aggregate_activations[index] += activations[index]
+                        counter[index] += 1    # captures how many instances of each unique input there are in the training set
+
+            temporal_activation_drift[batch_idx, :] = latentstate   # HRS this is not correct yet since only taking end of sequence
+
+        # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
+        for i in range(counter.shape[0]):
+            if counter[i]==0:
+                counter[i]=1  # prevent divide by zero
+                print('Warning: index ' + str(i) + ' input had no instances?')
+
+        activations = np.divide(aggregate_activations, counter)
+
+    # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
+
+    # sort all variables first by context order
+    context_ind = np.argsort(contexts, axis=0)
+    contexts = np.take_along_axis(contexts, context_ind, axis=0)
+    activations = np.take_along_axis(activations, context_ind, axis=0)
+    MDSlabels = np.take_along_axis(MDSlabels, context_ind, axis=0)
+    labels_refValues = np.take_along_axis(labels_refValues, context_ind, axis=0)
+    labels_judgeValues = np.take_along_axis(labels_judgeValues, context_ind, axis=0)
+    time_index = np.take_along_axis(time_index, context_ind, axis=0)
+    counter = np.take_along_axis(counter, context_ind, axis=0)
+
+    # within each context, sort according to numerosity of the judgement value
+    for context in range(1,4):
+        ind = [i for i in range(contexts.shape[0]) if contexts[i]==context]
+        numerosity_ind = np.argsort(labels_judgeValues[ind], axis=0) + ind[0]
+        labels_judgeValues[ind] = np.take_along_axis(labels_judgeValues, numerosity_ind, axis=0)
+        labels_refValues[ind] = np.take_along_axis(labels_refValues, numerosity_ind, axis=0)
+        contexts[ind] = np.take_along_axis(contexts, numerosity_ind, axis=0)
+        MDSlabels[ind] = np.take_along_axis(MDSlabels, numerosity_ind, axis=0)
+        activations[ind] = np.take_along_axis(activations, numerosity_ind, axis=0)
+        time_index[ind] = np.take_along_axis(time_index, numerosity_ind, axis=0)
+        counter[ind] = np.take_along_axis(counter, numerosity_ind, axis=0)
+
+    drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
 
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
 
@@ -839,7 +1072,7 @@ def defineHyperparams():
 
         # network training hyperparameters
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
-        parser.add_argument('--train-lesion-freq', default=0.5, type=float, help='frequency of number lesions on compare trials, during training (default=0.0)')
+        parser.add_argument('--train-lesion-freq', default=0.0, type=float, help='frequency of number lesions on compare trials, during training (default=0.0)')
         parser.add_argument('--batch-size-multi', nargs='*', type=int, help='input batch size (or list of batch sizes) for training (default: 48)', default=[1])
         parser.add_argument('--lr-multi', nargs='*', type=float, help='learning rate (or list of learning rates) (default: 0.001)', default=[0.0001])
         parser.add_argument('--batch-size', type=int, default=1, metavar='N', help='input batch size for training (default: 48)')
