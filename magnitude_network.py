@@ -1089,6 +1089,7 @@ def defineHyperparams():
         parser.add_argument('--hidden-size', type=int, default=200, metavar='N', help='number of nodes in hidden layer (default: 60)')
         parser.add_argument('--BPTT-len', type=int, default=120, metavar='N', help='length of sequences that we backprop through (default: 120 = whole block length)')
         parser.add_argument('--noise_std', type=float, default=0.0, metavar='N', help='standard deviation of iid noise injected into the recurrent hiden state between numerical inputs (default: 0.0).')
+        parser.add_argument('--model-id', type=int, default=0, metavar='N', help='for distinguishing many iterations of training same model (default: 0).')
 
         parser.set_defaults(create_new_dataset=False, all_fullrange=False, retain_hidden_state=True)
         args = parser.parse_args()
@@ -1143,7 +1144,7 @@ class argsparser():
 def getDatasetName(args):
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id'+ str(args.model_id)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
     hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
