@@ -16,6 +16,7 @@ import numpy as np
 import copy
 import sys
 import random
+import os
 import matplotlib.pyplot as plt
 import matplotlib.colors as mplcol
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -870,6 +871,7 @@ def performLesionTests(args, testParams, basefilename):
     This function performLesionTests() performs lesion tests on a single network
     We will only consider performance after a single lesion, because the other metrics are boring sanity checks.
     Plus it seems like performing more lesions in the sequence at test dont do much.
+    - modelname helps us deal with the different model instances (model ids)
     """
     # lesion settings
     whichLesion = 'number'    # default: 'number'. That's all we care about really
@@ -912,6 +914,15 @@ def performLesionTests(args, testParams, basefilename):
 
 # ---------------------------------------------------------------------------- #
 
+def getModelNames(args):
+    """This function finds and return all the lesion analysis file names"""
+
+    files = os.listdir("models")
+
+    return files
+
+# ---------------------------------------------------------------------------- #
+
 def compareLesionTests(args, device):
     """
     This function compareLesionTests() compares the post-lesion test set performance of networks
@@ -925,8 +936,6 @@ def compareLesionTests(args, device):
     offsets = [0.01,0.02,0.03]
     overall_lesioned_tests = []
 
-    # find all model ids that fit our requirements
-    
 
 
     # file naming
@@ -941,6 +950,11 @@ def compareLesionTests(args, device):
         range_txt = '_lowrangeonly'
     elif args.which_context==3:
         range_txt = '_highrangeonly'
+
+    # find all model ids that fit our requirements
+    getAnalysisNames(args)
+
+
 
     for train_lesion_frequency in frequencylist:
         args.train_lesion_freq = train_lesion_frequency
