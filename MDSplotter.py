@@ -917,7 +917,22 @@ def performLesionTests(args, testParams, basefilename):
 def getModelNames(args):
     """This function finds and return all the lesion analysis file names"""
 
-    files = os.listdir("models")
+    # included factors in name from getDatasetName()  (excluding random id for model instance)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
+    networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
+    contextlabelledtext = '_'+args.label_context+'contextlabel'
+    hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
+    rangetxt = '_numrangeintermingled' if args.all_fullrange else '_numrangeblocked'
+
+    # get all model files and then subselect the ones we want
+    allfiles = os.listdir("models")
+    files = []
+
+    for file in allfiles:
+        # check we've got the basics
+        if ((rangetxt in file) and (contextlabelledtext in file)) and ((hiddenstate in file) and (networkTxt in file)):
+            if str_args in file:
+                files.append(file)
 
     return files
 
@@ -927,6 +942,10 @@ def compareLesionTests(args, device):
     """
     This function compareLesionTests() compares the post-lesion test set performance of networks
      which were trained with different frequencies of lesions in the training set.
+     - this will now search for the lesion assessments for all the model instances that match the args
+     - this should now plot a dot +- SEM over model instances at each dot to see how variable it is.
+       Note that there will be more variability in the lesioned cases just because when we lesion during
+       training we do so randomly with a frequency, which will be different every time.
     """
     plt.figure()
     ax = plt.gca()
@@ -935,8 +954,6 @@ def compareLesionTests(args, device):
     frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     offsets = [0.01,0.02,0.03]
     overall_lesioned_tests = []
-
-
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
@@ -951,34 +968,40 @@ def compareLesionTests(args, device):
     elif args.which_context==3:
         range_txt = '_highrangeonly'
 
-    # find all model ids that fit our requirements
-    getAnalysisNames(args)
-
-
-
     for train_lesion_frequency in frequencylist:
+
         args.train_lesion_freq = train_lesion_frequency
         testParams = mnet.setupTestParameters(args, device)
-        basefilename = 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq)
-        filename = basefilename+'.npy'
-        context_tests = np.zeros((const.NCONTEXTS))
 
-        # perform or load the lesion tests
-        lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
-        data = lesiondata["bigdict_lesionperf"]
+        # find all model ids that fit our requirements
+        allmodels = getModelNames(args)
+        data = [[] for i in range(len(allmodels))]
+        context_tests = np.zeros((const.NCONTEXTS, len(allmodels)))
+        perf = np.zeros((const.NCONTEXTS, len(allmodels)))
+        counts = np.zeros((const.NCONTEXTS, len(allmodels)))
 
-        # evaluate performance on the different contexts
-        perf = np.zeros((const.NCONTEXTS,))
-        counts = np.zeros((const.NCONTEXTS,))
-        for seq in range(data.shape[0]):
-            for compare_idx in range(data[seq].shape[0]):
-                context = data[seq][compare_idx]["underlying_context"]-1
-                perf[context] += data[seq][compare_idx]["lesion_perf"]
-                counts[context] += 1
-        meanperf = 100 * np.divide(perf, counts)
-        for context in range(const.NCONTEXTS):
-            print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context], counts[context], meanperf[context]))
-            context_tests[context] = meanperf[context]
+        for ind, modelname in enumerate(allmodels):
+            basefilename = 'network_analysis/lesion_tests/lesiontests'+modelname[:-4]
+            filename = basefilename+'.npy'
+            print(filename)
+            # perform or load the lesion tests
+            lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
+            data[ind] = lesiondata["bigdict_lesionperf"]
+
+            # evaluate performance on the different contexts
+            for seq in range(data[ind].shape[0]):
+                for compare_idx in range(data[ind][seq].shape[0]):
+                    context = data[ind][seq][compare_idx]["underlying_context"]-1
+                    perf[context, ind] += data[ind][seq][compare_idx]["lesion_perf"]
+                    counts[context, ind] += 1
+            meanperf = 100 * np.divide(perf[:, ind], counts[:, ind])
+            for context in range(const.NCONTEXTS):
+                print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context, ind], counts[context, ind], meanperf[context]))
+                context_tests[context, ind] = meanperf[context]
+
+        print('-------')
+        print(context_tests)
+
 
         # plot unlesioned performance
         hnolesion, = plt.plot(train_lesion_frequency, regulartestdata["normal_testaccuracy"], 'x', color='black')

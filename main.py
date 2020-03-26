@@ -186,43 +186,11 @@ def generatePlots(MDS_dict, args):
 
 # ---------------------------------------------------------------------------- #
 
-def getModelNames(args):
-    """This function finds and return all the lesion analysis file names"""
-
-    # included factors in name from getDatasetName()  (excluding random id for model instance)
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
-    networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
-    contextlabelledtext = '_'+args.label_context+'contextlabel'
-    hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
-    rangetxt = '_numrangeintermingled' if args.all_fullrange else '_numrangeblocked'
-
-    # get all model files and then subselect the ones we want
-    allfiles = os.listdir("models")
-    files = []
-
-    for file in allfiles:
-        # check we've got the basics
-        if ((rangetxt in file) and (contextlabelledtext in file)) and ((hiddenstate in file) and (networkTxt in file)):
-            if str_args in file:
-                files.append(file)
-
-    return files
-
-# ---------------------------------------------------------------------------- #
-
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    lesionfreqs = [0.0, 0.1, 0.2, 0.3, 0.4]
-    for freq in lesionfreqs:
-        args.train_lesion_freq = freq
-
-        allmodels = getModelNames(args)
-        for model in allmodels:
-            print(model[:-4])
-            testParams = mnet.setupTestParameters(args, device)
-            MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+model[:-4])
+    #lesionfreqs = [0.0, 0.1, 0.2, 0.3, 0.4]
 
     # Train the network from scratch
     #trainAndSaveANetwork(args)
@@ -237,10 +205,10 @@ if __name__ == '__main__':
     #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
     #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
     #range_txt = ''
-    #testParams = mnet.setupTestParameters(args, device)
+    testParams = mnet.setupTestParameters(args, device)
     #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
     #MDSplt.perfVdistContextMean(testParams)  # Assess performance after a lesion as a function of the 'seen' number
-    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
 
 # ---------------------------------------------------------------------------- #
