@@ -921,9 +921,13 @@ def compareLesionTests(args, device):
     ax = plt.gca()
     #localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal = plotOptimalReferencePerformance(ax, args)
     localpolicy_optimal, globalpolicy_optimal = plotOptimalReferencePerformance(ax, args)
-    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]  # training frequencies of different networks to consider
+    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     offsets = [0.01,0.02,0.03]
     overall_lesioned_tests = []
+
+    # find all model ids that fit our requirements
+    
+
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
