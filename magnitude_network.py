@@ -1159,7 +1159,7 @@ def getDatasetName(args):
     elif args.which_context==3:
         whichcontexttext = '_highrange_6-16_only'
 
-    datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len)
+    datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len) + '_id'+ str(args.model_id)
     analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
     trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
     if args.network_style=='recurrent':

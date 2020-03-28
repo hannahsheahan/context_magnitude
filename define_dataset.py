@@ -286,6 +286,8 @@ def createSeparateInputData(filename, args):
                 trialtypeinput = [0 for i in range(len(type_sequence))]
                 contextsequence = []
                 contextinputsequence = []
+                previousFillerNum = None
+                previousTrialtype = None
 
                 # generate adjacent sequences of inputs, where no two adjacent elements within (or between) a sequence are the same
                 for item in range(args.BPTT_len):
@@ -313,11 +315,17 @@ def createSeparateInputData(filename, args):
                             context = turnIndexToContext(randind)
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
-                        input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
-                        # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time
+                        input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM)
+                        # make sure (like Fabrice) that after a compare trial the subsequent filler isnt the same as the previous filler 
+                        if previousFillerNum != None and previousTrialtype=='compare':
+                            while input2 == previousFillerNum:
+                                input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
+
+                        # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time *HRS note that actually this doesnt matter for training since when we train we remove the context part on filler trials
                         if args.all_fullrange:
                             context = random.randint(1,3)
 
+                    previousTrialtype = copy.copy(trial_type)
                     # Define the context input to the network
                     if args.label_context=='true':
                         contextinput = turnOneHot(context, const.NCONTEXTS)  # there are 3 different contexts

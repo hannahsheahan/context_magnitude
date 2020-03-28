@@ -13,6 +13,7 @@ import magnitude_network as mnet
 
 from mpl_toolkits import mplot3d
 import numpy as np
+import scipy as sp
 import copy
 import sys
 import random
@@ -42,7 +43,7 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id' + str(args.model_id)
 
     # automatic save file title details
     if args.which_context==0:
@@ -69,6 +70,7 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     if saveFig:
         plt.savefig(basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+labeltext+retainstatetext+'_n'+str(args.noise_std)+str_args+'.pdf',bbox_inches='tight')
 
+    plt.close()
     return basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+labeltext+retainstatetext+'_n'+str(args.noise_std)+str_args
 
 # ---------------------------------------------------------------------------- #
@@ -938,6 +940,16 @@ def getModelNames(args):
 
 # ---------------------------------------------------------------------------- #
 
+def getIdfromName(modelname):
+    """Take the model name and extract the model id number from the string.
+    This is useful when looping through all saved models, you can assign the args.model_id param
+    to this number so that subsequent analysis and figure generation naming includes the appropriate the model-id #."""
+    id_ind = modelname.find('_id')+3
+    pth_ind = modelname.find('.pth')
+    return  modelname[id_ind:pth_ind]
+
+# ---------------------------------------------------------------------------- #
+
 def compareLesionTests(args, device):
     """
     This function compareLesionTests() compares the post-lesion test set performance of networks
@@ -971,22 +983,27 @@ def compareLesionTests(args, device):
     for train_lesion_frequency in frequencylist:
 
         args.train_lesion_freq = train_lesion_frequency
-        testParams = mnet.setupTestParameters(args, device)
-
-        # find all model ids that fit our requirements
         allmodels = getModelNames(args)
         data = [[] for i in range(len(allmodels))]
         context_tests = np.zeros((const.NCONTEXTS, len(allmodels)))
         perf = np.zeros((const.NCONTEXTS, len(allmodels)))
         counts = np.zeros((const.NCONTEXTS, len(allmodels)))
+        unlesioned_test = np.zeros((len(allmodels),))
+        lesioned_test = np.zeros((len(allmodels),))
 
-        for ind, modelname in enumerate(allmodels):
-            basefilename = 'network_analysis/lesion_tests/lesiontests'+modelname[:-4]
+        # find all model ids that fit our requirements
+        for ind, m in enumerate(allmodels):
+            args.model_id = getIdfromName(m)
+            print('modelid: ' + str(args.model_id))
+            testParams = mnet.setupTestParameters(args, device)
+            basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
             filename = basefilename+'.npy'
-            print(filename)
+
             # perform or load the lesion tests
             lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
             data[ind] = lesiondata["bigdict_lesionperf"]
+            lesioned_test[ind] = lesiondata["lesioned_testaccuracy"]
+            unlesioned_test[ind] = regulartestdata["normal_testaccuracy"]
 
             # evaluate performance on the different contexts
             for seq in range(data[ind].shape[0]):
@@ -999,24 +1016,39 @@ def compareLesionTests(args, device):
                 print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context, ind], counts[context, ind], meanperf[context]))
                 context_tests[context, ind] = meanperf[context]
 
-        print('-------')
-        print(context_tests)
+        # now determine mean +-sem over models of that lesion frequency
+        mean_lesioned_test = np.nanmean(lesioned_test)
+        sem_lesioned_test = sp.stats.sem(lesioned_test)
+
+        mean_unlesioned_test = np.nanmean(unlesioned_test)
+        sem_unlesioned_test = sp.stats.sem(unlesioned_test)
+
+        mean_contextlesion_test = np.nanmean(context_tests,axis=1)
+        sem_contextlesion_test = sp.stats.sem(context_tests,axis=1)
+
+        #print(mean_lesioned_test)
+        #print(sem_lesioned_test)
+        #print('---')
+        #print(mean_unlesioned_test)
+        #print(sem_unlesioned_test)
+        #print('---')
+        #print(mean_contextlesion_test)
+        #print(sem_contextlesion_test)
 
 
         # plot unlesioned performance
-        hnolesion, = plt.plot(train_lesion_frequency, regulartestdata["normal_testaccuracy"], 'x', color='black')
+        hnolesion = plt.errorbar(train_lesion_frequency, mean_unlesioned_test, sem_unlesioned_test, color='black')
 
         # plot lesioned network performance
         #plt.plot(train_lesion_frequency, overall_lesioned_tests, '.', color='black')
         #htotal, = plt.plot(freq, overall_lesioned_tests, color='black')
-        hlesion, = plt.plot(train_lesion_frequency, lesiondata["lesioned_testaccuracy"], '.', color='black', markersize=13 )
+        hlesion = plt.errorbar(train_lesion_frequency, mean_lesioned_test, sem_lesioned_test, color='grey')
         #plt.text(train_lesion_frequency,lesioned_testaccuracy+1, '{:.2f}%'.format(lesioned_testaccuracy), color='blue')
 
         # plot post-lesion performance divided up by context
         context_handles = []
         for context in range(const.NCONTEXTS):
-            y = context_tests[context]
-            tmp, = plt.plot(train_lesion_frequency+offsets[context], y, '.', color=contextcolours[context], markersize=8)
+            tmp = plt.plot(train_lesion_frequency+offsets[context], mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context])
             context_handles.append(tmp)
         print('\n')
 

@@ -163,7 +163,7 @@ def generatePlots(MDS_dict, args):
         # Label activations by mean number A numerosity
         MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
         MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
-        MDSplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
+        #MDSplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
         #plot_diff_code = True
@@ -190,25 +190,35 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
+    niters = 12
     #lesionfreqs = [0.0, 0.1, 0.2, 0.3, 0.4]
+    for i in range(niters):
+        if i ==0:
+            args.create_new_dataset = True
+    #for m in MDSplt.getModelNames(args):
+        #args.model_id = MDSplt.getIdfromName(m)
+        #print('modelid: ' + str(args.model_id))
 
-    # Train the network from scratch
-    #trainAndSaveANetwork(args)
+        # Train the network from scratch
+        trainAndSaveANetwork(args)
 
-    # Analyse the trained network
-    #MDS_dict = analyseNetwork(args)
+        # Analyse the trained network
+        MDS_dict = analyseNetwork(args)
 
-    # Visualise the resultant network activations (RDMs and MDS)
-    #generatePlots(MDS_dict, args)
+        # Perform lesion tests on the network
+        #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+        #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+        #range_txt = ''
+        #testParams = mnet.setupTestParameters(args, device)
+        #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
 
-    # Perform lesion tests on the network
-    #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
-    #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
-    #range_txt = ''
-    testParams = mnet.setupTestParameters(args, device)
-    #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
+        # Visualise the resultant network activations (RDMs and MDS)
+        #generatePlots(MDS_dict, args)
+
+    # Plot the lesion test performance
+    #testParams = mnet.setupTestParameters(args, device)
     #MDSplt.perfVdistContextMean(testParams)  # Assess performance after a lesion as a function of the 'seen' number
-    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
 
 # ---------------------------------------------------------------------------- #
