@@ -316,16 +316,18 @@ def createSeparateInputData(filename, args):
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM)
-                        # make sure (like Fabrice) that after a compare trial the subsequent filler isnt the same as the previous filler 
+                        # make sure (like Fabrice) that after a compare trial the subsequent filler isnt the same as the previous filler
                         if previousFillerNum != None and previousTrialtype=='compare':
                             while input2 == previousFillerNum:
                                 input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
 
+                        previousFillerNum = copy.copy(input2)
                         # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time *HRS note that actually this doesnt matter for training since when we train we remove the context part on filler trials
                         if args.all_fullrange:
                             context = random.randint(1,3)
 
                     previousTrialtype = copy.copy(trial_type)
+
                     # Define the context input to the network
                     if args.label_context=='true':
                         contextinput = turnOneHot(context, const.NCONTEXTS)  # there are 3 different contexts

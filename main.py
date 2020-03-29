@@ -190,30 +190,47 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    niters = 12
-    #lesionfreqs = [0.0, 0.1, 0.2, 0.3, 0.4]
-    for i in range(niters):
-        if i ==0:
-            args.create_new_dataset = True
-    #for m in MDSplt.getModelNames(args):
-        #args.model_id = MDSplt.getIdfromName(m)
-        #print('modelid: ' + str(args.model_id))
+    """
+    niters = 1
+    lesionfreqs = [0.1, 0.2, 0.3, 0.4]
+    for freq in lesionfreqs:
+        for i in range(niters):
+            args.train_lesion_freq = freq
+            args.model_id = random.randint(1,10000)
 
-        # Train the network from scratch
-        trainAndSaveANetwork(args)
+            # Train the network from scratch
+            trainAndSaveANetwork(args)
 
-        # Analyse the trained network
-        MDS_dict = analyseNetwork(args)
+            # Analyse the trained network
+            MDS_dict = analyseNetwork(args)
 
-        # Perform lesion tests on the network
-        #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
-        #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
-        #range_txt = ''
-        #testParams = mnet.setupTestParameters(args, device)
-        #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
+            # Perform lesion tests on the network
+            #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+            #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+            #range_txt = ''
+            #testParams = mnet.setupTestParameters(args, device)
+            #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
 
-        # Visualise the resultant network activations (RDMs and MDS)
-        #generatePlots(MDS_dict, args)
+            # Visualise the resultant network activations (RDMs and MDS)
+            #generatePlots(MDS_dict, args)
+    """
+
+    # test of dataset...bugger
+    _, _, _, numpy_trainset, numpy_testset, _ = dset.loadInputData('datasets/', 'dataset_truecontextlabel_numrangeblocked_bpl120_id268')
+    seq = 0
+    trialtype = list(numpy_testset['trialtypeinputs'][seq])
+    nums = [dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq][i])[0] for i in range(len(dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq])))]
+    prefillers =  [nums[i] for i in range(len(nums)-1) if trialtype[i]==0.0 and trialtype[i+1]==1.0]
+    postfillers =  [nums[i] for i in range(2,len(nums)) if trialtype[i]==0.0 and trialtype[i-1]==1.0]  # start at ind 2 to ignore first post-compare trial
+
+    print((trialtype))
+    print((nums))
+    print(prefillers)
+    print(postfillers)
+    for i in range(len(postfillers)):
+        if postfillers[i]==prefillers[i]:
+            print(i)
+            print('oh no! this shouldnt happen')
 
     # Plot the lesion test performance
     #testParams = mnet.setupTestParameters(args, device)

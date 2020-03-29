@@ -1091,7 +1091,7 @@ def defineHyperparams():
         parser.add_argument('--noise_std', type=float, default=0.0, metavar='N', help='standard deviation of iid noise injected into the recurrent hiden state between numerical inputs (default: 0.0).')
         parser.add_argument('--model-id', type=int, default=0, metavar='N', help='for distinguishing many iterations of training same model (default: 0).')
 
-        parser.set_defaults(create_new_dataset=False, all_fullrange=False, retain_hidden_state=True)
+        parser.set_defaults(create_new_dataset=True, all_fullrange=False, retain_hidden_state=True)
         args = parser.parse_args()
 
     if args.which_context>0:
