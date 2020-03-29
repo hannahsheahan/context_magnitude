@@ -317,8 +317,8 @@ def createSeparateInputData(filename, args):
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
                         input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM)
                         # make sure (like Fabrice) that after a compare trial the subsequent filler isnt the same as the previous filler
-                        if previousFillerNum != None and previousTrialtype=='compare':
-                            while input2 == previousFillerNum:
+                        if previousFillerNum is not None and previousTrialtype=='compare':
+                            while all(input2 == previousFillerNum):
                                 input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
 
                         previousFillerNum = copy.copy(input2)

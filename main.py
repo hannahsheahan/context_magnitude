@@ -216,8 +216,9 @@ if __name__ == '__main__':
     """
 
     # test of dataset...bugger
-    _, _, _, numpy_trainset, numpy_testset, _ = dset.loadInputData('datasets/', 'dataset_truecontextlabel_numrangeblocked_bpl120_id268')
-    seq = 0
+    #trainAndSaveANetwork(args)
+    _, _, _, numpy_trainset, numpy_testset, _ = dset.loadInputData('datasets/', 'dataset_truecontextlabel_numrangeblocked_bpl120_id0')
+    seq = 5
     trialtype = list(numpy_testset['trialtypeinputs'][seq])
     nums = [dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq][i])[0] for i in range(len(dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq])))]
     prefillers =  [nums[i] for i in range(len(nums)-1) if trialtype[i]==0.0 and trialtype[i+1]==1.0]
