@@ -190,9 +190,9 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    """
-    niters = 1
-    lesionfreqs = [0.1, 0.2, 0.3, 0.4]
+
+    niters = 6
+    lesionfreqs = [0.1]
     for freq in lesionfreqs:
         for i in range(niters):
             args.train_lesion_freq = freq
@@ -213,25 +213,7 @@ if __name__ == '__main__':
 
             # Visualise the resultant network activations (RDMs and MDS)
             #generatePlots(MDS_dict, args)
-    """
 
-    # test of dataset...bugger
-    #trainAndSaveANetwork(args)
-    _, _, _, numpy_trainset, numpy_testset, _ = dset.loadInputData('datasets/', 'dataset_truecontextlabel_numrangeblocked_bpl120_id0')
-    seq = 5
-    trialtype = list(numpy_testset['trialtypeinputs'][seq])
-    nums = [dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq][i])[0] for i in range(len(dset.turnOneHotToInteger(numpy_testset['judgementValue'][seq])))]
-    prefillers =  [nums[i] for i in range(len(nums)-1) if trialtype[i]==0.0 and trialtype[i+1]==1.0]
-    postfillers =  [nums[i] for i in range(2,len(nums)) if trialtype[i]==0.0 and trialtype[i-1]==1.0]  # start at ind 2 to ignore first post-compare trial
-
-    print((trialtype))
-    print((nums))
-    print(prefillers)
-    print(postfillers)
-    for i in range(len(postfillers)):
-        if postfillers[i]==prefillers[i]:
-            print(i)
-            print('oh no! this shouldnt happen')
 
     # Plot the lesion test performance
     #testParams = mnet.setupTestParameters(args, device)
