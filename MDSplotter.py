@@ -668,7 +668,6 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
 
 # ---------------------------------------------------------------------------- #
 
-
 def performanceMean(number_differences, performance):
     """
     This function calculates the mean network performance as a function of the distance between the current number and some mean context signal
@@ -688,7 +687,156 @@ def performanceMean(number_differences, performance):
 
 # ---------------------------------------------------------------------------- #
 
-def perfVdistContextMean(testParams):
+def lesionperfbyNumerosity(lesiondata):
+    # determine how a given model performs post lesion on different numbers and contexts
+
+    context_perf = [[] for i in range(const.NCONTEXTS)]
+    context_numberdiffs = [[] for i in range(const.NCONTEXTS)]
+    context_globalnumberdiff = [[] for i in range(const.NCONTEXTS)]
+
+    # evaluate the context mean for each network assessment
+    contextmean = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
+    numberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
+    globalnumberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
+    perf = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
+    globalmean = 8
+
+    for seq in range(lesiondata.shape[0]):
+        for compare_idx in range(lesiondata.shape[1]):
+            context = lesiondata[seq][compare_idx]["underlying_context"]
+            if context==1:
+                contextmean[seq][compare_idx] = 8
+            elif context==2:
+                contextmean[seq][compare_idx] = 5.5
+            elif context==3:
+                contextmean[seq][compare_idx] = 10.5
+
+            # calculate difference between current number and context or global mean
+            numberdiffs[seq][compare_idx] = np.abs(np.asarray(lesiondata[seq][compare_idx]["assess_number"]-contextmean[seq][compare_idx]))
+            globalnumberdiffs[seq][compare_idx] = np.abs(np.asarray(lesiondata[seq][compare_idx]["assess_number"]-globalmean))
+            perf[seq][compare_idx] = lesiondata[seq][compare_idx]["lesion_perf"]
+
+            # context-specific
+            context_perf[context-1].append(perf[seq][compare_idx])
+            context_numberdiffs[context-1].append(numberdiffs[seq][compare_idx])
+            context_globalnumberdiff[context-1].append(globalnumberdiffs[seq][compare_idx])
+
+    # flatten across sequences and the trials in those sequences
+    globalnumberdiffs = dset.flattenFirstDim(globalnumberdiffs)
+    numberdiffs = dset.flattenFirstDim(numberdiffs)
+    perf = dset.flattenFirstDim(perf)
+    meanperf, uniquediffs = performanceMean(numberdiffs, perf)
+    global_meanperf, global_uniquediffs = performanceMean(globalnumberdiffs, perf)
+
+    # assess mean performance under each context (HRS hacky for now)
+    context1_meanperf, context1_uniquediffs = performanceMean(context_numberdiffs[0], context_perf[0])
+    context2_meanperf, context2_uniquediffs = performanceMean(context_numberdiffs[1], context_perf[1])
+    context3_meanperf, context3_uniquediffs = performanceMean(context_numberdiffs[2], context_perf[2])
+    context_perf = [context1_meanperf, context2_meanperf, context3_meanperf]
+    context_numberdiffs = [context1_uniquediffs, context2_uniquediffs, context3_uniquediffs]
+
+    return global_meanperf, context_perf, global_uniquediffs, context_numberdiffs
+
+# ---------------------------------------------------------------------------- #
+
+def perfVdistContextMean(args, device):
+    frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
+    overall_lesioned_tests = []
+
+    # file naming
+    blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+    contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+    range_txt = ''
+    if args.which_context==0:
+        range_txt = ''
+    elif args.which_context==1:
+        range_txt = '_fullrangeonly'
+    elif args.which_context==2:
+        range_txt = '_lowrangeonly'
+    elif args.which_context==3:
+        range_txt = '_highrangeonly'
+
+    for j,train_lesion_frequency in enumerate(frequencylist):
+        plt.subplot(1,2,j+1)
+        ax = plt.gca()
+
+        args.train_lesion_freq = train_lesion_frequency
+        allmodels = getModelNames(args)
+        data = [[] for i in range(len(allmodels))]
+        global_meanperf = []
+        context1_perf, context2_perf, context3_perf = [[] for i in range(3)]
+        global_uniquediffs = []
+        context1_numberdiffs, context2_numberdiffs, context3_numberdiffs = [[] for i in range(3)]
+
+        # find all model ids that fit our requirements
+        for ind, m in enumerate(allmodels):
+            args.model_id = getIdfromName(m)
+            print('modelid: ' + str(args.model_id))
+            testParams = mnet.setupTestParameters(args, device)
+            basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
+            filename = basefilename+'.npy'
+
+            # perform or load the lesion tests
+            lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
+            data[ind] = lesiondata["bigdict_lesionperf"]
+            gp, cp, gd, cd = lesionperfbyNumerosity(data[ind])
+            global_meanperf.append(gp)
+            global_uniquediffs.append(gd)
+            context1_perf.append(cp[0])
+            context2_perf.append(cp[1])
+            context3_perf.append(cp[2])
+            context1_numberdiffs.append(cd[0])
+            context2_numberdiffs.append(cd[1])
+            context3_numberdiffs.append(cd[2])
+
+        # mean over models
+        global_meanperf = np.array(global_meanperf)
+        context1_perf = np.array(context1_perf)
+        context2_perf = np.array(context2_perf)
+        context3_perf = np.array(context3_perf)
+        global_uniquediffs = np.array(global_uniquediffs)
+        context1_numberdiffs = np.array(context1_numberdiffs)
+        context2_numberdiffs = np.array(context2_numberdiffs)
+        context3_numberdiffs = np.array(context3_numberdiffs)
+
+        global_meanperf_mean = np.mean(global_meanperf, axis=0)
+        global_meanperf_sem = np.std(global_meanperf, axis=0) / np.sqrt(global_meanperf.shape[0])
+        global_uniquediffs = np.mean(global_uniquediffs, axis=0)
+
+        context1_perf_mean = np.mean(context1_perf, axis=0)
+        context1_perf_sem = np.std(context1_perf, axis=0) / np.sqrt(context1_perf.shape[0])
+        context2_perf_mean = np.mean(context2_perf, axis=0)
+        context2_perf_sem = np.std(context2_perf, axis=0) / np.sqrt(context2_perf.shape[0])
+        context3_perf_mean = np.mean(context3_perf, axis=0)
+        context3_perf_sem = np.std(context3_perf, axis=0) / np.sqrt(context3_perf.shape[0])
+
+        context1_numberdiffs = np.mean(context1_numberdiffs, axis=0)
+        context2_numberdiffs = np.mean(context2_numberdiffs, axis=0)
+        context3_numberdiffs = np.mean(context3_numberdiffs, axis=0)
+
+        # plotting
+        global_contextmean = plt.errorbar(global_uniquediffs, global_meanperf_mean, global_meanperf_sem, color='black', fmt='-o',markersize=2) # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
+
+        print(context3_perf_sem)
+
+
+        # plot and save the figure
+        ref7, = plt.plot([0,7],[.5,1],linestyle=':',color='grey')
+        ref4, = plt.plot([0,4.5],[.5,1],linestyle=':',color='grey')
+
+        # context-specific performance i.e. how did performance change with dist. to mean in each context
+        local_contextmean_context1 = plt.errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color='gold', fmt='-o',markersize=2)
+        local_contextmean_context2 = plt.errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color='dodgerblue', fmt='-o',markersize=2)
+        local_contextmean_context3 = plt.errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color='orangered', fmt='-o',markersize=2)
+    plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={4.5,7}', '\u03BC = global median', '\u03BC = local median | context A, 1:16','\u03BC = local median | context B, 1:11','\u03BC = local median | context C, 6-16'))
+    plt.ylabel('RNN perf. immediately post-lesion (just 1 lesion)')
+    plt.xlabel('|current# - \u03BC|')
+    whichTrialType = 'compare'
+    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, True, False, whichTrialType, True)
+
+# ---------------------------------------------------------------------------- #
+
+def _perfVdistContextMean(testParams):
     """
     Plot performance after just a single lesion vs the (absolute) distance of the seen number to the context mean
     Also plot vs distance for the (absolute) distance to the global mean. We are hoping for some linear trends with
@@ -1026,29 +1174,19 @@ def compareLesionTests(args, device):
         mean_contextlesion_test = np.nanmean(context_tests,axis=1)
         sem_contextlesion_test = sp.stats.sem(context_tests,axis=1)
 
-        #print(mean_lesioned_test)
-        #print(sem_lesioned_test)
-        #print('---')
-        #print(mean_unlesioned_test)
-        #print(sem_unlesioned_test)
-        #print('---')
-        #print(mean_contextlesion_test)
-        #print(sem_contextlesion_test)
-
-
         # plot unlesioned performance
-        hnolesion = plt.errorbar(train_lesion_frequency, mean_unlesioned_test, sem_unlesioned_test, color='black')
+        hnolesion = plt.errorbar(train_lesion_frequency, mean_unlesioned_test, sem_unlesioned_test, color='black', markersize=5, fmt='o')
 
         # plot lesioned network performance
         #plt.plot(train_lesion_frequency, overall_lesioned_tests, '.', color='black')
         #htotal, = plt.plot(freq, overall_lesioned_tests, color='black')
-        hlesion = plt.errorbar(train_lesion_frequency, mean_lesioned_test, sem_lesioned_test, color='grey')
+        hlesion = plt.errorbar(train_lesion_frequency, mean_lesioned_test, sem_lesioned_test, color='grey', markersize=5, fmt='o')
         #plt.text(train_lesion_frequency,lesioned_testaccuracy+1, '{:.2f}%'.format(lesioned_testaccuracy), color='blue')
 
         # plot post-lesion performance divided up by context
         context_handles = []
         for context in range(const.NCONTEXTS):
-            tmp = plt.plot(train_lesion_frequency+offsets[context], mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context])
+            tmp = plt.errorbar(train_lesion_frequency+offsets[context], mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context], markersize=4, fmt='o')
             context_handles.append(tmp)
         print('\n')
 
