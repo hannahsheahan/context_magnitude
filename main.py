@@ -191,6 +191,11 @@ if __name__ == '__main__':
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
 
+    data = (np.load('datasets/dataset_truecontextlabel_numrangeblocked_bpl120_id968.npy', allow_pickle=True)).item()
+    print(data['crossval_testset']['judgementValue'][0][0:3])
+    print('-----')
+    print(data['testset']['judgementValue'][0][0:3])
+
     # Train the network from scratch
     #trainAndSaveANetwork(args)
 
@@ -209,7 +214,7 @@ if __name__ == '__main__':
 
     # Plot the lesion test performance
     #testParams = mnet.setupTestParameters(args, device)
-    MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
+    #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
     #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
 
