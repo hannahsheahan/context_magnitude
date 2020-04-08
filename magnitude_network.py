@@ -1141,6 +1141,27 @@ class argsparser():
 
 # ---------------------------------------------------------------------------- #
 
+def setupTestParameters(args, device):
+    """
+    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
+    - HRS beware this is set for the main test set but we may also want to use the crossval test set, so should change to pass this which set as input
+    """
+    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
+
+    # load the test set appropriate for the dataset our model was trained on
+    trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
+    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+    # load our trained model
+    trained_model = torch.load(trained_modelname)
+    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
+    printOutput = True
+    testParams = [args, trained_model, device, testloader, criterion, printOutput]
+
+    return testParams
+
+# ---------------------------------------------------------------------------- #
+
 def getDatasetName(args):
 
     # conver the hyperparameter settings into a string ID

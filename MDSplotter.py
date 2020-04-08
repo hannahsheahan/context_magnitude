@@ -610,7 +610,7 @@ def compareLesionTests(args, device):
         for ind, m in enumerate(allmodels):
             args.model_id = anh.getIdfromName(m)
             print('modelid: ' + str(args.model_id))
-            testParams = anh.setupTestParameters(args, device)
+            testParams = mnet.setupTestParameters(args, device)
             basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
@@ -706,7 +706,7 @@ def perfVdistContextMean(args, device):
         for ind, m in enumerate(allmodels):
             args.model_id = anh.getIdfromName(m)
             print('modelid: ' + str(args.model_id))
-            testParams = anh.setupTestParameters(args, device)
+            testParams = mnet.setupTestParameters(args, device)
             basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 

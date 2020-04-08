@@ -209,6 +209,6 @@ if __name__ == '__main__':
 
     # Assess whether this class of trained networks use local-context or global-context policy
     args.train_lesion_freq = 0.1
-    anh.getSSEForContextModels(args)
+    anh.getSSEForContextModels(args, device)
 
 # ---------------------------------------------------------------------------- #

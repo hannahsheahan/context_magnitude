@@ -9,6 +9,7 @@ import define_dataset as dset
 import magnitude_network as mnet
 import constants as const
 import numpy as np
+import os
 
 # ---------------------------------------------------------------------------- #
 
@@ -43,28 +44,6 @@ def getIdfromName(modelname):
     id_ind = modelname.find('_id')+3
     pth_ind = modelname.find('.pth')
     return  modelname[id_ind:pth_ind]
-
-# ---------------------------------------------------------------------------- #
-
-def setupTestParameters(args, device):
-    """
-    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    - HRS beware this is set for the main test set but we may also want to use the crossval test set, so should change to pass this which set as input
-    """
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
-
-    # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
-    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-    # load our trained model
-    trained_model = torch.load(trained_modelname)
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-    printOutput = True
-
-    testParams = [args, trained_model, device, testloader, criterion, printOutput]
-
-    return testParams
 
 # ---------------------------------------------------------------------------- #
 
@@ -310,7 +289,7 @@ def lesionperfbyNumerosity(lesiondata):
 
 # ---------------------------------------------------------------------------- #
 
-def getSSEForContextModels(args):
+def getSSEForContextModels(args, device):
     # Determine the sum squared error between the rnn responses and the local vs global context models, for each RNN instance.
     allmodels = getModelNames(args)
     SSE_local = [0 for i in range(len(allmodels))]
@@ -318,7 +297,7 @@ def getSSEForContextModels(args):
 
     for ind, m in enumerate(allmodels):
         args.model_id = getIdfromName(m)
-        testParams = setupTestParameters(args, device)
+        testParams = mnet.setupTestParameters(args, device)
         basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
 
         # perform or load the lesion tests
