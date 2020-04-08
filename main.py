@@ -13,11 +13,14 @@
 import magnitude_network as mnet
 import define_dataset as dset
 import MDSplotter as MDSplt
+import analysis_helpers as anh
 import constants as const
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
 import sys
+import math
 import random
 import copy
 from sklearn.manifold import MDS
@@ -102,8 +105,8 @@ def analyseNetwork(args):
                 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
 
                 dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = MDSplt.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
-                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = MDSplt.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = anh.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = anh.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
 
                 # do MDS on the activations for the training set
                 print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
@@ -191,31 +194,21 @@ if __name__ == '__main__':
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
 
-    data = (np.load('datasets/dataset_truecontextlabel_numrangeblocked_bpl120_id968.npy', allow_pickle=True)).item()
-    print(data['crossval_testset']['judgementValue'][0][0:3])
-    print('-----')
-    print(data['testset']['judgementValue'][0][0:3])
-
     # Train the network from scratch
     #trainAndSaveANetwork(args)
 
-    # Analyse the trained network
+    # Analyse the trained network (extract and save network activations)
     #MDS_dict = analyseNetwork(args)
-
-    # Perform lesion tests on the network
-    #blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
-    #contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
-    #range_txt = ''
-    #testParams = mnet.setupTestParameters(args, device)
-    #MDSplt.performLesionTests(args, testParams, 'network_analysis/lesion_tests/lesiontests'+blcktxt+contexttxt+range_txt+'_trainlf'+str(args.train_lesion_freq))
 
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
-    #testParams = mnet.setupTestParameters(args, device)
     #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
     #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
+    # Assess whether this class of trained networks use local-context or global-context policy
+    args.train_lesion_freq = 0.1
+    anh.getSSEForContextModels(args)
 
 # ---------------------------------------------------------------------------- #

@@ -71,28 +71,6 @@ def answerCorrect(output, label):
 
 # ---------------------------------------------------------------------------- #
 
-def setupTestParameters(args, device):
-    """
-    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    - HRS beware this is set for the main test set but we may also want to use the crossval test set, so should change to pass this which set as input
-    """
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
-
-    # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
-    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-    # load our trained model
-    trained_model = torch.load(trained_modelname)
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-    printOutput = True
-
-    testParams = [args, trained_model, device, testloader, criterion, printOutput]
-
-    return testParams
-
-# ---------------------------------------------------------------------------- #
-
 def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     """
     This function will take a look at the gradients in all layers of our model during training.
@@ -272,6 +250,24 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
 # ---------------------------------------------------------------------------- #
 
+def getLocalModelResponse(number, context, label):
+    # evaluate whether a simulated local context policy would have got this trial correct
+    localmedians = [8.5, 6, 11]  # full range, low range, high range
+    response = 1 if number > localmedians[context-1] else 0
+    iscorrect = 1 if response == label else 0
+    return iscorrect
+
+# ---------------------------------------------------------------------------- #
+
+def getGlobalModelResponse(number, context, label):
+    # evaluate whether a simulated local context policy would have got this trial correct
+    globalmedian = 8.5
+    response = 1 if number > globalmedian else 0
+    iscorrect = 1 if response == label else 0
+    return iscorrect
+
+# ---------------------------------------------------------------------------- #
+
 def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutput=True, whichLesion='number', lesionFrequency=1):
     """
     Test a recurrent neural network on the test set, while lesioning occasional inputs.
@@ -359,6 +355,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
 
                         # if trial designated for lesioning, apply the lesion ***HRS to check these indices are correct for lesions
                         if lesionRecord[trial]==1:
+                            lesion_number = dset.turnOneHotToInteger(tmpinputs[trial][0][0:const.TOTALMAXNUM])
                             if whichLesion=='number':
                                 tmpinputs[trial][0][0:const.TOTALMAXNUM] = torch.full_like(tmpinputs[trial][0][0:const.TOTALMAXNUM], 0)
                             else:
@@ -378,8 +375,12 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                             if trial==assess_idx:
                                 lesionperf = answerCorrect(output, labels[trial])
 
+                    localmodel_perf = getLocalModelResponse(assess_number, context, labels[trial])   # correct or incorrect
+                    globalmodel_perf = getGlobalModelResponse(assess_number, context, labels[trial]) # correct or incorrect
 
-                    mydict = {"assess_number":assess_number, "lesion_perf":lesionperf, "overall_perf":overallperf, "desired_lesionF":lesionFrequency, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials }
+                    mydict = {"assess_number":assess_number, "lesion_number":lesion_number, "lesion_perf":lesionperf, "overall_perf":overallperf,\
+                     "desired_lesionF":lesionFrequency, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials,\
+                     "localmodel_perf":localmodel_perf, "globalmodel_perf":globalmodel_perf }
                     sequenceAssessment.append(mydict)
                     aggregateLesionPerf += lesionperf
                     aggregatePerf += overallperf
@@ -757,7 +758,6 @@ def _getActivations(args, testset, trained_model, test_loader, whichType='compar
 
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
 
-# ---------------------------------------------------------------------------- #
 # ---------------------------------------------------------------------------- #
 
 def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
