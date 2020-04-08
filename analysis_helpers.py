@@ -312,17 +312,17 @@ def lesionperfbyNumerosity(lesiondata):
 
 def getSSEForContextModels(args):
     # Determine the sum squared error between the rnn responses and the local vs global context models, for each RNN instance.
-    allmodels = MDSplt.getModelNames(args)
+    allmodels = getModelNames(args)
     SSE_local = [0 for i in range(len(allmodels))]
     SSE_global = [0 for i in range(len(allmodels))]
 
     for ind, m in enumerate(allmodels):
-        args.model_id = MDSplt.getIdfromName(m)
+        args.model_id = getIdfromName(m)
         testParams = setupTestParameters(args, device)
         basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
 
         # perform or load the lesion tests
-        lesiondata, regulartestdata = MDSplt.performLesionTests(args, testParams, basefilename)
+        lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
         n_sequences, n_lesions = lesiondata["bigdict_lesionperf"].shape
 
         for seq in range(n_sequences):
