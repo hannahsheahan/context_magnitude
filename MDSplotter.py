@@ -525,25 +525,6 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
 
 # ---------------------------------------------------------------------------- #
 
-def performanceMean(number_differences, performance):
-    """
-    This function calculates the mean network performance as a function of the distance between the current number and some mean context signal
-    - the absolute difference |(current - mean)| signal is already in number_differences
-    """
-    unique_diffs = np.unique(number_differences)
-    tally = np.zeros((len(unique_diffs),))    # a counter for computing mean
-    aggregate_perf = np.zeros((len(unique_diffs),))
-    for i in range(len(unique_diffs)):
-        num = unique_diffs[i]
-        ind = np.argwhere([number_differences[i]==num for i in range(len(number_differences))])
-        tally[i] = len(ind)
-        for k in range(len(ind)):
-            aggregate_perf[i] += performance[ind[k][0]]
-    mean_performance = np.divide(aggregate_perf, tally)
-    return mean_performance, unique_diffs
-
-# ---------------------------------------------------------------------------- #
-
 def plotOptimalReferencePerformance(ax, args):
     # ***HRS these numbers need changing for the new longer number ranges
     if args.which_context==0:
