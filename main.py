@@ -18,7 +18,6 @@ import constants as const
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
 import sys
 import math
 import random

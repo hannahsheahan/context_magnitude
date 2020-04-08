@@ -9,6 +9,7 @@ import define_dataset as dset
 import magnitude_network as mnet
 import constants as const
 import numpy as np
+import scipy
 import os
 
 # ---------------------------------------------------------------------------- #
