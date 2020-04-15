@@ -29,7 +29,7 @@ from sklearn.manifold import MDS
 from sklearn.utils import shuffle
 
 # generic plotting settings
-contextcolours = ['gold', 'dodgerblue', 'orangered', 'black']   # 1-16, 1-11, 6-16 like fabrices colours
+contextcolours = [np.asarray([1.0, 0.69803921, 0.0, 1.0]), 'dodgerblue', 'orangered', 'black']   # 1-16, 1-11, 6-16 like fabrices colours
 
 # ---------------------------------------------------------------------------- #
 
@@ -78,7 +78,7 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
 
 def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', saveFig=True):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
-    Context order:  1-16, 1-11, 5-16
+    Reorient the context order to match Fabrice's:  i.e. from (1-16, 1-11, 5-16) to (low, high, full)
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
     """
     if whichTrialType=='filler':
@@ -87,21 +87,33 @@ def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', sav
     fig = plt.figure(figsize=(5,3))
     ax = plt.gca()
     if plot_diff_code:
-        D = pairwise_distances(MDS_dict["diff_sl_activations"])
+        D = pairwise_distances(MDS_dict["diff_sl_activations"], metric='correlation')
         labelticks = ['-15:+15', '-10:+10', '-10:+10']
         ticks = [0,(const.FULLR_SPAN-1)*2, (const.FULLR_SPAN-1)*2 + (const.LOWR_SPAN-1)*2]
         differenceCodeText = 'differencecode_'
     else:
-        D = pairwise_distances(MDS_dict["sl_activations"])  # note that activations are structured by: context (1-15,1-10,5-15) and judgement value magnitude within that.
+        act = MDS_dict["sl_activations"][:]
+
         if whichTrialType == 'filler':
+            Dfull = act[0:const.FULLR_SPAN]
+            Dlow = act[const.FULLR_SPAN:const.FULLR_SPAN+const.FULLR_SPAN]
+            Dhigh = act[const.FULLR_SPAN+const.FULLR_SPAN:const.FULLR_SPAN+const.FULLR_SPAN+const.FULLR_SPAN]
             labelticks = ['1-16', '1-16', '1-16']
             ticks = [0,const.FULLR_SPAN,const.FULLR_SPAN*2]
         else:
-            labelticks = ['1-16', '1-11', '6-16']
-            ticks = [0, const.FULLR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN]
+            Dfull = act[0:const.FULLR_SPAN]
+            Dlow = act[const.FULLR_SPAN:const.FULLR_SPAN+const.LOWR_SPAN]
+            Dhigh = act[const.FULLR_SPAN+const.LOWR_SPAN:const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN]
+            labelticks = ['25-35', '30-40', '25-40']
+            ticks = [0, const.LOWR_SPAN, const.HIGHR_SPAN+const.LOWR_SPAN]
+
+        D = np.concatenate((Dlow, Dhigh, Dfull), axis=0)
+
+        np.save('meanactivations_trlf'+str(args.train_lesion_freq), D)
+        D = pairwise_distances(D, metric='correlation')
         differenceCodeText = ''
 
-    im = plt.imshow(D, zorder=2, cmap='Blues', interpolation='nearest', vmin=0, vmax=5)
+    im = plt.imshow(D, zorder=2, cmap='viridis', interpolation='nearest')
 
     #    divider = make_axes_locatable(ax[1])
     #    cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -266,9 +278,15 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
 
     if whichTrialType=='filler':
         MDS_dict = MDS_dict["filler_dict"]
+        Ns = [16,16,16]
+    else:
+        Ns = [16,11,11]
 
     fig,ax = plt.subplots(1,3, figsize=(18,5))
-    colours = get_cmap(10, 'magma')
+    #colours = get_cmap(10, 'magma')
+    rbg_contextcolours = [mplcol.to_rgba(i) for i in contextcolours]
+    white = (1.0, 1.0, 1.0, 1.0)
+
     diffcolours = get_cmap(20, 'magma')
 
     if plot_diff_code:
@@ -320,19 +338,34 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
             ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
 
+        markercount=0
+        lastc = -1
         for i in range((MDS_act.shape[0])):
-            # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(contextlabel[i])], s=80)
 
+            # create colour gradient within each context to signal numerosity
+            c = int(contextlabel[i])
+            if c!=lastc:
+                markercount=0
+            lastc = int(contextlabel[i])
+            graded_contextcolours = np.zeros((4, Ns[c]))
+            for p in range(4):
+                graded_contextcolours[p] = np.linspace(white[p],rbg_contextcolours[c][p],Ns[c])
+            gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
+
+            # colour by context
+            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=gradedcolour, edgecolor=contextcolours[int(contextlabel[i])], s=80, linewidths=2)
+            markercount +=1
             # label numerosity in white inside the marker
-            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(numberlabel[i])), color='black', size=8, horizontalalignment='center', verticalalignment='center')
+            firstincontext = [0,15,16,16+10,16+11, 16+21]
+            if i in firstincontext:
+                ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(24+int(numberlabel[i])), color=contextcolours[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
         if args.network_style=='mlp':
             ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
         else:
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
-            ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
+            ax[j].set(xlim=(-0.65, 0.65), ylim=(-0.65, 0.65))
 
     n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
 
@@ -383,11 +416,13 @@ def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare',
             if not plot_diff_code:  # the difference code is arranged differently
                 ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
             for j in range(len(points[i])):
-                label = str(int(labels[points[i][j]]))
+                label = str(24+int(labels[points[i][j]]))
                 ax.text(slMDS[points[i][j], 0], slMDS[points[i][j], 1], slMDS[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
         ax.set_xlabel('MDS dim 1')
         ax.set_ylabel('MDS dim 2')
         ax.set_zlabel('MDS dim 3')
+        ax.set(xlim=(-0.65, 0.65), ylim=(-0.65, 0.65), zlim=(-0.65, 0.65))
+
         return fig,
 
     def animate(i):
@@ -528,8 +563,18 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
 def plotOptimalReferencePerformance(ax, args):
     # ***HRS these numbers need changing for the new longer number ranges
     if args.which_context==0:
-        localpolicy_optimal = ax.axhline(y=77.07, linestyle=':', color='lightpink')
         globalpolicy_optimal = ax.axhline(y=73.43, linestyle=':', color='lightblue')
+        plt.scatter(0.5, 73.43, color='lightblue', s=5)
+        plt.scatter(0.5+0.01, 76.67, color=contextcolours[0], s=4)
+        plt.scatter(0.5+0.02, 71.82, color=contextcolours[1], s=4)
+        plt.scatter(0.5+0.03, 71.82, color=contextcolours[2], s=4)
+
+        localpolicy_optimal = ax.axhline(y=77.07, linestyle=':', color='lightpink')
+        plt.scatter(0.6, 77.07, color='lightpink', s=5)
+        plt.scatter(0.6+0.01, 76.67, color=contextcolours[0], s=4)
+        plt.scatter(0.6+0.02, 77.27, color=contextcolours[1], s=4)
+        plt.scatter(0.6+0.03, 77.27, color=contextcolours[2], s=4)
+
         #globaldistpolicy_optimal = ax.axhline(y=76.5, linestyle=':', color='lightgreen')
         #handles = [localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal]
         handles = [localpolicy_optimal, globalpolicy_optimal]

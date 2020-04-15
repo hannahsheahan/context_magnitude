@@ -23,6 +23,7 @@ import math
 import random
 import copy
 from sklearn.manifold import MDS
+from sklearn.metrics import pairwise_distances
 from sklearn.utils import shuffle
 from importlib import reload
 from mpl_toolkits import mplot3d
@@ -107,7 +108,7 @@ def analyseNetwork(args):
                 sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = anh.averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
                 diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = anh.diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
 
-                # do MDS on the activations for the training set
+                # do MDS on the activations for the test set
                 print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
                 tic = time.time()
                 randseed = 3 # so that we get the same MDS each time
@@ -187,11 +188,61 @@ def generatePlots(MDS_dict, args):
         #MDSplt.animate3DdriftMDS(MDS_dict, args)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
+def averageActivationsAcrossModels(args):
+    # Take all models trained under the conditions in args, and average the resulting test activations before we plot
+    # This will average the activations across all model BEFORE MDS is performed, and then do MDS on the average activations
+    allmodels = anh.getModelNames(args)
+    MDS_meandict = {}
+    MDS_meandict["filler_dict"] = {}
+    sl_activations = [[] for i in range(len(allmodels))]
+    contextlabel = [[] for i in range(len(allmodels))]
+    numberlabel = [[] for i in range(len(allmodels))]
+    filler_sl_activations = [[] for i in range(len(allmodels))]
+    filler_contextlabel = [[] for i in range(len(allmodels))]
+    filler_numberlabel = [[] for i in range(len(allmodels))]
+
+    for ind, m in enumerate(allmodels):
+        args.model_id = anh.getIdfromName(m)
+        # Analyse the trained network (extract and save network activations)
+        mdict = analyseNetwork(args)
+        sl_activations[ind] = mdict["sl_activations"]
+        contextlabel[ind] = mdict["sl_contexts"]
+        numberlabel[ind] = mdict["sl_judgeValues"]
+        filler_sl_activations[ind] = mdict["filler_dict"]["sl_activations"]
+        filler_contextlabel[ind] = mdict["filler_dict"]["sl_contexts"]
+        filler_numberlabel[ind] = mdict["filler_dict"]["sl_judgeValues"]
+
+    MDS_meandict["sl_activations"] = np.mean(sl_activations, axis=0)
+    MDS_meandict["sl_contexts"] = np.mean(contextlabel, axis=0)
+    MDS_meandict["sl_judgeValues"] = np.mean(numberlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_activations"] = np.mean(filler_sl_activations, axis=0)
+    MDS_meandict["filler_dict"]["sl_contexts"] = np.mean(filler_contextlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_numberlabel, axis=0)
+
+    # Now do MDS on the mean activations across all networks
+    randseed = 3   # so that we get the same MDS each time
+    sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+    D = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
+    MDS_slactivations = sl_embedding.fit_transform(D)
+
+    filler_sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+    D = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
+    filler_MDS_slactivations = filler_sl_embedding.fit_transform(D)
+
+    MDS_meandict["MDS_slactivations"] = MDS_slactivations
+    MDS_meandict["filler_dict"]["MDS_slactivations"] = filler_MDS_slactivations
+    args.model_id = 0
+
+    return MDS_meandict, args
+
+# ---------------------------------------------------------------------------- #
 
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
+    #args.train_lesion_freq=0.1
+    #args.model_id = 7388  # an example case
 
     # Train the network from scratch
     #trainAndSaveANetwork(args)
@@ -199,15 +250,17 @@ if __name__ == '__main__':
     # Analyse the trained network (extract and save network activations)
     #MDS_dict = analyseNetwork(args)
 
+    #MDS_dict, args = averageActivationsAcrossModels(args)
+
     # Visualise the resultant network activations (RDMs and MDS)
     #generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
     #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
-    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Assess whether this class of trained networks use local-context or global-context policy
-    args.train_lesion_freq = 0.1
-    anh.getSSEForContextModels(args, device)
+    #args.train_lesion_freq = 0.1
+    #anh.getSSEForContextModels(args, device)
 
 # ---------------------------------------------------------------------------- #
