@@ -1278,7 +1278,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
         model = OneStepRNN(const.TOTALMAXNUM+const.NCONTEXTS+1, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
-
+        
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 

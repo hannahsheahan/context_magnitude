@@ -191,6 +191,8 @@ def generatePlots(MDS_dict, args):
 def averageActivationsAcrossModels(args):
     # Take all models trained under the conditions in args, and average the resulting test activations before we plot
     # This will average the activations across all model BEFORE MDS is performed, and then do MDS on the average activations
+    # *HRS This function is ugly AF so can tidy later
+
     allmodels = anh.getModelNames(args)
     MDS_meandict = {}
     MDS_meandict["filler_dict"] = {}
@@ -220,7 +222,7 @@ def averageActivationsAcrossModels(args):
     MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_numberlabel, axis=0)
 
     # Now do MDS on the mean activations across all networks
-    randseed = 3   # so that we get the same MDS each time
+    randseed = 2#3   # so that we get the same MDS each time
     sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
     D = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
     MDS_slactivations = sl_embedding.fit_transform(D)
@@ -239,28 +241,31 @@ def averageActivationsAcrossModels(args):
 
 if __name__ == '__main__':
 
-    # set up dataset and network hyperparams via command line
-    args, device, multiparams = mnet.defineHyperparams()
-    #args.train_lesion_freq=0.1
-    #args.model_id = 7388  # an example case
+    for i in range(9):
+        # set up dataset and network hyperparams via command line
+        args, device, multiparams = mnet.defineHyperparams()
+        args.label_context = 'constant'
+        args.train_lesion_freq=0.1
+        args.model_id = random.randint(1,10000)
 
-    # Train the network from scratch
-    #trainAndSaveANetwork(args)
+        #args.model_id = 7388  # an example case
 
-    # Analyse the trained network (extract and save network activations)
-    #MDS_dict = analyseNetwork(args)
+        # Train the network from scratch
+        trainAndSaveANetwork(args)
 
-    #MDS_dict, args = averageActivationsAcrossModels(args)
+        # Analyse the trained network (extract and save network activations)
+        MDS_dict = analyseNetwork(args)
 
-    # Visualise the resultant network activations (RDMs and MDS)
-    #generatePlots(MDS_dict, args)
+        # Visualise the resultant network activations (RDMs and MDS)
+        #MDS_dict, args = averageActivationsAcrossModels(args)
+        #generatePlots(MDS_dict, args)
 
-    # Plot the lesion test performance
-    #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
-    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+        # Plot the lesion test performance
+        #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
+        #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
-    # Assess whether this class of trained networks use local-context or global-context policy
-    #args.train_lesion_freq = 0.1
-    #anh.getSSEForContextModels(args, device)
+        # Assess whether this class of trained networks use local-context or global-context policy
+        #args.train_lesion_freq = 0.1
+        #anh.getSSEForContextModels(args, device)
 
 # ---------------------------------------------------------------------------- #
