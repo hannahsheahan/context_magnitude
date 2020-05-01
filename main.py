@@ -39,10 +39,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 from itertools import product
 from datetime import datetime
 import argparse
+
 
 # ---------------------------------------------------------------------------- #
 
@@ -62,6 +63,7 @@ def trainAndSaveANetwork(args):
         model = mnet.trainMLPNetwork(args, device, multiparams, trainset, testset)
 
     # save the trained weights so we can easily look at them
+    print('Saving trained model...')
     print(trained_modelname)
     torch.save(model, trained_modelname)
 
@@ -74,7 +76,7 @@ def analyseNetwork(args):
         - the above for both the regular training set and the cross validation set
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args) # HRS this needs modifying to choose the right training iter.
 
     # load an existing dataset
     try:
@@ -112,12 +114,16 @@ def analyseNetwork(args):
                 print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
                 tic = time.time()
                 randseed = 3 # so that we get the same MDS each time
-                embedding = MDS(n_components=3, random_state=randseed)
-                MDS_activations = embedding.fit_transform(activations)
-                sl_embedding = MDS(n_components=3, random_state=randseed)
-                MDS_slactivations = sl_embedding.fit_transform(sl_activations)
-                diff_sl_embedding = MDS(n_components=3, random_state=randseed)
-                MDS_diff_slactivations = diff_sl_embedding.fit_transform(diff_sl_activations)
+
+                embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+                D = pairwise_distances(activations, metric='correlation') # using correlation distance
+                MDS_activations = embedding.fit_transform(D)
+                sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+                D = pairwise_distances(sl_activations, metric='correlation') # using correlation distance
+                MDS_slactivations = sl_embedding.fit_transform(D)
+                diff_sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+                D = pairwise_distances(diff_sl_activations, metric='correlation') # using correlation distance
+                MDS_diff_slactivations = diff_sl_embedding.fit_transform(D)
 
                 # now do MDS again but for the latent state activations through time in the training set (***HRS takes ages to do this MDS)
                 #print(drift["temporal_activation_drift"].shape)
@@ -184,7 +190,7 @@ def generatePlots(MDS_dict, args):
         #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args)  # plot the MDS with context labels. ***HRS obsolete?
 
         # 3D Animations
-        #MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
+        MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
         #MDSplt.animate3DdriftMDS(MDS_dict, args)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
@@ -205,6 +211,7 @@ def averageActivationsAcrossModels(args):
 
     for ind, m in enumerate(allmodels):
         args.model_id = anh.getIdfromName(m)
+        print('Loading model: {}'.format(args.model_id))
         # Analyse the trained network (extract and save network activations)
         mdict = analyseNetwork(args)
         sl_activations[ind] = mdict["sl_activations"]
@@ -241,31 +248,29 @@ def averageActivationsAcrossModels(args):
 
 if __name__ == '__main__':
 
-    for i in range(9):
-        # set up dataset and network hyperparams via command line
-        args, device, multiparams = mnet.defineHyperparams()
-        args.label_context = 'constant'
-        args.train_lesion_freq=0.1
-        args.model_id = random.randint(1,10000)
+    # set up dataset and network hyperparams via command line
+    args, device, multiparams = mnet.defineHyperparams()
+    args.label_context = 'constant'
+    args.train_lesion_freq=0.1
+    #args.model_id = 2951
+    #args.model_id = 7388  # an example case
 
-        #args.model_id = 7388  # an example case
+    # Train the network from scratch
+    #trainAndSaveANetwork(args)
 
-        # Train the network from scratch
-        trainAndSaveANetwork(args)
+    # Analyse the trained network (extract and save network activations)
+    #MDS_dict = analyseNetwork(args)
 
-        # Analyse the trained network (extract and save network activations)
-        MDS_dict = analyseNetwork(args)
+    # Visualise the resultant network activations (RDMs and MDS)
+    #MDS_dict, args = averageActivationsAcrossModels(args)
+    #generatePlots(MDS_dict, args)
 
-        # Visualise the resultant network activations (RDMs and MDS)
-        #MDS_dict, args = averageActivationsAcrossModels(args)
-        #generatePlots(MDS_dict, args)
+    # Plot the lesion test performance
+    #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
+    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
-        # Plot the lesion test performance
-        #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
-        #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
-
-        # Assess whether this class of trained networks use local-context or global-context policy
-        #args.train_lesion_freq = 0.1
-        #anh.getSSEForContextModels(args, device)
+    # Assess whether this class of trained networks use local-context or global-context policy
+    #args.train_lesion_freq = 0.1
+    #anh.getSSEForContextModels(args, device)
 
 # ---------------------------------------------------------------------------- #

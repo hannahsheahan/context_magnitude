@@ -366,6 +366,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
         else:
             #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
             ax[j].set(xlim=(-0.65, 0.65), ylim=(-0.65, 0.65))
+            #ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
     n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
 
@@ -422,6 +423,7 @@ def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare',
         ax.set_ylabel('MDS dim 2')
         ax.set_zlabel('MDS dim 3')
         ax.set(xlim=(-0.65, 0.65), ylim=(-0.65, 0.65), zlim=(-0.65, 0.65))
+        #ax.set(xlim=(-3, 3), ylim=(-3, 3), zlim=(-3, 3))
 
         return fig,
 
@@ -604,7 +606,8 @@ def compareLesionTests(args, device):
     ax = plt.gca()
     #localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal = plotOptimalReferencePerformance(ax, args)
     localpolicy_optimal, globalpolicy_optimal = plotOptimalReferencePerformance(ax, args)
-    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
+    #frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
+    frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
     offsets = [0.01,0.02,0.03]
     overall_lesioned_tests = []
 
@@ -689,7 +692,7 @@ def compareLesionTests(args, device):
     plt.legend((localpolicy_optimal, globalpolicy_optimal, hnolesion, hlesion, context_handles[0], context_handles[1], context_handles[2]),('Optimal | local \u03C0, local #distr.','Optimal | global \u03C0, local #distr.','Unlesioned perf. across whole sequence', 'Perf. immediately post-lesion','Perf. immediately post-lesion, context A: 1-16','Perf. immediately post-lesion, context B: 1-11','Perf. immediately post-lesion, context C: 6-16'))
     plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+', trained with lesions)')
     whichTrialType = 'compare'
-    autoSaveFigure('figures/lesionfreq_trainedlesions_', args, True, False, whichTrialType, True)
+    autoSaveFigure('figures/lesionfreq_trainedlesions_'+contexttxt, args, True, False, whichTrialType, True)
 
 # ---------------------------------------------------------------------------- #
 
