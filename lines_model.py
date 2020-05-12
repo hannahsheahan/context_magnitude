@@ -26,15 +26,19 @@ import constants as const
 import MDSplotter as MDSplt
 import random
 
+from scipy.spatial import procrustes
 from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
 import matplotlib.colors as mplcol
 import sklearn.decomposition
+from matplotlib import animation
+from mpl_toolkits import mplot3d
 
 RNN_BASEPATH = 'lines_model/rnn_RDMs_nolesion/' #'lines_model/rnn_RDMs_nolesion/' #'lines_model/rnn_RDMs/'
 EEG_BASEPATH = 'lines_model/brain_RDMs/'
 EEG_FILE = 'avRDM_magn.mat'
 contextcolours = ['dodgerblue', 'orangered', np.asarray([1.0, 0.69803921, 0.0, 1.0]), 'black']   # 1-16, 1-11, 6-16 like fabrices colours
+modelcolours = ['mediumblue','saddlebrown','darkgoldenrod']
 
 # ---------------------------------------------------------------------------- #
 def cmdscale(D):
@@ -165,9 +169,10 @@ def rotate_axes(x,y,theta):
 
 # ---------------------------------------------------------------------------- #
 
-def plot_components(data, theta=0, axislimits=None):
+def plot_components(data, theta=0, axislimits=None, ax=None):
 
-    fig,ax = plt.subplots(1,3, figsize=(18,5))
+    if ax is None:
+        fig,ax = plt.subplots(1,3, figsize=(18,5))
     rbg_contextcolours = [mplcol.to_rgba(i) for i in contextcolours]
     white = (1.0, 1.0, 1.0, 1.0)
     contextlabel = np.zeros((data.shape[0],))
@@ -233,7 +238,7 @@ def plot_components(data, theta=0, axislimits=None):
         ax[j].axis('equal')
         if axislimits is not None:
             ax[j].set(xlim=axislimits, ylim=axislimits)
-    return fig
+
 
 # --------------------------------------------------------------------------- #
 
@@ -284,8 +289,8 @@ def generate_lines(params):
     x0,y0,z0 = [0,0,0]
     npoints_long = 16
     npoints_short = 11
-    allow_centre_offsets = True
-    keep_parallel = True
+    allow_centre_offsets = True  # note: haven't written a False option
+    keep_parallel = True         # note: haven't written a False option
 
     # define centre of each line as free point in 3d space
     if allow_centre_offsets:
@@ -324,6 +329,7 @@ def makelinesmodel(metric, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
     # we will use the x (first) input to signal the distance metric (unconventional but we dont need to evaluate as a function of x)
     params = [xB,yB,zB, xC,yC,zC, lenLong, lenShort]
     all_lines = generate_lines(params)
+    all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix
     model_RDM = pairwise_distances(all_lines, metric=metric)
 
     return model_RDM.flatten()
@@ -336,9 +342,9 @@ def nanArray(size):
     return tmp
 
 # ---------------------------------------------------------------------------- #
-def fitmodelRDM(data, numiter):
+def fitmodelRDM(data, metric, numiter):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
-    metric = 'euclidean'
+
     fitted_params = nanArray((numiter,8))
     fitted_SSE = nanArray((numiter,1))
 
@@ -346,10 +352,16 @@ def fitmodelRDM(data, numiter):
         # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
         init_params = [random.random(),random.random(),random.random(),\
                        random.random(),random.random(),random.random(),\
-                       random.random(), random.random()]
+                       random.random()*5, random.random()*5]
         try:
+            lower_bound = [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0, 0]
+            upper_bound = [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]
+            #params, params_covariance = optimize.curve_fit(makelinesmodel, metric, data, p0=init_params, bounds=(lower_bound,upper_bound))
             params, params_covariance = optimize.curve_fit(makelinesmodel, metric, data, p0=init_params)
+
+            # lets try a cost function which is hopefully closer to correlation distance by squaring the square errors
             SSE = sum((makelinesmodel(metric, *params) - data)**2)
+
             fitted_params[i] = params
             fitted_SSE[i] = SSE
 
@@ -360,23 +372,24 @@ def fitmodelRDM(data, numiter):
 
 # ---------------------------------------------------------------------------- #
 
-def bestfitRDM(data):
+def bestfitRDM(data, metric):
+    # fits a model RDM to the input data RDM
     flat_data = data.flatten()
-    fitted_params, fitted_SSE = fitmodelRDM(flat_data, 100)
+    fitted_params, fitted_SSE = fitmodelRDM(flat_data, metric, 1000)
     opt_iter = np.nanargmin(fitted_SSE)
     opt_params = fitted_params[opt_iter][:]
     print('Best-fit parameters:')
     print(opt_params)
 
     # generate euclidean distance RDM under these best fit parameters
-    bestfit_rdm = makelinesmodel('euclidean', *opt_params)
+    bestfit_rdm = makelinesmodel(metric, *opt_params)
 
     fig, ax = plt.subplots(1,2)
     ax[0].imshow(flat_data.reshape(38,-1).T)
     ax[0].set_title('rnn data RDM')
     ax[1].imshow(bestfit_rdm.reshape(38,-1).T)
     ax[1].set_title('best fit RDM')
-    plt.savefig('figures/rdm_fitting_test.pdf',bbox_inches='tight')
+    plt.savefig('figures/rdm_fitting_test_'+metric+'.pdf',bbox_inches='tight')
 
     divisivenorm_ratio = opt_params[-1]/opt_params[-2]
     print('Best-fit divisive normalisation ratio: {}'.format(divisivenorm_ratio))
@@ -387,8 +400,119 @@ def bestfitRDM(data):
     return opt_params, subtractive_ratio, divisivenorm_ratio
 # ---------------------------------------------------------------------------- #
 
+def fit_subjects(data, metric):
+    fitparams = np.zeros((data.shape[0], 8))
+    sub_ratios = np.zeros((data.shape[0],))
+    div_ratios = np.zeros((data.shape[0],))
+    for i in range(data.shape[0]):
+        subject_eclRDM = data[i]
+        subject_eclRDM = pairwise_distances(subject_eclRDM, metric=metric)
+        np.fill_diagonal(np.asarray(subject_eclRDM), 0)
+        opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(subject_eclRDM, metric)
+        fitparams[i] = opt_params
+        sub_ratios[i] = subtractive_ratio
+        div_ratios[i] = divisivenorm_ratio
 
-# saving settings
+    print('subtractive ratios:')
+    print(sub_ratios)
+    print('divisive ratios:')
+    print(div_ratios)
+
+    print('stat. significance:')
+    [t,p] = stats.ttest_1samp(sub_ratios, 1)  # is there significant subtractive normalisation vs totally offset?
+    print('subtractive normalisation: p={}'.format(p))
+    [t,p] = stats.ttest_1samp(div_ratios, 0.6875)  # is there significant divisive normalisation vs totally absolute?
+    print('divisive normalisation: p={}'.format(p))
+
+    return fitparams, sub_ratios, div_ratios
+# ---------------------------------------------------------------------------- #
+
+def plot_bestmodel_data(mtx1, mtx2, args, metric):
+    # mtx1 = data procrustes transformed
+    # mtx2 = model proucrustes transformed
+    fig, ax = plt.subplots(1,3, figsize=(18,5))
+    # Plot the data using our pretty plotting function
+    plot_components(mtx1, 0, None, ax)
+
+    # Plot the model on top
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+        elif j==1:
+            dimA = 0
+            dimB = 2
+        elif j==2:
+            dimA = 1
+            dimB = 2
+
+        contextA = range(const.LOWR_SPAN)
+        contextB = range(const.LOWR_SPAN,const.LOWR_SPAN+const.HIGHR_SPAN)
+        contextC = range(const.LOWR_SPAN+const.HIGHR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+        ax[j].plot(mtx2[contextA, dimA], mtx2[contextA, dimB], color=modelcolours[0])
+        ax[j].plot(mtx2[contextB, dimA],mtx2[contextB, dimB], color=modelcolours[1])
+        ax[j].plot(mtx2[contextC, dimA],mtx2[contextC, dimB], color=modelcolours[2])
+        ax[j].axis('equal')
+
+    MDSplt.autoSaveFigure('figures/bestfit_procrustes_'+metric, args, False, False, 'compare', saveFig)
+# ---------------------------------------------------------------------------- #
+
+def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
+    """ This function will plot the numerosity labeled, context-marked MDS projections
+     of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
+     from different angles and optionally save it as a mp4 file.
+    """
+
+    fig = plt.figure()
+    ax = mplot3d.Axes3D(fig)
+    contextA = range(const.LOWR_SPAN)
+    contextB = range(const.LOWR_SPAN,const.LOWR_SPAN+const.HIGHR_SPAN)
+    contextC = range(const.LOWR_SPAN+const.HIGHR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+    numberlabel = [[i for i in range(const.LOWR_LLIM,const.LOWR_ULIM+1)],[i for i in range(const.HIGHR_LLIM,const.HIGHR_ULIM+1)], [i for i in range(const.FULLR_LLIM,const.FULLR_ULIM+1)]]
+    numberlabel = [i+24 for sublist in numberlabel for i in sublist]
+
+    def init():
+        points = [contextA, contextB, contextC] #if labelContext else [contextA]
+
+        for i in range(len(points)):
+            # plot the MDS of the data
+            ax.scatter(MDS_data[points[i], 0], MDS_data[points[i], 1], MDS_data[points[i], 2], color=contextcolours[i])
+            ax.plot(MDS_data[points[i], 0], MDS_data[points[i], 1], MDS_data[points[i], 2], color=contextcolours[i])
+
+            for j in range(len(points[i])):
+                if j==0 or j==len(points[i])-1:
+                    label = str(int(numberlabel[points[i][j]]))
+                    ax.text(MDS_data[points[i][j], 0], MDS_data[points[i][j], 1], MDS_data[points[i][j], 2], label, color='black', size=11, horizontalalignment='center', verticalalignment='center')
+
+            # now plot the MDS of the model predictions
+            if MDS_model is not None:
+                ax.plot(MDS_model[points[i], 0], MDS_model[points[i], 1], MDS_model[points[i], 2], color=modelcolours[i])
+
+        ax.set_xlabel('MDS dim 1')
+        ax.set_ylabel('MDS dim 2')
+        ax.set_zlabel('MDS dim 3')
+        axislimits = (-0.7, 0.7)
+        ax.set(xlim=axislimits, ylim=axislimits, zlim=axislimits)
+
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=10., azim=i)
+        return fig,
+
+    # Animate.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=360, interval=20, blit=True)
+
+    # save the animation as an mp4.
+    if saveFig:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        strng = MDSplt.autoSaveFigure('animations/MDS_3Danim_linesmodelanddata_'+metric, args, True, False, 'compare', False)
+        anim.save(strng+'.mp4', writer=writer)
+
+# ---------------------------------------------------------------------------- #
+
+# figure saving settings
 saveFig = True
 RNN_args = network_args('blocked', 'truecontext', 0.0)
 EEG_args = network_args('blocked', 'truecontext', 0.0)
@@ -396,59 +520,77 @@ EEG_args = network_args('blocked', 'truecontext', 0.0)
 # import rnn representations data
 RNN_data = import_RNN_data(RNN_BASEPATH, RNN_args)
 mean_RNN_data = np.mean(RNN_data, axis=0)  # mean across model instances
-mean_RNN_RDM = pairwise_distances(mean_RNN_data, metric='correlation')
-mean_RNN_euclRDM = pairwise_distances(mean_RNN_data, metric='euclidean')
+mean_RNN_data = stats.zscore(mean_RNN_data, axis=None)  # z-score the RNN raw data
 
 # import the eeg representations data
 EEG_data = import_EEG_data(EEG_BASEPATH, EEG_FILE)
 mean_EEG_RDM = np.mean(EEG_data, axis=0)
 
-# plot low dimensional representations of the rnn and eeg data
-#generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+# ---------------------------------------------------------------------------- #
+"""
+metric = 'correlation'
+data = pairwise_distances(mean_RNN_data, metric=metric)
+np.fill_diagonal(np.asarray(data), 0)
+MDS_rnn, evals = cmdscale(data)
+animate3DMDS(MDS_rnn, None, RNN_args, 'correlation', saveFig)
+
+"""
+
+# Plot low dimensional representations of the rnn and eeg data
+# generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+
+# Fit to the mean rnn for now
+metric = 'correlation'
+data = pairwise_distances(mean_RNN_data, metric=metric)
+np.fill_diagonal(np.asarray(data), 0)
+opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(data, metric)
+
+# Now take the best fit parameters for the lines model, generate a distance RDM from it,
+# and visualize that fit next to the distance data
+bestfit_lines = generate_lines(opt_params)
+fig = plot_components(bestfit_lines)
+MDSplt.autoSaveFigure('figures/bestfit_lines'+metric, RNN_args, False, False, 'compare', saveFig)
+
+bestfit_RDM = pairwise_distances(bestfit_lines, metric=metric)
+np.fill_diagonal(np.asarray(bestfit_RDM), 0)
+MDS_model, evals = cmdscale(bestfit_RDM)
+
+# For plotting MDS
+#metric = 'correlation'
+#test = np.square(bestfit_RDM)  # this should be proportional to correlation distance
+#plt.figure()
+#plt.imshow(test)
+#print(test)
+#MDSplt.autoSaveFigure('figures/bestfit_rmd_euclfit_nowcorrel_', RNN_args, False, False, 'compare', saveFig)
+#np.fill_diagonal(np.asarray(test), 0)
+#MDS_model, evals = cmdscale(test)
+
+pairwise_data = pairwise_distances(mean_RNN_data, metric=metric)
+np.fill_diagonal(np.asarray(pairwise_data), 0)
+MDS_data, evals = cmdscale(pairwise_data)
+
+# Do procrustes transformation to visualize the best fit  model predictions on top of the original data MDS
+MDS_data = MDS_data[:,:3] # just take the first 3 MDS components
+MDS_model = MDS_model[:,:3]
+plt.figure()
+plot_components(MDS_model)
+#MDSplt.autoSaveFigure('figures/eucfit_tocorrel_fitmodel', RNN_args, False, False, 'compare', saveFig)
+MDSplt.autoSaveFigure('figures/correl_fitmodel', RNN_args, False, False, 'compare', saveFig)
+
+# Plot the procrustes-transformed MDS of the model and MDS of the data on top of each other
+procrustes_data, procrustes_model, disparity = procrustes(MDS_data, MDS_model)
+plot_bestmodel_data(procrustes_data, procrustes_model, RNN_args, metric)
+
+# Generate an animation of the procrustes-transformed MDS of the model and MDS of the data on top of each other
+#animate3DMDS(procrustes_data, procrustes_model, RNN_args, metric, saveFig)
 
 
 
-# construct a lines model
-# the lines model will take some parameters and generate 3 lines in 3D space
-# it will then generate a (correlation distance) RDM based on those lines
-# we will then fit the correlation distance model RDM to the actual (rnn or eeg) data
-
+# fit each subject (or model instance) separately
+#fitparams, sub_ratios, div_ratios = fit_subjects(RNN_data, metric)
 
 # generate a fake rdm to test our fitting on
 #fake_params = [1,0,0, -1,-1,0, 11, 11]
 #fake_rdm = makelinesmodel('euclidean', *fake_params)
-
-rnn_fitparams = np.zeros((RNN_data.shape[0], 8))
-sub_ratios = np.zeros((RNN_data.shape[0],))
-div_ratios = np.zeros((RNN_data.shape[0],))
-for i in range(RNN_data.shape[0]):
-    subject_RNN_eclRDM = RNN_data[i]
-    subject_RNN_eclRDM = pairwise_distances(subject_RNN_eclRDM, metric='euclidean')
-    np.fill_diagonal(np.asarray(subject_RNN_eclRDM), 0)
-    opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(subject_RNN_eclRDM)
-    rnn_fitparams[i] = opt_params
-    sub_ratios[i] = subtractive_ratio
-    div_ratios[i] = divisivenorm_ratio
-
-print('subtractive ratios:')
-print(sub_ratios)
-print('divisive ratios:')
-print(div_ratios)
-
-print('stat. significance:')
-[t,p] = stats.ttest_1samp(sub_ratios, 1)  # is there significant subtractive normalisation vs totally offset?
-print('subtractive normalisation: p={}'.format(p))
-[t,p] = stats.ttest_1samp(div_ratios, 0.6875)  # is there significant divisive normalisation vs totally absolute?
-print('divisive normalisation: p={}'.format(p))
-
-
-# Looks like for the unlesioned model its totally absolute and for the lesioned model its halfway between abs and normalised
-
-# Now take the best fit parameters for the lines model, generate a *correlation* distance RDM from it,
-# and visualize that fit on top of the correlation distance data
-#bestfit_lines = generate_lines(opt_params)
-#fig = plot_components(bestfit_lines)
-#MDSplt.autoSaveFigure('figures/bestfit', RNN_args, False, False, 'compare', saveFig)
-
 
 # ---------------------------------------------------------------------------- #
