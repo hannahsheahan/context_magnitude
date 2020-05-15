@@ -122,6 +122,35 @@ def import_RNN_data(basepath, args):
     return rnn_ordered_activations   # correlation distance:  [model instance x conditions x activity]
 # ---------------------------------------------------------------------------- #
 
+def import_all_data(RNN_args, metric='correlation'):
+    """ Imports the data from the RNN and EEG activations and compute similarity measures (for the RNN) based on the input metric.
+      - defaults to correlation distance which is the EEG metric.
+    """
+    RNN_data = import_RNN_data(RNN_BASEPATH, RNN_args)
+    mean_RNN_data = np.mean(RNN_data, axis=0)  # mean across model instances
+    mean_RNN_data = stats.zscore(mean_RNN_data, axis=None)  # z-score the RNN raw data
+
+    # compute RDM for RNN data
+    mean_RNN_RDM = pairwise_distances(mean_RNN_data, metric=metric)
+    np.fill_diagonal(np.asarray(mean_RNN_RDM), 0)
+
+    # for each model instance, zscore the RNN data and compute a similarity matrix
+    subjects_RNN_RDMs = np.zeros((RNN_data.shape[0], RNN_data.shape[1], RNN_data.shape[1]))
+    for i in range(RNN_data.shape[0]):
+        instance_RNN_data = RNN_data[i]
+        instance_RNN_data = stats.zscore(instance_RNN_data, axis=None)  # z-score the RNN raw data
+        instance_RNN_RDM = pairwise_distances(instance_RNN_data, metric=metric)
+        np.fill_diagonal(np.asarray(instance_RNN_RDM), 0)
+        subjects_RNN_RDMs[i] = instance_RNN_RDM
+
+    # import the eeg activations data (already in correlation distance)
+    subjects_EEG_RDMs = import_EEG_data(EEG_BASEPATH, EEG_FILE)
+    mean_EEG_RDM = np.mean(subjects_EEG_RDMs, axis=0)
+
+    return mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs
+
+# ---------------------------------------------------------------------------- #
+
 class network_args():
     def __init__(self, blocking, label, train_lesion_freq):
         self.blocking = blocking
@@ -284,26 +313,55 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
 # ---------------------------------------------------------------------------- #
 
-def generate_lines(params):
+def generate_lines(params, fit_args):
     """Build 3x parallel lines in 3d based on the parameters in params"""
     xB,yB,zB, xC,yC,zC, lenLong, lenShort = params
+    _, keep_parallel, div_norm, sub_norm, _ = fit_args
+
     x0,y0,z0 = [0,0,0]
     npoints_long = 16
     npoints_short = 11
-    allow_centre_offsets = True  # note: haven't written a False option
-    keep_parallel = True         # note: haven't written a False option
-
-    # define centre of each line as free point in 3d space
-    if allow_centre_offsets:
-        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        centre_B = [xB,yB,zB]
-        centre_C = [xC,yC,zC]
 
     # align axes with the coordinate system for defining the long line
     if keep_parallel:
         lineA_direction = [1,0,0]
         lineB_direction = [1,0,0]
         lineC_direction = [1,0,0]
+    else:
+        lineA_direction = [1,0,0]
+        lineB_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
+        lineC_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
+
+    # divisive normalisation settings
+    if div_norm == 'normalised':
+        lenLong = lenShort
+    elif div_norm == 'absolute':
+        lenLong = (npoints_long/npoints_short)*lenShort
+    elif div_norm == 'unconstrained':
+        # let the optimiser find whatever values it like for lenShort and lenLong
+        pass
+
+    # subtractive normalisation settings
+    if sub_norm == 'centred':
+        # constrain the centre of the three lines to be centred along the magnitude dimension
+        centre_A = [x0,y0,z0]
+        centre_B = [x0,yB,zB]
+        centre_C = [x0,yC,zC]
+
+    elif sub_norm == 'offset':
+        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+        mag_centre_low = -2.5 * (lenLong/npoints_long)
+        mag_centre_high = +2.5 * (lenLong/npoints_long)
+        centre_B = [mag_centre_low,yB,zB]
+        centre_C = [mag_centre_high,yC,zC]
+
+    elif sub_norm == 'unconstrained':
+        # let the optimiser do its thing
+        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+        centre_B = [xB,yB,zB]
+        centre_C = [xC,yC,zC]
+
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
@@ -325,13 +383,13 @@ def generate_lines(params):
 
 # ---------------------------------------------------------------------------- #
 
-def makelinesmodel(dummy, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
+def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
     """Construct a model of 3 lines (parallel or free) in 3d space
     - dummy is an unused dummy variable"""
     # we will use the x (first) input to signal the distance metric (unconventional but we dont need to evaluate as a function of x)
     params = [xB,yB,zB, xC,yC,zC, lenLong, lenShort]
-    all_lines = generate_lines(params)
-    all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix
+    all_lines = generate_lines(params, fit_args)
+    all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix **HRS dont need this line
     model_RDM = pairwise_distances(all_lines, metric='euclidean')
 
     #zscore the model RDM to make sure its on same scale as data
@@ -349,12 +407,12 @@ def nanArray(size):
 
 # ---------------------------------------------------------------------------- #
 
-def fitfunc(params, metric, data):
+def fitfunc(params, fit_args, data):
     """Fit lines model to data using a different function
        - for passing into scipy.optimize.minimize
        - returns a scalar loss
     """
-    modelRDM_uppertri = makelinesmodel(None, *params)
+    modelRDM_uppertri = makelinesmodel(fit_args, *params)
     loss = sum((modelRDM_uppertri - data)**2)
     return loss
 
@@ -364,19 +422,22 @@ def fitmodelRDM(data, numiter, cost_function):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
 
     uppertri_data, ind = data
+    cost_function, keep_parallel, div_norm, sub_norm, n_iter = fit_args
+    fitted_params = nanArray((n_iter,8))
+    fitted_loss = nanArray((n_iter,1))
 
-    fitted_params = nanArray((numiter,8))
-    fitted_loss = nanArray((numiter,1))
-
-    for i in range(numiter):
+    for i in range(n_iter):
         #
         try:
-            # keep these bounds, they seem reasonable and the fits dont get close to them at all
+            # keep these fit bounds, they are reasonable and the fits dont get close to them at all
             lower_bound = [-1, -1, -1, -1, -1, -1, 0, 0]
             upper_bound = [1, 1, 1, 1, 1, 1, 4, 4]
+            init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))] # random initial params
 
-            # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
-            init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
+            # select a loss function for the fit (these are now equivalent costs but use different fitting functions)
+            if cost_function=='SSE':
+                params, params_covariance = optimize.curve_fit(makelinesmodel, fit_args, uppertri_data, p0=init_params, bounds=(lower_bound,upper_bound) )
+                loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
             # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
             if cost_function=='SSE':
@@ -386,7 +447,7 @@ def fitmodelRDM(data, numiter, cost_function):
             elif cost_function=='SSE2':
                 result = optimize.minimize(fitfunc, init_params, args=(None, uppertri_data), bounds=[(lower_bound[i],upper_bound[i]) for i in range(len(init_params))] )
                 params = result.x
-                loss = sum((makelinesmodel(None, *params) - uppertri_data)**2)
+                loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
             fitted_params[i] = params
             fitted_loss[i] = loss
@@ -428,6 +489,8 @@ def bestfitRDM(data, cost_function, sub=0):
     print('Min fitted SEE: {}'.format(np.min(fitted_SSE)))
     opt_iter = np.nanargmin(fitted_SSE)
     opt_params = fitted_params[opt_iter][:]
+    opt_SSE = np.min(fitted_SSE)
+    print('Bestfit SSE: {}'.format(opt_SSE))
     print('Best-fit parameters:')
     print(opt_params)
 
@@ -442,13 +505,7 @@ def bestfitRDM(data, cost_function, sub=0):
     ax[1].set_title('best fit RDM')
     plt.savefig('figures/rdm_fitting_test_'+str(sub)+'.pdf',bbox_inches='tight')
 
-    divisivenorm_ratio = opt_params[-1]/opt_params[-2]
-    print('Best-fit divisive normalisation ratio: {}'.format(divisivenorm_ratio))
-    print('where scale is 0.6875 (abs) -> 1 (norm)')
-    subtractive_ratio = np.mean((np.abs(opt_params[0]), np.abs(opt_params[3])))/(opt_params[-2]-opt_params[-1])
-    print('Best-fit subtractive normalisation ratio (1=totally offset, 0=totally centred): {:.2f} '.format(subtractive_ratio))
-
-    return opt_params, subtractive_ratio, divisivenorm_ratio
+    return opt_params, opt_SSE, bestfit_rdm
 # ---------------------------------------------------------------------------- #
 
 def fit_subjects(data, metric, cost_function):
@@ -461,24 +518,11 @@ def fit_subjects(data, metric, cost_function):
         np.fill_diagonal(np.asarray(subject_RDM), 0)
         opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(subject_RDM, cost_function, i+1)
         fitparams[i] = opt_params
-        sub_ratios[i] = subtractive_ratio
-        div_ratios[i] = divisivenorm_ratio
 
-    print('subtractive ratios:')
-    print(sub_ratios)
-    print('divisive ratios:')
-    print(div_ratios)
-
-    print('stat. significance:')
-    [t,p] = stats.ttest_1samp(sub_ratios, 1)  # is there significant subtractive normalisation vs totally offset?
-    print('subtractive normalisation: p={}'.format(p))
-    [t,p] = stats.ttest_1samp(div_ratios, 0.6875)  # is there significant divisive normalisation vs totally absolute?
-    print('divisive normalisation: p={}'.format(p))
-
-    return fitparams, sub_ratios, div_ratios
+    return fitparams
 # ---------------------------------------------------------------------------- #
 
-def plot_bestmodel_data(mtx1, mtx2, args, metric):
+def plot_bestmodel_data(mtx1, mtx2, model_system, model_id):
     # mtx1 = data procrustes transformed
     # mtx2 = model proucrustes transformed
     fig, ax = plt.subplots(1,3, figsize=(18,5))
@@ -508,7 +552,7 @@ def plot_bestmodel_data(mtx1, mtx2, args, metric):
     MDSplt.autoSaveFigure('figures/bestfit_procrustes_'+metric, args, False, False, 'compare', True)
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
+def animate3DMDS(MDS_data, MDS_model, args, model_system, model_id, saveFig=True):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -558,7 +602,7 @@ def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = MDSplt.autoSaveFigure('animations/MDS_3Danim_linesmodelanddata_'+metric, args, True, False, 'compare', False)
+        strng = MDSplt.autoSaveFigure('animations/MDS_3Danim_linesmodelanddata_'+model_system+'_'+str(model_id), args, True, False, 'compare', False)
         anim.save(strng+'.mp4', writer=writer)
 
 # ---------------------------------------------------------------------------- #
