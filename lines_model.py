@@ -315,12 +315,12 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
 def generate_lines(params, fit_args):
     """Build 3x parallel lines in 3d based on the parameters in params"""
-    xB,yB,zB, xC,yC,zC, lenLong, lenShort = params
+    xB,yB,zB, xC,yC,zC, lenRatio = params
     _, keep_parallel, div_norm, sub_norm, _, _ = fit_args
 
     x0,y0,z0 = [0,0,0]
-    npoints_long = 16
-    npoints_short = 11
+    lenShort = 3
+    lenLong = lenShort*lenRatio
 
     # align axes with the coordinate system for defining the long line
     if keep_parallel:
@@ -332,15 +332,6 @@ def generate_lines(params, fit_args):
         lineB_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
         lineC_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
 
-    # Divisive normalisation settings
-    if div_norm == 'normalised':
-        lenLong = lenShort
-    elif div_norm == 'absolute':
-        lenLong = (npoints_long/npoints_short)*lenShort
-    elif div_norm == 'unconstrained':
-        # let the optimiser find whatever values it like for lenShort and lenLong
-        pass
-
     # Subtractive normalisation settings
     if sub_norm == 'centred':
         # constrain the centre of the three lines to be centred along the magnitude dimension
@@ -351,8 +342,8 @@ def generate_lines(params, fit_args):
     elif sub_norm == 'offset':
         # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
         centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        mag_centre_low = -2.5 * (lenLong/npoints_long)
-        mag_centre_high = +2.5 * (lenLong/npoints_long)
+        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        mag_centre_high = +2.5 * (lenLong/const.N_POINTS_LONG)
         centre_B = [mag_centre_low,yB,zB]
         centre_C = [mag_centre_high,yC,zC]
 
@@ -364,29 +355,29 @@ def generate_lines(params, fit_args):
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
-    points_A = np.zeros((npoints_long,3))
-    points_B = np.zeros((npoints_short,3))
-    points_C = np.zeros((npoints_short,3))
+    points_A = np.zeros((const.N_POINTS_LONG,3))
+    points_B = np.zeros((const.N_POINTS_SHORT,3))
+    points_C = np.zeros((const.N_POINTS_SHORT,3))
     for i in range(3):
         directed_points = lineA_direction[i] *lenLong/2
-        points_A[:,i] = np.linspace(centre_A[i]-directed_points, centre_A[i]+directed_points, num=npoints_long)
+        points_A[:,i] = np.linspace(centre_A[i]-directed_points, centre_A[i]+directed_points, num=const.N_POINTS_LONG)
 
         directed_points = lineB_direction[i] *lenShort/2
-        points_B[:,i] = np.linspace(centre_B[i]-directed_points, centre_B[i]+directed_points, num=npoints_short)
+        points_B[:,i] = np.linspace(centre_B[i]-directed_points, centre_B[i]+directed_points, num=const.N_POINTS_SHORT)
 
         directed_points = lineC_direction[i] *lenShort/2
-        points_C[:,i] = np.linspace(centre_C[i]-directed_points, centre_C[i]+directed_points, num=npoints_short)
+        points_C[:,i] = np.linspace(centre_C[i]-directed_points, centre_C[i]+directed_points, num=const.N_POINTS_SHORT)
 
     # calculate the correlation RDM for these lines
     return np.concatenate((points_B, points_C, points_A), axis=0)  # low -> high -> full
 
 # ---------------------------------------------------------------------------- #
 
-def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
+def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio):
     """Construct a model of 3 lines (parallel or free) in 3d space
     - dummy is an unused dummy variable"""
     # we will use the x (first) input to signal the distance metric (unconventional but we dont need to evaluate as a function of x)
-    params = [xB,yB,zB, xC,yC,zC, lenLong, lenShort]
+    params = [xB,yB,zB, xC,yC,zC, lenRatio]
     all_lines = generate_lines(params, fit_args)
     all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix
     model_RDM = pairwise_distances(all_lines, metric='euclidean')
@@ -423,18 +414,29 @@ def fitmodelRDM(data, fit_args):
     uppertri_data, ind = data
     cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric = fit_args
 
-    fitted_params = nanArray((n_iter,8))
+    fitted_params = nanArray((n_iter,7))
     fitted_loss = nanArray((n_iter,1))
 
     for i in range(n_iter):
         #
         try:
             # keep these bounds, they seem reasonable and the fits dont get close to them at all
-            lower_bound = [-1, -1, -1, -1, -1, -1, 0, 0]
-            upper_bound = [1, 1, 1, 1, 1, 1, 4, 4]
+            lower_bound = [-1, -1, -1, -1, -1, -1, 0]
+            upper_bound = [1, 1, 1, 1, 1, 1, 2]
 
             # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
             init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
+
+            """
+            # Divisive normalisation settings
+            if div_norm == 'normalised':
+                lenLong = lenShort
+            elif div_norm == 'absolute':
+                lenLong = (const.N_POINTS_LONG/const.N_POINTS_SHORT)*lenShort
+            elif div_norm == 'unconstrained':
+                # let the optimiser find whatever values it like for lenShort and lenLong
+                pass
+            """
 
             # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
             if cost_function=='SSE':

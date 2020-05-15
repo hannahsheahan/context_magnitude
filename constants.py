@@ -22,3 +22,7 @@ HIGHR_SPAN = HIGHR_ULIM - HIGHR_LLIM +1
 # trial types
 TRIAL_FILLER  = 0
 TRIAL_COMPARE = 1
+
+# the same as the spans... but used in lines_model
+N_POINTS_LONG = 16
+N_POINTS_SHORT = 11
