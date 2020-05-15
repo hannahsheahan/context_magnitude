@@ -7,7 +7,7 @@
 # Issues: N/A
 # Notes:
 # - neural EEG task designed and data collected by Fabrice Luyckx
-# - Fabrice built a model like this in matlab, this is an independent attempt to build a similar model in python
+# - both Fabrice and Steph built models like this in matlab, this is an independent attempt to build a similar model in python
 # - in early development (27/04/2020)
 """
 # ---------------------------------------------------------------------------- #
@@ -28,6 +28,7 @@ import random
 
 from scipy.spatial import procrustes
 from sklearn.metrics import pairwise_distances
+from scipy.spatial.distance import correlation
 from sklearn.manifold import MDS
 import matplotlib.colors as mplcol
 import sklearn.decomposition
@@ -324,15 +325,20 @@ def generate_lines(params):
 
 # ---------------------------------------------------------------------------- #
 
-def makelinesmodel(metric, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
-    """Construct a model of 3 lines (parallel or free) in 3d space"""
+def makelinesmodel(dummy, xB,yB,zB, xC,yC,zC, lenLong, lenShort):
+    """Construct a model of 3 lines (parallel or free) in 3d space
+    - dummy is an unused dummy variable"""
     # we will use the x (first) input to signal the distance metric (unconventional but we dont need to evaluate as a function of x)
     params = [xB,yB,zB, xC,yC,zC, lenLong, lenShort]
     all_lines = generate_lines(params)
     all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix
-    model_RDM = pairwise_distances(all_lines, metric=metric)
+    model_RDM = pairwise_distances(all_lines, metric='euclidean')
 
-    return model_RDM.flatten()
+    #zscore the model RDM to make sure its on same scale as data
+    model_RDM = stats.zscore(model_RDM)
+    model_uppertriRDM, _ = fullmatrix_touppertri(model_RDM)  # just use the upper triangle of matrix for fitting
+
+    return model_uppertriRDM
 
 # ---------------------------------------------------------------------------- #
 def nanArray(size):
@@ -342,54 +348,98 @@ def nanArray(size):
     return tmp
 
 # ---------------------------------------------------------------------------- #
-def fitmodelRDM(data, metric, numiter):
+
+def fitfunc(params, metric, data):
+    """Fit lines model to data using a different function
+       - for passing into scipy.optimize.minimize
+       - returns a scalar loss
+    """
+    modelRDM_uppertri = makelinesmodel(None, *params)
+    loss = sum((modelRDM_uppertri - data)**2)
+    return loss
+
+# ---------------------------------------------------------------------------- #
+
+def fitmodelRDM(data, numiter, method):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
 
+    uppertri_data, ind = data
+
     fitted_params = nanArray((numiter,8))
-    fitted_SSE = nanArray((numiter,1))
+    fitted_loss = nanArray((numiter,1))
 
     for i in range(numiter):
-        # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
-        init_params = [random.random(),random.random(),random.random(),\
-                       random.random(),random.random(),random.random(),\
-                       random.random()*5, random.random()*5]
+        #
         try:
-            lower_bound = [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0, 0]
-            upper_bound = [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]
-            #params, params_covariance = optimize.curve_fit(makelinesmodel, metric, data, p0=init_params, bounds=(lower_bound,upper_bound))
-            params, params_covariance = optimize.curve_fit(makelinesmodel, metric, data, p0=init_params)
+            # keep these bounds, they seem reasonable and the fits dont get close to them at all
+            lower_bound = [-1, -1, -1, -1, -1, -1, 0, 0]
+            upper_bound = [1, 1, 1, 1, 1, 1, 4, 4]
 
-            # lets try a cost function which is hopefully closer to correlation distance by squaring the square errors
-            SSE = sum((makelinesmodel(metric, *params) - data)**2)
+            # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
+            init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
+
+            # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
+            if method=='SSE':
+                params, params_covariance = optimize.curve_fit(makelinesmodel, None, uppertri_data, p0=init_params, bounds=(lower_bound,upper_bound) )
+                loss = sum((makelinesmodel(None, *params) - uppertri_data)**2)
+
+            elif method=='SSE2':
+                result = optimize.minimize(fitfunc, init_params, args=(metric, uppertri_data), bounds=[(lower_bound[i],upper_bound[i]) for i in range(len(init_params))] )
+                params = result.x
+                loss = sum((makelinesmodel(None, *params) - uppertri_data)**2)
 
             fitted_params[i] = params
-            fitted_SSE[i] = SSE
+            fitted_loss[i] = loss
 
         except RuntimeError:
             print("\n Error: max number of fit iterations hit. Moving on...")
 
-    return fitted_params, fitted_SSE
+    return fitted_params, fitted_loss
 
 # ---------------------------------------------------------------------------- #
 
-def bestfitRDM(data, metric):
+def fullmatrix_touppertri(x):
+    # return the flattened elements and indices of the upper triangular portion of the matrix
+    ind = np.triu_indices(x.shape[0])
+    flatx = [x[ind[0][i], ind[1][i]] for i in range(len(ind[0]))]
+    flatx = np.asarray(flatx)
+    return flatx, ind
+
+# ---------------------------------------------------------------------------- #
+
+def flatuppertri_tofullmatrix(x, ind, n):
+    uppertri = np.zeros((n,n))
+    uppertri[ind] = x
+    zeroed_diag = np.zeros((n,n)) + uppertri
+    np.fill_diagonal(zeroed_diag, 0)
+    fullmatrix = uppertri + np.transpose(zeroed_diag)
+    return fullmatrix
+
+# ---------------------------------------------------------------------------- #
+
+def bestfitRDM(data, method, sub=0):
     # fits a model RDM to the input data RDM
     flat_data = data.flatten()
-    fitted_params, fitted_SSE = fitmodelRDM(flat_data, metric, 1000)
+    uppertri_data, ind = fullmatrix_touppertri(data)
+
+    fitted_params, fitted_SSE = fitmodelRDM((uppertri_data, ind), 100, method)
+    print('All fitted SSE:')
+    print('Min fitted SEE: {}'.format(np.min(fitted_SSE)))
     opt_iter = np.nanargmin(fitted_SSE)
     opt_params = fitted_params[opt_iter][:]
     print('Best-fit parameters:')
     print(opt_params)
 
     # generate euclidean distance RDM under these best fit parameters
-    bestfit_rdm = makelinesmodel(metric, *opt_params)
+    bestfit_rdm_uppertri = makelinesmodel(None, *opt_params)
+    bestfit_rdm = flatuppertri_tofullmatrix(bestfit_rdm_uppertri, ind, data.shape[0])
 
     fig, ax = plt.subplots(1,2)
     ax[0].imshow(flat_data.reshape(38,-1).T)
     ax[0].set_title('rnn data RDM')
     ax[1].imshow(bestfit_rdm.reshape(38,-1).T)
     ax[1].set_title('best fit RDM')
-    plt.savefig('figures/rdm_fitting_test_'+metric+'.pdf',bbox_inches='tight')
+    plt.savefig('figures/rdm_fitting_test_'+str(sub)+'.pdf',bbox_inches='tight')
 
     divisivenorm_ratio = opt_params[-1]/opt_params[-2]
     print('Best-fit divisive normalisation ratio: {}'.format(divisivenorm_ratio))
@@ -400,15 +450,15 @@ def bestfitRDM(data, metric):
     return opt_params, subtractive_ratio, divisivenorm_ratio
 # ---------------------------------------------------------------------------- #
 
-def fit_subjects(data, metric):
+def fit_subjects(data, metric, method):
     fitparams = np.zeros((data.shape[0], 8))
     sub_ratios = np.zeros((data.shape[0],))
     div_ratios = np.zeros((data.shape[0],))
     for i in range(data.shape[0]):
-        subject_eclRDM = data[i]
-        subject_eclRDM = pairwise_distances(subject_eclRDM, metric=metric)
-        np.fill_diagonal(np.asarray(subject_eclRDM), 0)
-        opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(subject_eclRDM, metric)
+        subject_RDM = data[i]
+        subject_RDM = pairwise_distances(subject_RDM, metric=metric)  # correlation distance data
+        np.fill_diagonal(np.asarray(subject_RDM), 0)
+        opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(subject_RDM, method, i+1)
         fitparams[i] = opt_params
         sub_ratios[i] = subtractive_ratio
         div_ratios[i] = divisivenorm_ratio
@@ -450,8 +500,8 @@ def plot_bestmodel_data(mtx1, mtx2, args, metric):
         contextB = range(const.LOWR_SPAN,const.LOWR_SPAN+const.HIGHR_SPAN)
         contextC = range(const.LOWR_SPAN+const.HIGHR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
         ax[j].plot(mtx2[contextA, dimA], mtx2[contextA, dimB], color=modelcolours[0])
-        ax[j].plot(mtx2[contextB, dimA],mtx2[contextB, dimB], color=modelcolours[1])
-        ax[j].plot(mtx2[contextC, dimA],mtx2[contextC, dimB], color=modelcolours[2])
+        ax[j].plot(mtx2[contextB, dimA], mtx2[contextB, dimB], color=modelcolours[1])
+        ax[j].plot(mtx2[contextC, dimA], mtx2[contextC, dimB], color=modelcolours[2])
         ax[j].axis('equal')
 
     MDSplt.autoSaveFigure('figures/bestfit_procrustes_'+metric, args, False, False, 'compare', saveFig)
@@ -512,85 +562,71 @@ def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
 
 # ---------------------------------------------------------------------------- #
 
+# main()
+
 # figure saving settings
 saveFig = True
 RNN_args = network_args('blocked', 'truecontext', 0.0)
 EEG_args = network_args('blocked', 'truecontext', 0.0)
 
-# import rnn representations data
+# import rnn activations data
 RNN_data = import_RNN_data(RNN_BASEPATH, RNN_args)
 mean_RNN_data = np.mean(RNN_data, axis=0)  # mean across model instances
 mean_RNN_data = stats.zscore(mean_RNN_data, axis=None)  # z-score the RNN raw data
 
-# import the eeg representations data
+# import the eeg activations data (already in correlation distance)
 EEG_data = import_EEG_data(EEG_BASEPATH, EEG_FILE)
 mean_EEG_RDM = np.mean(EEG_data, axis=0)
 
 # ---------------------------------------------------------------------------- #
-"""
-metric = 'correlation'
-data = pairwise_distances(mean_RNN_data, metric=metric)
-np.fill_diagonal(np.asarray(data), 0)
-MDS_rnn, evals = cmdscale(data)
-animate3DMDS(MDS_rnn, None, RNN_args, 'correlation', saveFig)
-
-"""
 
 # Plot low dimensional representations of the rnn and eeg data
 # generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
 
-# Fit to the mean rnn for now
+# Fit to the mean rnn data for now
 metric = 'correlation'
+method = 'SSE2' # 'correlation_error' or 'SSE'  # HRS should be renamed cost_function
 data = pairwise_distances(mean_RNN_data, metric=metric)
 np.fill_diagonal(np.asarray(data), 0)
-opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(data, metric)
+# zscore the data RDM to make sure its on same scale as model
+data = stats.zscore(data)
+opt_params, subtractive_ratio, divisivenorm_ratio = bestfitRDM(data, method)
 
-# Now take the best fit parameters for the lines model, generate a distance RDM from it,
-# and visualize that fit next to the distance data
+# Now take the best fit parameters for the lines model, generate a distance RDM from it, and visualize that fit next to the data RDM
 bestfit_lines = generate_lines(opt_params)
 fig = plot_components(bestfit_lines)
-MDSplt.autoSaveFigure('figures/bestfit_lines'+metric, RNN_args, False, False, 'compare', saveFig)
+MDSplt.autoSaveFigure('figures/bestfit_lines', RNN_args, False, False, 'compare', saveFig)
 
-bestfit_RDM = pairwise_distances(bestfit_lines, metric=metric)
+# MDS of the bestfit model RDM
+bestfit_RDM = pairwise_distances(bestfit_lines, metric='euclidean')
 np.fill_diagonal(np.asarray(bestfit_RDM), 0)
 MDS_model, evals = cmdscale(bestfit_RDM)
+MDS_model = MDS_model[:,:3] # just take the first 3 MDS components
 
-# For plotting MDS
-#metric = 'correlation'
-#test = np.square(bestfit_RDM)  # this should be proportional to correlation distance
-#plt.figure()
-#plt.imshow(test)
-#print(test)
-#MDSplt.autoSaveFigure('figures/bestfit_rmd_euclfit_nowcorrel_', RNN_args, False, False, 'compare', saveFig)
-#np.fill_diagonal(np.asarray(test), 0)
-#MDS_model, evals = cmdscale(test)
-
+# MDS of the data
 pairwise_data = pairwise_distances(mean_RNN_data, metric=metric)
 np.fill_diagonal(np.asarray(pairwise_data), 0)
 MDS_data, evals = cmdscale(pairwise_data)
+MDS_data = MDS_data[:,:3]   # just take the first 3 MDS components
 
-# Do procrustes transformation to visualize the best fit  model predictions on top of the original data MDS
-MDS_data = MDS_data[:,:3] # just take the first 3 MDS components
-MDS_model = MDS_model[:,:3]
+# Visualize MDS of the bestfit model
 plt.figure()
 plot_components(MDS_model)
-#MDSplt.autoSaveFigure('figures/eucfit_tocorrel_fitmodel', RNN_args, False, False, 'compare', saveFig)
-MDSplt.autoSaveFigure('figures/correl_fitmodel', RNN_args, False, False, 'compare', saveFig)
+MDSplt.autoSaveFigure('figures/MDS_fitmodel', RNN_args, False, False, 'compare', saveFig)
 
 # Plot the procrustes-transformed MDS of the model and MDS of the data on top of each other
 procrustes_data, procrustes_model, disparity = procrustes(MDS_data, MDS_model)
-plot_bestmodel_data(procrustes_data, procrustes_model, RNN_args, metric)
+plot_bestmodel_data(procrustes_data, procrustes_model, RNN_args, 'procrustes')
 
 # Generate an animation of the procrustes-transformed MDS of the model and MDS of the data on top of each other
 #animate3DMDS(procrustes_data, procrustes_model, RNN_args, metric, saveFig)
 
 
-
 # fit each subject (or model instance) separately
-#fitparams, sub_ratios, div_ratios = fit_subjects(RNN_data, metric)
+#metric = 'correlation'
+#fitparams, sub_ratios, div_ratios = fit_subjects(RNN_data, metric, method)
 
 # generate a fake rdm to test our fitting on
 #fake_params = [1,0,0, -1,-1,0, 11, 11]
-#fake_rdm = makelinesmodel('euclidean', *fake_params)
 
 # ---------------------------------------------------------------------------- #
