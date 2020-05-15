@@ -121,6 +121,34 @@ def import_RNN_data(basepath, args):
     rnn_ordered_activations = np.concatenate((low_activations, high_activations, full_activations), axis=1)
 
     return rnn_ordered_activations   # correlation distance:  [model instance x conditions x activity]
+
+# ---------------------------------------------------------------------------- #
+
+def import_all_data(metric, RNN_args):
+    # import rnn activations data
+    RNN_data = import_RNN_data(RNN_BASEPATH, RNN_args)
+    mean_RNN_data = np.mean(RNN_data, axis=0)  # mean across model instances
+    mean_RNN_data = stats.zscore(mean_RNN_data, axis=None)  # z-score the RNN raw data
+
+    # compute RDM for RNN data
+    mean_RNN_RDM = pairwise_distances(mean_RNN_data, metric=metric)
+    np.fill_diagonal(np.asarray(mean_RNN_RDM), 0)
+
+    # for each model instance, zscore the RNN data and compute a similarity matrix
+    subjects_RNN_RDMs = np.zeros((RNN_data.shape[0], RNN_data.shape[1], RNN_data.shape[1]))
+    for i in range(RNN_data.shape[0]):
+        instance_RNN_data = RNN_data[i]
+        instance_RNN_data = stats.zscore(instance_RNN_data, axis=None)  # z-score the RNN raw data
+        instance_RNN_RDM = pairwise_distances(instance_RNN_data, metric=metric)
+        np.fill_diagonal(np.asarray(instance_RNN_RDM), 0)
+        subjects_RNN_RDMs[i] = instance_RNN_RDM
+
+    # import the eeg activations data (already in correlation distance)
+    subjects_EEG_RDMs = import_EEG_data(EEG_BASEPATH, EEG_FILE)
+    mean_EEG_RDM = np.mean(subjects_EEG_RDMs, axis=0)
+
+    return mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs
+
 # ---------------------------------------------------------------------------- #
 
 class network_args():
@@ -293,20 +321,46 @@ def generate_lines(params, fit_args):
     x0,y0,z0 = [0,0,0]
     npoints_long = 16
     npoints_short = 11
-    allow_centre_offsets = True  # note: haven't written a False option
-    keep_parallel = True         # note: haven't written a False option
-
-    # define centre of each line as free point in 3d space
-    if allow_centre_offsets:
-        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        centre_B = [xB,yB,zB]
-        centre_C = [xC,yC,zC]
 
     # align axes with the coordinate system for defining the long line
     if keep_parallel:
         lineA_direction = [1,0,0]
         lineB_direction = [1,0,0]
         lineC_direction = [1,0,0]
+    else:
+        lineA_direction = [1,0,0]
+        lineB_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
+        lineC_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
+
+    # Divisive normalisation settings
+    if div_norm == 'normalised':
+        lenLong = lenShort
+    elif div_norm == 'absolute':
+        lenLong = (npoints_long/npoints_short)*lenShort
+    elif div_norm == 'unconstrained':
+        # let the optimiser find whatever values it like for lenShort and lenLong
+        pass
+
+    # Subtractive normalisation settings
+    if sub_norm == 'centred':
+        # constrain the centre of the three lines to be centred along the magnitude dimension
+        centre_A = [x0,y0,z0]
+        centre_B = [x0,yB,zB]
+        centre_C = [x0,yC,zC]
+
+    elif sub_norm == 'offset':
+        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+        mag_centre_low = -2.5 * (lenLong/npoints_long)
+        mag_centre_high = +2.5 * (lenLong/npoints_long)
+        centre_B = [mag_centre_low,yB,zB]
+        centre_C = [mag_centre_high,yC,zC]
+
+    elif sub_norm == 'unconstrained':
+        # let the optimiser do its thing
+        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+        centre_B = [xB,yB,zB]
+        centre_C = [xC,yC,zC]
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
@@ -422,7 +476,7 @@ def uppertri_to_matrix(x, ind, n):
 
 # ---------------------------------------------------------------------------- #
 
-def bestfitRDM(data, fit_args, sub=0):
+def bestfitRDM(data, fit_args, model_system, model_id=0):
     # fits a model RDM to the input data RDM
     flat_data = data.flatten()
     uppertri_data, ind = matrix_to_uppertri(data)
@@ -444,7 +498,7 @@ def bestfitRDM(data, fit_args, sub=0):
     ax[0].set_title('rnn data RDM')
     ax[1].imshow(bestfit_rdm.reshape(38,-1).T)
     ax[1].set_title('best fit RDM')
-    plt.savefig('figures/rdm_fitting_test_'+str(sub)+'.pdf',bbox_inches='tight')
+    plt.savefig('figures/bestfit_rdm_' + model_system + '_' + str(model_id) + '.pdf',bbox_inches='tight')
 
     """
     divisivenorm_ratio = opt_params[-1]/opt_params[-2]
@@ -454,7 +508,7 @@ def bestfitRDM(data, fit_args, sub=0):
     print('Best-fit subtractive normalisation ratio (1=totally offset, 0=totally centred): {:.2f} '.format(subtractive_ratio))
     """
 
-    return opt_params, opt_SSE, bestfit_rdm
+    return opt_params, opt_SSE
 # ---------------------------------------------------------------------------- #
 
 def fit_subjects(data, metric, cost_function):
@@ -465,7 +519,7 @@ def fit_subjects(data, metric, cost_function):
         subject_RDM = data[i]
         subject_RDM = pairwise_distances(subject_RDM, metric=metric)  # correlation distance data
         np.fill_diagonal(np.asarray(subject_RDM), 0)
-        opt_params, opt_SSE, bestfit_rdm = bestfitRDM(subject_RDM, fit_args, i+1)
+        opt_params, opt_SSE = bestfitRDM(subject_RDM, fit_args, model_system, i+1)
         fitparams[i] = opt_params
 
     return fitparams
@@ -561,34 +615,26 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
 
     cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric = fit_args
 
-    # Fit to the mean rnn data for now
-    data = pairwise_distances(data, metric=metric)
-    np.fill_diagonal(np.asarray(data), 0)
     original_data = copy.deepcopy(data)   # correlation data RDM, not z-scored
 
-    # zscore the data RDM to make sure its on same scale as model
-    data = stats.zscore(data, axis=None)
-    opt_params, opt_SSE, bestfit_rdm = bestfitRDM(data, fit_args)
+    # zscore the data RDM to make sure its on same scale as model for the fit
+    zscored_data = stats.zscore(data, axis=None)
+    opt_params, opt_SSE = bestfitRDM(zscored_data, fit_args, model_system, model_id)
 
-    # Now take the best fit parameters for the lines model, generate a distance RDM from it, and visualize that fit next to the data RDM
+    # Now visualize the geometry of the best fit lines in their euclidean space
     bestfit_lines = generate_lines(opt_params, fit_args)
     fig = plot_components(bestfit_lines)
     plt.savefig('figures/bestfit_lines_' + model_system + '_' + str(model_id) + '.pdf', bbox_inches='tight')
 
-    # MDS of the bestfit model RDM
+    # MDS of the bestfit model RDM (not z-scored)
     bestfit_RDM = pairwise_distances(bestfit_lines, metric='euclidean')
     np.fill_diagonal(np.asarray(bestfit_RDM), 0)
     MDS_model, evals = cmdscale(bestfit_RDM)
     MDS_model = MDS_model[:,:3] # just take the first 3 MDS components
 
     # MDS of the data
-    MDS_data, evals = cmdscale(original_data)
+    MDS_data, evals = cmdscale(data)
     MDS_data = MDS_data[:,:3]   # just take the first 3 MDS components
-
-    # Visualize MDS of the bestfit model
-    plt.figure()
-    plot_components(MDS_model)
-    plt.savefig('figures/MDS_fitmodel_' + model_system + '_' + str(model_id) + '.pdf',bbox_inches='tight')
 
     # Plot the procrustes-transformed MDS of the model and MDS of the data on top of each other
     procrustes_data, procrustes_model, disparity = procrustes(MDS_data, MDS_model)
@@ -618,14 +664,7 @@ def main():
     RNN_args = network_args('blocked', 'truecontext', 0.0)
     EEG_args = network_args('blocked', 'truecontext', 0.0)
 
-    # import rnn activations data
-    RNN_data = import_RNN_data(RNN_BASEPATH, RNN_args)
-    mean_RNN_data = np.mean(RNN_data, axis=0)  # mean across model instances
-    mean_RNN_data = stats.zscore(mean_RNN_data, axis=None)  # z-score the RNN raw data
-
-    # import the eeg activations data (already in correlation distance)
-    EEG_data = import_EEG_data(EEG_BASEPATH, EEG_FILE)
-    mean_EEG_RDM = np.mean(EEG_data, axis=0)
+    mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args)
 
     # Plot low dimensional representations of the rnn and eeg data
     # generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
@@ -640,7 +679,7 @@ def main():
     print(' - subtractive normalisation is '+ sub_norm + ' in fit')
 
     if model_system == 'RNN':
-        data = mean_RNN_data
+        data = mean_RNN_RDM
     elif model_system == 'EEG':
         data = mean_EEG_RDM
     model_id = 0
