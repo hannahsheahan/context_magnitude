@@ -316,11 +316,15 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 def generate_lines(params, fit_args):
     """Build 3x parallel lines in 3d based on the parameters in params"""
     xB,yB,zB, xC,yC,zC, lenRatio = params
-    _, keep_parallel, div_norm, sub_norm, _, _ = fit_args
+    _, keep_parallel, div_norm, sub_norm, _, _, lenShort = fit_args
 
     x0,y0,z0 = [0,0,0]
-    lenShort = 3
     lenLong = lenShort*lenRatio
+
+    # Define line centres
+    centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+    centre_B = [xB,yB,zB]
+    centre_C = [xC,yC,zC]
 
     # align axes with the coordinate system for defining the long line
     if keep_parallel:
@@ -331,27 +335,6 @@ def generate_lines(params, fit_args):
         lineA_direction = [1,0,0]
         lineB_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
         lineC_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
-
-    # Subtractive normalisation settings
-    if sub_norm == 'centred':
-        # constrain the centre of the three lines to be centred along the magnitude dimension
-        centre_A = [x0,y0,z0]
-        centre_B = [x0,yB,zB]
-        centre_C = [x0,yC,zC]
-
-    elif sub_norm == 'offset':
-        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
-        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
-        mag_centre_high = +2.5 * (lenLong/const.N_POINTS_LONG)
-        centre_B = [mag_centre_low,yB,zB]
-        centre_C = [mag_centre_high,yC,zC]
-
-    elif sub_norm == 'unconstrained':
-        # let the optimiser do its thing
-        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        centre_B = [xB,yB,zB]
-        centre_C = [xC,yC,zC]
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
@@ -391,13 +374,53 @@ def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio):
 # ---------------------------------------------------------------------------- #
 
 def constrain_divisive_norm(params, fit_args):
-    _, _, div_norm, _, _, _ = fit_args
+    """ Divisive normalisation constraints for the lines model fitting optimisation
+        - for use in scipy.optimize.minimize(). """
+    _, _, div_norm, _, _, _, _ = fit_args
 
     if div_norm == 'normalised':
         return params[-1] -1  # line length ratio must be perfectly equal to 1 i.e. totally normalised
     elif div_norm == 'absolute':
         return params[-1] - (const.N_POINTS_LONG/const.N_POINTS_SHORT) # line length ratio must be proportional to numerical range
     elif div_norm == 'unconstrained':
+        return 0
+
+# ---------------------------------------------------------------------------- #
+
+def constrain_sub_norm_line_B(params, fit_args):
+    """ Subtractive normalisation constraints for the lines model fitting optimisation
+       - for use in scipy.optimize.minimize(). """
+    _, _, _, sub_norm, _, _, lenShort = fit_args
+
+    if sub_norm == 'centred':
+        return params[0]  # set this line-centre parameter to zero
+
+    elif sub_norm == 'offset':
+        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+        lenLong = lenShort*params[-1]
+        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        return params[0]-mag_centre_low
+
+    elif sub_norm == 'unconstrained':
+        return 0
+
+# ---------------------------------------------------------------------------- #
+
+def constrain_sub_norm_line_C(params, fit_args):
+    """ Subtractive normalisation constraints for the lines model fitting optimisation
+       - for use in scipy.optimize.minimize(). """
+    _, _, _, sub_norm, _, _, lenShort = fit_args
+
+    if sub_norm == 'centred':
+        return params[3]  # set this line-centre parameter to zero
+
+    elif sub_norm == 'offset':
+        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+        lenLong = lenShort*params[-1]
+        mag_centre_high = +2.5 * (lenLong/const.N_POINTS_LONG)
+        return params[3]-mag_centre_high
+
+    elif sub_norm == 'unconstrained':
         return 0
 
 # ---------------------------------------------------------------------------- #
@@ -425,7 +448,9 @@ def fitmodelRDM(data, fit_args):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
 
     uppertri_data, ind = data
-    cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric = fit_args
+
+    # Define the fixed length of the short lines so that we just solve for the line length ratio
+    cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort = fit_args
 
     fitted_params = nanArray((n_iter,7))
     fitted_loss = nanArray((n_iter,1))
@@ -441,18 +466,16 @@ def fitmodelRDM(data, fit_args):
             init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
 
             # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
-            if cost_function=='SSE':
-                params, params_covariance = optimize.curve_fit(makelinesmodel, fit_args, uppertri_data, p0=init_params, bounds=(lower_bound,upper_bound) )
-                loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
+            bounds = [(lower_bound[i],upper_bound[i]) for i in range(len(init_params))]
+            fit_constraints = [{'type':'eq', 'fun':constrain_divisive_norm, 'args':(fit_args,)}]
+            #                   {'type':'eq', 'fun':constrain_sub_norm_line_B, 'args':(fit_args,)},
+            #                   {'type':'eq', 'fun':constrain_sub_norm_line_C, 'args':(fit_args,)}]
 
-            elif cost_function=='SSE2':
-                bounds = [(lower_bound[i],upper_bound[i]) for i in range(len(init_params))]
-                fit_constraints = [{'type':'eq', 'fun':constrain_divisive_norm, 'args':(fit_args,)}]
-
-                result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data),
-                                            bounds=bounds, constraints=fit_constraints )
-                params = result.x
-                loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
+            result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data),
+                                      bounds=bounds, constraints=fit_constraints )
+            #result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data), bounds=bounds )
+            params = result.x
+            loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
             fitted_params[i] = params
             fitted_loss[i] = loss
@@ -621,7 +644,7 @@ def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
 def fit_and_plot_model(data, model_system, model_id, fit_args):
     """ Fit a euclidean distance lines model to the input data RDM."""
 
-    cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric = fit_args
+    cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort = fit_args
 
     original_data = copy.deepcopy(data)   # correlation data RDM, not z-scored
 
@@ -659,13 +682,14 @@ def main():
 
     # fitting settings
     metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
-    cost_function = 'SSE2'  # both SSE and SSE2 seem to do the same thing but use different fitting functions
+    cost_function = 'SSE'  # both SSE and SSE2 seem to do the same thing but use different fitting functions
     keep_parallel = True
-    div_norm = 'absolute' # 'unconstrained' 'normalised'  'absolute'
+    div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
     sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
     n_iter = 100               # number of random initialisations for each fit
     model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
-    fit_args = [cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric]
+    lenShort = 3               # somewhat arbitrary fixed parameter for the length of the short lines (we just fit a length ratio). Keep small ~3 otherwise true line centre params will move outside bounds
+    fit_args = [cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort]
 
     # figure saving settings
     saveFig = True
