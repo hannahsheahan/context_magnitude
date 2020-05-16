@@ -550,7 +550,8 @@ def bestfitRDM(data, fit_args, model_system, model_id=0):
     ax[0].set_title('rnn data RDM')
     ax[1].imshow(bestfit_rdm.reshape(38,-1).T)
     ax[1].set_title('best fit RDM')
-    plt.savefig('figures/bestfit_rdm_' + model_system + '_' + str(model_id) + '.pdf',bbox_inches='tight')
+    plt.savefig('figures/bestfit_rdm_' + get_model_description(model_id, model_system, fit_args) + '.pdf',bbox_inches='tight')
+    plt.close()
 
     """
     divisivenorm_ratio = opt_params[-1]/opt_params[-2]
@@ -591,6 +592,7 @@ def plot_bestmodel_data(mtx1, mtx2, model_system):
         ax[j].axis('equal')
 
     plt.savefig('figures/bestfit_procrustes_' + model_system + '.pdf', bbox_inches='tight')
+    plt.close()
 
 # ---------------------------------------------------------------------------- #
 
@@ -692,13 +694,14 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
     plt.xlabel('Angle between lines (degrees)')
     plt.title('Distribution of angle between bestfit lines')
     plt.savefig('figures/hist_angles_between_lines_' + model_system + model_string + '.pdf', bbox_inches='tight')
+    plt.close()
 
     # perform a rayleigh test that the angles come from a uniform circular distribution
     p,z = rayleigh(angles)
 
     print('-----')
     print('Rayleigh test (distr. angles between bestfit lines):')
-    print('p = {:5f}'.format(p))
+    print('p = {:7f}'.format(p))
     print("Rayleigh's z: {:3f}".format(z))
     return p,z
 
@@ -717,12 +720,13 @@ def plot_divisive_normalisation(model_system, allsubjects_params, fit_args):
 
     if len(ratios)>1:
         plt.figure()
-        plt.histogram(ratios, bins=50)
+        plt.hist(ratios, bins=50)
         ax = plt.gca()
         ax.set_xlim(0.9, 1.6)
         plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
         plt.title('Bestfit divisive norm ratios: ' + model_system)
         plt.savefig('figures/hist_divnorm_ratios_' + model_system + model_string + '.pdf', bbox_inches='tight')
+        plt.close()
     else:
         print('-----')
         print('Divisive norm ratio:   {:3f}'.format(ratios[0]))
@@ -740,7 +744,7 @@ def plot_subtractive_normalisation(model_system, allsubjects_params, fit_args):
 
     if len(ratios)>1:
         plt.figure()
-        plt.histogram(ratios, bins=50)
+        plt.hist(ratios, bins=50)
         ax = plt.gca()
         ax.set_xlim(0.9, 1.6)
         plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
@@ -767,7 +771,8 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
     # Now visualize the geometry of the best fit lines in their euclidean space
     bestfit_lines = generate_lines(opt_params, fit_args)
     fig = plot_components(bestfit_lines)
-    plt.savefig('figures/bestfit_lines_' + model_system + '_' + str(model_id) + '.pdf', bbox_inches='tight')
+    plt.savefig('figures/bestfit_lines_' + get_model_description(model_id, model_system, fit_args) + '.pdf', bbox_inches='tight')
+    plt.close()
 
     # MDS of the bestfit model RDM (not z-scored)
     bestfit_RDM = pairwise_distances(bestfit_lines, metric='euclidean')
@@ -790,14 +795,26 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
+def get_model_description(model_id, model_system, fit_args):
+    """Turn the model arguments into a descriptive string for figure and saved parameter file naming."""
+
+    _, keep_parallel, div_norm, sub_norm, _, metric, _ = fit_args
+    fitmean_text = '_meanfit_' if model_id==999 else ''
+    keep_parallel_text = '_keptparallel_' if keep_parallel else '_notkeptparallel_'
+    model_description = model_system + fitmean_text + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_datametric_' + metric + str(model_id)
+
+    return model_description
+
+# ---------------------------------------------------------------------------- #
+
 def main():
 
     # fitting settings
-    fit_to_mean = True
+    fit_to_mean = False
     model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
     metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
     cost_function = 'SSE'   # ***HRS obsolete, always uses SSE through scipy.optimize.minimize()
-    keep_parallel = True
+    keep_parallel = False
     div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
     sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
     n_iter = 100               # number of random initialisations for each fit
@@ -841,16 +858,14 @@ def main():
         allsubjects_data = subjects_RNN_RDMs if model_system == 'RNN' else subjects_EEG_RDMs
         for model_id in range(allsubjects_data.shape[0]):
             data = allsubjects_data[model_id]
-            print('\nFitting ' + model_system + 'subject ' + model_id + '...')
+            print('\nFitting ' + model_system + ' subject ' + str(model_id+1) + '/' + str(allsubjects_data.shape[0]) + '...')
             transformed_data, transformed_model, SSE, params = fit_and_plot_model(data, model_system, model_id, fit_args)
             allsubjects_params.append(params)
             allsubjects_SSE.append(SSE)
     print('Fitting complete.')
 
     # Save the best fit parameters so we dont have to repeat this whole process
-    fitmean_text = '_meanfit_' if fit_to_mean else ''
-    keep_parallel_text = '_keptparallel_' if keep_parallel else '_notkeptparallel_'
-    model_description = model_system + fitmean_text + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_datametric_' + metric
+    model_description = get_model_description(model_id, model_system, fit_args)
 
     filename_parameters = 'bestfit_parameters_' + model_description
     filename_SSE = 'bestfit_SSE_' + model_description
