@@ -313,18 +313,54 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
 # ---------------------------------------------------------------------------- #
 
+def normalise_vect(x):
+    x = np.asarray(x)
+    normed_x = x / np.linalg.norm(x)
+    normed_x = list(normed_x)
+    return normed_x
+
+# ---------------------------------------------------------------------------- #
+
+def reconstrain_params(params, fit_args):
+    """ This forces back the constraints on the parameters that exist within the fitting function generate_lines(),
+     in case these values deviated during fitting (but dont worry they wont have affected SSE). This is just for parameter interpretation
+     because even generating predictions will reconstrain these lines.
+     ***HRS note that this could be put inside generate_lines() for better practice to ensure they are they same"""
+
+    _, keep_parallel, div_norm, sub_norm, _, _, lenShort = fit_args
+
+    if sub_norm == 'centred':
+        params[0] = 0      # set this line-centre parameter to zero
+        params[3] = 0      # set this line-centre parameter to zero
+    elif sub_norm == 'offset':
+        lenLong = lenShort*params[6]
+        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        mag_centre_high = -mag_centre_low
+        params[0] = mag_centre_low
+        params[3] = mag_centre_high
+
+    if div_norm == 'normalised':
+        params[6] = 1
+    elif div_norm == 'absolute':
+        params[6] = const.N_POINTS_LONG/const.N_POINTS_SHORT
+
+    if keep_parallel:
+        params[7:] = [1,0,0,1,0,0]  # set lines B and C parallel to line A
+
+    # normalise the direction of the fitted lines B and C directions for interpretability
+    params[7:10] = normalise_vect(params[7:10])
+    params[10:] = normalise_vect(params[10:])
+
+    return params
+
+# ---------------------------------------------------------------------------- #
+
 def generate_lines(params, fit_args):
     """Build 3x parallel lines in 3d based on the parameters in params"""
-    xB,yB,zB, xC,yC,zC, lenRatio = params
+    xB,yB,zB, xC,yC,zC, lenRatio, dirxB, diryB, dirzB, dirxC, diryC, dirzC = params
     _, keep_parallel, div_norm, sub_norm, _, _, lenShort = fit_args
 
     x0,y0,z0 = [0,0,0]
-    lenLong = lenShort*lenRatio
-
-    # Define line centres
-    centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-    centre_B = [xB,yB,zB]
-    centre_C = [xC,yC,zC]
 
     # align axes with the coordinate system for defining the long line
     if keep_parallel:
@@ -333,8 +369,39 @@ def generate_lines(params, fit_args):
         lineC_direction = [1,0,0]
     else:
         lineA_direction = [1,0,0]
-        lineB_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
-        lineC_direction = [1,0,0]  # ***HRS to implement. remember to keep normed so that we can interpret the line lengths
+        lineB_direction = [dirxB, diryB, dirzB]
+        lineC_direction = [dirxC, diryC, dirzC]
+
+    # normalise the line directions
+    lineA_direction = normalise_vect(lineA_direction)
+    lineB_direction = normalise_vect(lineB_direction)
+    lineC_direction = normalise_vect(lineC_direction)
+
+    # constrain divisive normalisation inside the function
+    if div_norm == 'normalised':
+        lenRatio = 1  # line length ratio must be perfectly equal to 1 i.e. totally normalised
+    elif div_norm == 'absolute':
+        lenRatio = const.N_POINTS_LONG/const.N_POINTS_SHORT # line length ratio must be proportional to numerical range
+    elif div_norm == 'unconstrained':
+        pass
+    lenLong = lenShort*lenRatio
+
+    # constrain subtractive normalisation inside the function
+    if sub_norm == 'centred':
+        centre_A = [x0,y0,z0]
+        centre_B = [x0,yB,zB]
+        centre_C = [x0,yC,zC]
+    elif sub_norm == 'offset':
+        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        mag_centre_high = -mag_centre_low
+        centre_A = [x0,y0,z0]
+        centre_B = [mag_centre_low,yB,zB]
+        centre_C = [mag_centre_high,yC,zC]
+    elif sub_norm == 'unconstrained':
+        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+        centre_B = [xB,yB,zB]
+        centre_C = [xC,yC,zC]
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
@@ -356,11 +423,11 @@ def generate_lines(params, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
-def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio):
+def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio, dirxB,diryB,dirzB, dirxC,diryC,dirzC):
     """Construct a model of 3 lines (parallel or free) in 3d space
     - dummy is an unused dummy variable"""
     # we will use the x (first) input to signal the distance metric (unconventional but we dont need to evaluate as a function of x)
-    params = [xB,yB,zB, xC,yC,zC, lenRatio]
+    params = [xB,yB,zB, xC,yC,zC, lenRatio, dirxB,diryB,dirzB, dirxC,diryC,dirzC]
     all_lines = generate_lines(params, fit_args)
     all_lines = stats.zscore(all_lines, axis=None) # zscore the lines model before computing similarity matrix
     model_RDM = pairwise_distances(all_lines, metric='euclidean')
@@ -370,58 +437,6 @@ def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio):
     model_uppertriRDM, _ = matrix_to_uppertri(model_RDM)  # just use the upper triangle of matrix for fitting
 
     return model_uppertriRDM
-
-# ---------------------------------------------------------------------------- #
-
-def constrain_divisive_norm(params, fit_args):
-    """ Divisive normalisation constraints for the lines model fitting optimisation
-        - for use in scipy.optimize.minimize(). """
-    _, _, div_norm, _, _, _, _ = fit_args
-
-    if div_norm == 'normalised':
-        return params[-1] -1  # line length ratio must be perfectly equal to 1 i.e. totally normalised
-    elif div_norm == 'absolute':
-        return params[-1] - (const.N_POINTS_LONG/const.N_POINTS_SHORT) # line length ratio must be proportional to numerical range
-    elif div_norm == 'unconstrained':
-        return 0
-
-# ---------------------------------------------------------------------------- #
-
-def constrain_sub_norm_line_B(params, fit_args):
-    """ Subtractive normalisation constraints for the lines model fitting optimisation
-       - for use in scipy.optimize.minimize(). """
-    _, _, _, sub_norm, _, _, lenShort = fit_args
-
-    if sub_norm == 'centred':
-        return params[0]  # set this line-centre parameter to zero
-
-    elif sub_norm == 'offset':
-        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
-        lenLong = lenShort*params[-1]
-        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
-        return params[0]-mag_centre_low
-
-    elif sub_norm == 'unconstrained':
-        return 0
-
-# ---------------------------------------------------------------------------- #
-
-def constrain_sub_norm_line_C(params, fit_args):
-    """ Subtractive normalisation constraints for the lines model fitting optimisation
-       - for use in scipy.optimize.minimize(). """
-    _, _, _, sub_norm, _, _, lenShort = fit_args
-
-    if sub_norm == 'centred':
-        return params[3]  # set this line-centre parameter to zero
-
-    elif sub_norm == 'offset':
-        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
-        lenLong = lenShort*params[-1]
-        mag_centre_high = +2.5 * (lenLong/const.N_POINTS_LONG)
-        return params[3]-mag_centre_high
-
-    elif sub_norm == 'unconstrained':
-        return 0
 
 # ---------------------------------------------------------------------------- #
 
@@ -436,7 +451,7 @@ def nanArray(size):
 def fitfunc(params, fit_args, data):
     """Fit lines model to data using a different function
        - for passing into scipy.optimize.minimize
-       - returns a scalar loss
+       - returns a scalar loss (SSE)
     """
     modelRDM_uppertri = makelinesmodel(fit_args, *params)
     loss = sum((modelRDM_uppertri - data)**2)
@@ -448,35 +463,34 @@ def fitmodelRDM(data, fit_args):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
 
     uppertri_data, ind = data
-
-    # Define the fixed length of the short lines so that we just solve for the line length ratio
     cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort = fit_args
 
-    fitted_params = nanArray((n_iter,7))
+    n_params = 13
+    fitted_params = nanArray((n_iter,n_params))
     fitted_loss = nanArray((n_iter,1))
 
+    # Note that introducing constraints into optimize.minimize() forces the use of a different solver that doesnt fit as well,
+    # so instead we will test our different (constrained) hypotheses by fixing some parameters ~within~ the fitting function.
+    # Strangely this method results in closer fits (lower SSE).
     for i in range(n_iter):
         #
         try:
             # keep these bounds, they seem reasonable and the fits dont get close to them at all
-            lower_bound = [-1, -1, -1, -1, -1, -1, 0]
-            upper_bound = [1, 1, 1, 1, 1, 1, 2]
+            lower_bound = [-1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1]
+            upper_bound = [1,   1,  1,  1,  1,  1, 2,  1,  1,  1,  1,  1,  1]
 
             # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
             init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
 
             # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
             bounds = [(lower_bound[i],upper_bound[i]) for i in range(len(init_params))]
-            fit_constraints = [{'type':'eq', 'fun':constrain_divisive_norm, 'args':(fit_args,)}]
-            #                   {'type':'eq', 'fun':constrain_sub_norm_line_B, 'args':(fit_args,)},
-            #                   {'type':'eq', 'fun':constrain_sub_norm_line_C, 'args':(fit_args,)}]
-
-            result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data),
-                                      bounds=bounds, constraints=fit_constraints )
-            #result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data), bounds=bounds )
+            result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data), bounds=bounds )
             params = result.x
-            loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
+            # force back in the constraints on the params in case they deviated during fitting (as repeated in generate_lines())
+            params = reconstrain_params(params)
+
+            loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
             fitted_params[i] = params
             fitted_loss[i] = loss
 
