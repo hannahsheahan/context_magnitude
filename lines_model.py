@@ -389,6 +389,19 @@ def makelinesmodel(fit_args, xB,yB,zB, xC,yC,zC, lenRatio):
     return model_uppertriRDM
 
 # ---------------------------------------------------------------------------- #
+
+def constrain_divisive_norm(params, fit_args):
+    _, _, div_norm, _, _, _ = fit_args
+
+    if div_norm == 'normalised':
+        return params[-1] -1  # line length ratio must be perfectly equal to 1 i.e. totally normalised
+    elif div_norm == 'absolute':
+        return params[-1] - (const.N_POINTS_LONG/const.N_POINTS_SHORT) # line length ratio must be proportional to numerical range
+    elif div_norm == 'unconstrained':
+        return 0
+
+# ---------------------------------------------------------------------------- #
+
 def nanArray(size):
     # create a numpy array of size 'size' (tuple) filled with nans
     tmp = np.zeros(size)
@@ -427,24 +440,17 @@ def fitmodelRDM(data, fit_args):
             # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
             init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
 
-            """
-            # Divisive normalisation settings
-            if div_norm == 'normalised':
-                lenLong = lenShort
-            elif div_norm == 'absolute':
-                lenLong = (const.N_POINTS_LONG/const.N_POINTS_SHORT)*lenShort
-            elif div_norm == 'unconstrained':
-                # let the optimiser find whatever values it like for lenShort and lenLong
-                pass
-            """
-
             # select a loss function for the fit: either SSE (for euclidean fits) or summed correlation distance
             if cost_function=='SSE':
                 params, params_covariance = optimize.curve_fit(makelinesmodel, fit_args, uppertri_data, p0=init_params, bounds=(lower_bound,upper_bound) )
                 loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
             elif cost_function=='SSE2':
-                result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data), bounds=[(lower_bound[i],upper_bound[i]) for i in range(len(init_params))] )
+                bounds = [(lower_bound[i],upper_bound[i]) for i in range(len(init_params))]
+                fit_constraints = [{'type':'eq', 'fun':constrain_divisive_norm, 'args':(fit_args,)}]
+
+                result = optimize.minimize(fitfunc, init_params, args=(fit_args, uppertri_data),
+                                            bounds=bounds, constraints=fit_constraints )
                 params = result.x
                 loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
 
@@ -655,7 +661,7 @@ def main():
     metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
     cost_function = 'SSE2'  # both SSE and SSE2 seem to do the same thing but use different fitting functions
     keep_parallel = True
-    div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
+    div_norm = 'absolute' # 'unconstrained' 'normalised'  'absolute'
     sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
     n_iter = 100               # number of random initialisations for each fit
     model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
