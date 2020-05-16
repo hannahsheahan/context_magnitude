@@ -31,6 +31,9 @@ from scipy.spatial import procrustes
 from sklearn.metrics import pairwise_distances
 from scipy.spatial.distance import correlation
 from sklearn.manifold import MDS
+#from astropy.stats import rayleightest
+from pycircstat.tests import rayleigh
+
 import matplotlib.colors as mplcol
 import sklearn.decomposition
 from matplotlib import animation
@@ -313,7 +316,8 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
 # ---------------------------------------------------------------------------- #
 
-def normalise_vect(x):
+def unit_vector(x):
+    # create a unit vector from the input array
     x = np.asarray(x)
     normed_x = x / np.linalg.norm(x)
     normed_x = list(normed_x)
@@ -348,8 +352,8 @@ def reconstrain_params(params, fit_args):
         params[7:] = [1,0,0,1,0,0]  # set lines B and C parallel to line A
 
     # normalise the direction of the fitted lines B and C directions for interpretability
-    params[7:10] = normalise_vect(params[7:10])
-    params[10:] = normalise_vect(params[10:])
+    params[7:10] = unit_vector(params[7:10])
+    params[10:] = unit_vector(params[10:])
 
     return params
 
@@ -373,9 +377,9 @@ def generate_lines(params, fit_args):
         lineC_direction = [dirxC, diryC, dirzC]
 
     # normalise the line directions
-    lineA_direction = normalise_vect(lineA_direction)
-    lineB_direction = normalise_vect(lineB_direction)
-    lineC_direction = normalise_vect(lineC_direction)
+    lineA_direction = unit_vector(lineA_direction)
+    lineB_direction = unit_vector(lineB_direction)
+    lineC_direction = unit_vector(lineC_direction)
 
     # constrain divisive normalisation inside the function
     if div_norm == 'normalised':
@@ -488,7 +492,7 @@ def fitmodelRDM(data, fit_args):
             params = result.x
 
             # force back in the constraints on the params in case they deviated during fitting (as repeated in generate_lines())
-            params = reconstrain_params(params)
+            params = reconstrain_params(params, fit_args)
 
             loss = sum((makelinesmodel(fit_args, *params) - uppertri_data)**2)
             fitted_params[i] = params
@@ -655,6 +659,107 @@ def animate3DMDS(MDS_data, MDS_model, args, metric, saveFig=True):
 
 # ---------------------------------------------------------------------------- #
 
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'.
+       Source:  https://stackoverflow.com/questions/2827393/angles-between-two-n-dimensional-vectors-in-python/13849249#13849249 """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    angle_radians = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    return angle_radians
+
+# ---------------------------------------------------------------------------- #
+
+def parallelness_test(model_system, allsubjects_params, fit_args):
+    """The null hypothesis for line parallelness is that the distribution of angles
+      between each bestfit line and each other bestfit line across all our models is uniform.
+      We can then do a rayleigh test across subjects/models that tests the distribution of those cosine angles.
+      Note that a rayleigh test will just reject the H0 that the angles are uniform around a circle
+      (but wont say they are actually parallel, but it should be totally obvious from the distribution of angles plot)."""
+
+    _, keep_parallel, div_norm, sub_norm, _, _, _ = fit_args
+    parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
+    model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
+
+    angles = []
+    for params in allsubjects_params:
+        # the best fitting directions of each line in 3d space
+        dir_lineA = np.asarray([1,0,0])
+        dir_lineB = params[7:10]
+        dir_lineC = params[10:]
+
+        # compute the angles between the unit vectors in the bestfit lines model
+        angle_AB = angle_between(dir_lineA, dir_lineB) # line A v B
+        angle_BC = angle_between(dir_lineB, dir_lineC) # line B v C
+
+        angles.append(angle_AB)
+        angles.append(angle_BC)
+
+    angles = np.asarray(angles)
+    plt.figure()
+    plt.hist(angles, bins=50)
+    ax = plt.gca()
+    ax.set_xlim(-np.pi, np.pi)
+    plt.xlabel('Angle between lines (degrees)')
+    plt.title('Distribution of angle between bestfit lines')
+    plt.savefig('figures/hist_angles_between_lines_' + model_system + model_string + '.pdf', bbox_inches='tight')
+
+    # perform a rayleigh test that the angles come from a uniform circular distribution
+    p,z = rayleigh(angles)
+    print('Rayleigh test (distr. angles between bestfit lines):')
+    print('p = {:5f}'.format(p))
+    print("Rayleigh's z: {:3f}".format(z))
+    return p,z
+
+# ---------------------------------------------------------------------------- #
+
+def plot_divisive_normalisation(model_system, allsubjects_params, fit_args):
+
+    _, keep_parallel, div_norm, sub_norm, _, _, _ = fit_args
+    parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
+    model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
+
+    ratios = []
+    for params in allsubjects_params:
+        divisive_norm_ratio = params[6]
+        ratios.append(divisive_norm_ratio)
+
+    if len(ratios)>1:
+        plt.figure()
+        plt.histogram(ratios, bins=50)
+        ax = plt.gca()
+        ax.set_xlim(0.9, 1.6)
+        plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
+        plt.title('Bestfit divisive norm ratios: ' + model_system)
+        plt.savefig('figures/hist_divnorm_ratios_' + model_system + model_string + '.pdf', bbox_inches='tight')
+    else:
+        print('Divisive norm ratio: {:3f}'.format(ratios))
+        print('Totally normalised: 1 ---> totally absolute: 1.455')
+
+# ---------------------------------------------------------------------------- #
+
+def plot_subtractive_normalisation(model_system, allsubjects_params, fit_args):
+    # hasn't been written properly yet HRS, and not necessary except for optional visualisation
+    """
+    ratios = []
+    for params in allsubjects_params:
+        subtractive_norm_ratio = params[6]
+        ratios.append(divisive_norm_ratio)
+
+    if len(ratios)>1:
+        plt.figure()
+        plt.histogram(ratios, bins=50)
+        ax = plt.gca()
+        ax.set_xlim(0.9, 1.6)
+        plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
+        plt.title('Bestfit divisive norm ratios: ' + model_system)
+        plt.savefig('figures/hist_divnorm_ratios_' + model_system + '.pdf', bbox_inches='tight')
+    else:
+        print('Divisive norm ratio: {}'.format(ratios))
+        print('Totally normalised: 1 ---> totally absolute: 1.455')
+    """
+
+# ---------------------------------------------------------------------------- #
+
 def fit_and_plot_model(data, model_system, model_id, fit_args):
     """ Fit a euclidean distance lines model to the input data RDM."""
 
@@ -731,8 +836,12 @@ def main():
     model_id = 0
 
     transformed_data, transformed_model, SSE, params = fit_and_plot_model(data, model_system, model_id, fit_args)
+    allsubjects_params = [params]
 
-
+    # Perform statistical tests on the best fit models
+    parallelness_test(model_system, allsubjects_params, fit_args)
+    plot_divisive_normalisation(model_system, allsubjects_params, fit_args)
+    # plot_subtractive_normalisation(model_system, allsubjects_params) # not written properly yet and unnecessary
 
 # ---------------------------------------------------------------------------- #
 
