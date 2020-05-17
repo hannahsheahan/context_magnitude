@@ -483,8 +483,8 @@ def fitmodelRDM(data, fit_args):
         #
         try:
             # keep these bounds, they seem reasonable and the fits dont get close to them at all
-            lower_bound = [-1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1]
-            upper_bound = [1,   1,  1,  1,  1,  1, 2,  1,  1,  1,  1,  1,  1]
+            lower_bound = [-2, -2, -2, -2, -2, -2, 0, -1, -1, -1, -1, -1, -1]
+            upper_bound = [2,   2,  2,  2,  2,  2, 2,  1,  1,  1,  1,  1,  1]
 
             # Randomise the initial parameter starting point for those we are fitting (first iteration will just use our guesses)
             init_params = [random.uniform(lower_bound[i],upper_bound[i]) for i in range(len(lower_bound))]
@@ -564,7 +564,7 @@ def bestfitRDM(data, fit_args, model_system, model_id=0):
     return opt_params, opt_SSE
 # ---------------------------------------------------------------------------- #
 
-def plot_bestmodel_data(mtx1, mtx2, model_system):
+def plot_bestmodel_data(mtx1, mtx2, model_description):
     # mtx1 = data procrustes transformed
     # mtx2 = model proucrustes transformed
     fig, ax = plt.subplots(1,3, figsize=(18,5))
@@ -591,7 +591,7 @@ def plot_bestmodel_data(mtx1, mtx2, model_system):
         ax[j].plot(mtx2[contextC, dimA], mtx2[contextC, dimB], color=modelcolours[2])
         ax[j].axis('equal')
 
-    plt.savefig('figures/bestfit_procrustes_' + model_system + '.pdf', bbox_inches='tight')
+    plt.savefig('figures/bestfit_procrustes_' + model_description + '.pdf', bbox_inches='tight')
     plt.close()
 
 # ---------------------------------------------------------------------------- #
@@ -682,15 +682,17 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
         # compute the angles between the unit vectors in the bestfit lines model
         angle_AB = angle_between(dir_lineA, dir_lineB) # line A v B
         angle_BC = angle_between(dir_lineB, dir_lineC) # line B v C
+        angle_AC = angle_between(dir_lineA, dir_lineC) # line A v C
 
         angles.append(angle_AB)
         angles.append(angle_BC)
+        angles.append(angle_AC)
 
     angles = np.asarray(angles)
     plt.figure()
-    plt.hist(angles, bins=50)
+    plt.hist([angle*(180/np.pi) for angle in angles], bins=40)
     ax = plt.gca()
-    ax.set_xlim(-np.pi, np.pi)
+    ax.set_xlim(-180, 180)
     plt.xlabel('Angle between lines (degrees)')
     plt.title('Distribution of angle between bestfit lines')
     plt.savefig('figures/hist_angles_between_lines_' + model_system + model_string + '.pdf', bbox_inches='tight')
@@ -720,9 +722,9 @@ def plot_divisive_normalisation(model_system, allsubjects_params, fit_args):
 
     if len(ratios)>1:
         plt.figure()
-        plt.hist(ratios, bins=50)
+        plt.hist(ratios, bins=30)
         ax = plt.gca()
-        ax.set_xlim(0.9, 1.6)
+        ax.set_xlim(0.95, 1.5)
         plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
         plt.title('Bestfit divisive norm ratios: ' + model_system)
         plt.savefig('figures/hist_divnorm_ratios_' + model_system + model_string + '.pdf', bbox_inches='tight')
@@ -771,7 +773,8 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
     # Now visualize the geometry of the best fit lines in their euclidean space
     bestfit_lines = generate_lines(opt_params, fit_args)
     fig = plot_components(bestfit_lines)
-    plt.savefig('figures/bestfit_lines_' + get_model_description(model_id, model_system, fit_args) + '.pdf', bbox_inches='tight')
+    model_description = get_model_description(model_id, model_system, fit_args)
+    plt.savefig('figures/bestfit_lines_' + model_description + '.pdf', bbox_inches='tight')
     plt.close()
 
     # MDS of the bestfit model RDM (not z-scored)
@@ -786,7 +789,7 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
 
     # Plot the procrustes-transformed MDS of the model and MDS of the data on top of each other
     procrustes_data, procrustes_model, disparity = procrustes(MDS_data, MDS_model)
-    plot_bestmodel_data(procrustes_data, procrustes_model, model_system)
+    plot_bestmodel_data(procrustes_data, procrustes_model, model_description)
 
     # Generate an animation of the procrustes-transformed MDS of the model and MDS of the data on top of each other
     #animate3DMDS(procrustes_data, procrustes_model, RNN_args, metric, saveFig)
@@ -807,30 +810,12 @@ def get_model_description(model_id, model_system, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
-def main():
+def fit_models(datasets, fit_to_mean, model_system, fit_args):
+    """Fit model defined by fit_args to all the subjects (or to mean, if instructed),
+    and plot and save the resulting parameters/SSE/MDS etc results."""
 
-    # fitting settings
-    fit_to_mean = False
-    model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
-    metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
-    cost_function = 'SSE'   # ***HRS obsolete, always uses SSE through scipy.optimize.minimize()
-    keep_parallel = False
-    div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
-    sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
-    n_iter = 100               # number of random initialisations for each fit
-    lenShort = 3               # somewhat arbitrary fixed parameter for the length of the short lines (we just fit a length ratio). Keep small ~3 otherwise true line centre params will move outside bounds
-    fit_args = [cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort]
-
-    # figure saving settings
-    saveFig = True
-    RNN_args = network_args('blocked', 'truecontext', 0.0)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
-    EEG_args = network_args('blocked', 'truecontext', 0.0)
-
-    # Load our data
-    mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args)
-
-    # Plot low dimensional representations of the rnn and eeg data
-    # generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+    mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = datasets
+    cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort = fit_args
 
     # Confirming fitting settings
     parallel_text = '' if keep_parallel else 'NOT '
@@ -866,7 +851,6 @@ def main():
 
     # Save the best fit parameters so we dont have to repeat this whole process
     model_description = get_model_description(model_id, model_system, fit_args)
-
     filename_parameters = 'bestfit_parameters_' + model_description
     filename_SSE = 'bestfit_SSE_' + model_description
     filepath_parameters = os.path.join(SAVE_FILELOC, filename_parameters)
@@ -879,6 +863,52 @@ def main():
     parallelness_test(model_system, allsubjects_params, fit_args)
     plot_divisive_normalisation(model_system, allsubjects_params, fit_args)
     # plot_subtractive_normalisation(model_system, allsubjects_params) # not written properly yet and unnecessary
+
+# ---------------------------------------------------------------------------- #
+
+def main():
+
+    # fitting settings
+    fit_to_mean = True
+    model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
+    metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
+    cost_function = 'SSE'   # ***HRS obsolete, always uses SSE through scipy.optimize.minimize()
+    keep_parallel = False
+    div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
+    sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
+    n_iter = 100               # number of random initialisations for each fit
+    lenShort = 3               # somewhat arbitrary fixed parameter for the length of the short lines (we just fit a length ratio). Keep small ~3 otherwise true line centre params will move outside bounds
+
+    # figure saving settings
+    saveFig = True
+    RNN_args = network_args('blocked', 'truecontext', 0.0)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
+    EEG_args = network_args('blocked', 'truecontext', 0.0)
+
+    # Load our data
+    mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args)
+    datasets = [mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs]
+
+    # Plot low dimensional representations of the rnn and eeg data
+    # generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+
+    # Sets of parameter settings for looping
+    parameter_set_1 = [False,  'unconstrained', 'unconstrained']  # totally free model: 1
+    parameter_set_2 = [True,  'unconstrained', 'unconstrained']   # free but parallel model: 2
+    parameter_set_3 = [True,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
+    parameter_set_4 = [True,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
+    parameter_set_5 = [True,  'unconstrained', 'centred']      # parallel and sub centred model: 5
+    parameter_set_6 = [True,  'unconstrained', 'offset']       # parallel and sub offset model: 6
+    parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5, parameter_set_6]
+
+    # i.e. each time test one hypothesis by restricting a set of parameters, and keep all others free.
+    # We will compare:
+    # - parallelness: model1 v model2
+    # - divisive normalisation: model3 v model4
+    # - subtractive normalisation: model5 v model6
+
+    for keep_parallel, div_norm, sub_norm in parameter_combinations:
+        fit_args = [cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort]
+        fit_models(datasets, fit_to_mean, model_system, fit_args)
 
 # ---------------------------------------------------------------------------- #
 
