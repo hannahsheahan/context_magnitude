@@ -528,7 +528,7 @@ def uppertri_to_matrix(x, ind, n):
 
 # ---------------------------------------------------------------------------- #
 
-def bestfitRDM(data, fit_args, model_system, model_id=0):
+def bestfitRDM(data, fit_args, model_description, model_id=0):
     # fits a model RDM to the input data RDM
     flat_data = data.flatten()
     uppertri_data, ind = matrix_to_uppertri(data)
@@ -550,7 +550,7 @@ def bestfitRDM(data, fit_args, model_system, model_id=0):
     ax[0].set_title('rnn data RDM')
     ax[1].imshow(bestfit_rdm.reshape(38,-1).T)
     ax[1].set_title('best fit RDM')
-    plt.savefig('figures/bestfit_rdm_' + get_model_description(model_id, model_system, fit_args) + '.pdf',bbox_inches='tight')
+    plt.savefig('figures/bestfit_rdm_' + model_description + '.pdf',bbox_inches='tight')
     plt.close()
 
     """
@@ -671,6 +671,7 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
     _, keep_parallel, div_norm, sub_norm, _, _, _ = fit_args
     parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
     model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
+    model_string = model_string + '_meanfit' if mean_fits else model_string
 
     angles = []
     for params in allsubjects_params:
@@ -703,8 +704,8 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
 
     print('-----')
     print('Rayleigh test (distr. angles between bestfit lines):')
-    print('p = {:7f}'.format(p))
-    print("Rayleigh's z: {:3f}".format(z))
+    print('p = {:.3e}'.format(p))
+    print("Rayleigh's z: {:.3e}".format(z))
     return p,z
 
 # ---------------------------------------------------------------------------- #
@@ -759,21 +760,20 @@ def plot_subtractive_normalisation(model_system, allsubjects_params, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
-def fit_and_plot_model(data, model_system, model_id, fit_args):
+def fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method):
     """ Fit a euclidean distance lines model to the input data RDM."""
 
     cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort = fit_args
-
-    original_data = copy.deepcopy(data)   # correlation data RDM, not z-scored
+    model_description = get_model_description(model_id, model_system, fit_args)
+    model_description = model_description + '_crossval' if fit_method=='cross_val' else model_description
 
     # zscore the data RDM to make sure its on same scale as model for the fit
-    zscored_data = stats.zscore(data, axis=None)
-    opt_params, opt_SSE = bestfitRDM(zscored_data, fit_args, model_system, model_id)
+    zscored_train_data = stats.zscore(train_data, axis=None)
+    opt_params, opt_SSE = bestfitRDM(zscored_train_data, fit_args, model_description, model_id)
 
     # Now visualize the geometry of the best fit lines in their euclidean space
     bestfit_lines = generate_lines(opt_params, fit_args)
     fig = plot_components(bestfit_lines)
-    model_description = get_model_description(model_id, model_system, fit_args)
     plt.savefig('figures/bestfit_lines_' + model_description + '.pdf', bbox_inches='tight')
     plt.close()
 
@@ -784,7 +784,9 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
     MDS_model = MDS_model[:,:3] # just take the first 3 MDS components
 
     # MDS of the data
-    MDS_data, evals = cmdscale(data)
+    # note that when we are doing cross-val this will be the left out subject,
+    # and when fitting to individual subjects of the global mean, its just the same as training data
+    MDS_data, evals = cmdscale(test_data)
     MDS_data = MDS_data[:,:3]   # just take the first 3 MDS components
 
     # Plot the procrustes-transformed MDS of the model and MDS of the data on top of each other
@@ -794,7 +796,16 @@ def fit_and_plot_model(data, model_system, model_id, fit_args):
     # Generate an animation of the procrustes-transformed MDS of the model and MDS of the data on top of each other
     #animate3DMDS(procrustes_data, procrustes_model, RNN_args, metric, saveFig)
 
-    return procrustes_data, procrustes_model, opt_SSE, opt_params
+    # now compute the final SSE by testing the model against the test set
+    zscored_test_data = stats.zscore(test_data, axis=None)
+    uppertri_data, ind = matrix_to_uppertri(zscored_test_data)
+    test_SSE = sum((makelinesmodel(fit_args, *opt_params) - uppertri_data)**2)
+
+    # do a sanity check (these should be the same unless doing cross-validation)
+    print('train SSE: {}'.format(opt_SSE))
+    print('test SSE: {}'.format(test_SSE))
+
+    return procrustes_data, procrustes_model, test_SSE, opt_params
 
 # ---------------------------------------------------------------------------- #
 
@@ -810,7 +821,7 @@ def get_model_description(model_id, model_system, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
-def fit_models(datasets, fit_to_mean, model_system, fit_args):
+def fit_models(datasets, fit_method, model_system, fit_args):
     """Fit model defined by fit_args to all the subjects (or to mean, if instructed),
     and plot and save the resulting parameters/SSE/MDS etc results."""
 
@@ -819,8 +830,9 @@ def fit_models(datasets, fit_to_mean, model_system, fit_args):
 
     # Confirming fitting settings
     parallel_text = '' if keep_parallel else 'NOT '
+    fit_method_text = 'with cross-validation' if fit_method == 'cross_val' else ''
     print('Fitting model:')
-    print(' - fitting to ' + model_system + ' data')
+    print(' - fitting to ' + model_system + ' data' + fit_method_text)
     print(' - data RDM built from ' + metric + ' distance')
     print(' - model RDM built from euclidean distance')
     print(' - fitted lines are ' + parallel_text + 'constrained to be parallel')
@@ -831,26 +843,57 @@ def fit_models(datasets, fit_to_mean, model_system, fit_args):
     allsubjects_params = []
     allsubjects_SSE = []
 
-    if fit_to_mean:
+    if fit_method == 'fit_to_mean':
+        # same train and test data
         print('\nFitting to mean data from ' + model_system + '...')
         model_id = 999  # code id for fitting to mean
-        data = mean_RNN_RDM if model_system == 'RNN' else mean_EEG_RDM
-        transformed_data, transformed_model, SSE, params = fit_and_plot_model(data, model_system, model_id, fit_args)
+        train_data = mean_RNN_RDM if model_system == 'RNN' else mean_EEG_RDM
+        test_data = copy.deepcopy(train_data)
+        transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method)
         allsubjects_params = [params]
         allsubjects_SSE = [SSE]
-    else:
+
+    elif fit_method == 'individual':
+        # same train and test data
         print('\nFitting to each subject/model from ' + model_system + '...')
         allsubjects_data = subjects_RNN_RDMs if model_system == 'RNN' else subjects_EEG_RDMs
         for model_id in range(allsubjects_data.shape[0]):
-            data = allsubjects_data[model_id]
+            train_data = allsubjects_data[model_id]
+            test_data = copy.deepcopy(train_data)
             print('\nFitting ' + model_system + ' subject ' + str(model_id+1) + '/' + str(allsubjects_data.shape[0]) + '...')
-            transformed_data, transformed_model, SSE, params = fit_and_plot_model(data, model_system, model_id, fit_args)
+            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method)
             allsubjects_params.append(params)
             allsubjects_SSE.append(SSE)
+
+    elif fit_method == 'cross_val':
+        # train on k-1 dataset and test on the left-out subject's data
+        print('\nFitting to k-1 subjects/models (crossval) from ' + model_system + '...')
+        allsubjects_data = subjects_RNN_RDMs if model_system == 'RNN' else subjects_EEG_RDMs
+        for model_id in range(allsubjects_data.shape[0]):
+
+            # assemble the k-1 dataset to fit to
+            train_data = np.zeros((allsubjects_data.shape[0]-1, allsubjects_data.shape[1], allsubjects_data.shape[2]))
+            for i in range(allsubjects_data.shape[0]):
+                model_count = 0
+                if i != model_id:
+                    train_data[model_count] = allsubjects_data[i]
+                    model_count += 1
+
+            # take the mean of the data over the k-1 subjects data
+            train_data = np.mean(train_data, axis=0)
+            test_data = allsubjects_data[model_id]
+
+            # fit a model to the mean of the k-1 data subset (and test it on the left-out test data)
+            print('\nFitting ' + model_system + ', leaving out subject ' + str(model_id+1) + '/' + str(allsubjects_data.shape[0]) + '...')
+            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method)
+            allsubjects_params.append(params)
+            allsubjects_SSE.append(SSE)
+
     print('Fitting complete.')
 
     # Save the best fit parameters so we dont have to repeat this whole process
     model_description = get_model_description(model_id, model_system, fit_args)
+    model_description = model_description + '_crossval' if fit_method=='cross_val' else model_description
     filename_parameters = 'bestfit_parameters_' + model_description
     filename_SSE = 'bestfit_SSE_' + model_description
     filepath_parameters = os.path.join(SAVE_FILELOC, filename_parameters)
@@ -860,8 +903,8 @@ def fit_models(datasets, fit_to_mean, model_system, fit_args):
     np.save(filepath_SSE, np.asarray(allsubjects_SSE))
 
     # Perform statistical tests on the best fit models
-    parallelness_test(model_system, allsubjects_params, fit_args)
-    plot_divisive_normalisation(model_system, allsubjects_params, fit_args)
+    #parallelness_test(model_system, allsubjects_params, fit_args)
+    #plot_divisive_normalisation(model_system, allsubjects_params, fit_args)
     # plot_subtractive_normalisation(model_system, allsubjects_params) # not written properly yet and unnecessary
 
 # ---------------------------------------------------------------------------- #
@@ -869,7 +912,7 @@ def fit_models(datasets, fit_to_mean, model_system, fit_args):
 def main():
 
     # fitting settings
-    fit_to_mean = True
+    fit_method = 'cross_val'  # 'cross_val'  'individual' 'cross_val'
     model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
     metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
     cost_function = 'SSE'   # ***HRS obsolete, always uses SSE through scipy.optimize.minimize()
@@ -892,6 +935,7 @@ def main():
     # generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
 
     # Sets of parameter settings for looping
+    """
     parameter_set_1 = [False,  'unconstrained', 'unconstrained']  # totally free model: 1
     parameter_set_2 = [True,  'unconstrained', 'unconstrained']   # free but parallel model: 2
     parameter_set_3 = [True,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
@@ -899,6 +943,15 @@ def main():
     parameter_set_5 = [True,  'unconstrained', 'centred']      # parallel and sub centred model: 5
     parameter_set_6 = [True,  'unconstrained', 'offset']       # parallel and sub offset model: 6
     parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5, parameter_set_6]
+    """
+
+    # actually when we dont restrict it to be parallel it seems that there is more divisive normalisation in the EEG subjects so lets do that model
+    parameter_set_7 = [False,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
+    parameter_set_8 = [False,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
+    parameter_set_9 = [False,  'unconstrained', 'centred']      # parallel and sub centred model: 5
+    parameter_set_10 = [False,  'unconstrained', 'offset']       # parallel and sub offset model: 6
+    parameter_combinations = [parameter_set_7, parameter_set_8, parameter_set_9, parameter_set_10]
+
 
     # i.e. each time test one hypothesis by restricting a set of parameters, and keep all others free.
     # We will compare:
@@ -908,7 +961,7 @@ def main():
 
     for keep_parallel, div_norm, sub_norm in parameter_combinations:
         fit_args = [cost_function, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort]
-        fit_models(datasets, fit_to_mean, model_system, fit_args)
+        fit_models(datasets, fit_method, model_system, fit_args)
 
 # ---------------------------------------------------------------------------- #
 

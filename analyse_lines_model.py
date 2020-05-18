@@ -87,9 +87,10 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
       Note that a rayleigh test will just reject the H0 that the angles are uniform around a circle
       (but wont say they are actually parallel, but it should be totally obvious from the distribution of angles plot)."""
 
-    _, _, keep_parallel, div_norm, sub_norm, _ = fit_args
+    mean_fits, _, keep_parallel, div_norm, sub_norm, _ = fit_args
     parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
     model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
+    model_string = model_string + '_meanfit' if mean_fits else model_string
 
     angles = []
     for params in allsubjects_params:
@@ -111,7 +112,7 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
     plt.figure()
     plt.hist([angle*(180/np.pi) for angle in angles], bins=40)
     ax = plt.gca()
-    ax.set_xlim(-180, 180)
+    ax.set_xlim(-10, 180)
     plt.xlabel('Angle between lines (degrees)')
     plt.title('Distribution of angle between bestfit lines')
     plt.savefig('figures/hist_angles_between_lines_' + model_system + model_string + '.pdf', bbox_inches='tight')
@@ -128,10 +129,38 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
+def plot_divisive_normalisation(model_system, allsubjects_params, fit_args):
+
+    mean_fits, _, keep_parallel, div_norm, sub_norm, _ = fit_args
+    parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
+    model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
+    model_string = model_string + '_meanfit' if mean_fits else model_string
+
+    ratios = []
+    for params in allsubjects_params:
+        divisive_norm_ratio = params[6]
+        ratios.append(divisive_norm_ratio)
+
+    #if len(ratios)>1:
+    plt.figure()
+    plt.hist(ratios, bins=15)
+    ax = plt.gca()
+    ax.set_xlim(0.95, 1.5)
+    plt.xlabel('Divisive norm ratios (1: totally normalised -> 1.455: totally absolute)')
+    plt.title('Bestfit divisive norm ratios: ' + model_system)
+    plt.savefig('figures/hist_divnorm_ratios_' + model_system + model_string + '.pdf', bbox_inches='tight')
+    plt.close()
+    if len(ratios)==1:
+        print('-----')
+        print('Divisive norm ratio:   {:3f}'.format(ratios[0]))
+        print('(totally normalised: 1 --> totally absolute: 1.45)')
+
+# ---------------------------------------------------------------------------- #
+
 def main():
 
     mean_fits = False      # load the mean fits or individual subject fits
-    model_system = 'RNN' # 'RNN' or 'EEG'
+    model_system = 'EEG' # 'RNN' or 'EEG'
     metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
 
     #for subject in range(len(SSE)):
@@ -144,9 +173,11 @@ def main():
     fit_args = [mean_fits, model_system, keep_parallel, div_norm, sub_norm, metric]
     SSE, parameters = load_fits(fit_args)
     parallelness_test(model_system, parameters, fit_args)
+    plot_divisive_normalisation(model_system, parameters, fit_args)
+    print(SSE)
 
     # Assess divisive normalisation vs absolute line lengths
-    keep_parallel = True
+    keep_parallel = False
     sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
     compare_SSEs = []
     for div_norm in ['normalised', 'absolute']:
