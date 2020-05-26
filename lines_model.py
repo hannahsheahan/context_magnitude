@@ -943,7 +943,7 @@ def fit_models(datasets, fit_method, model_system, fit_args):
     #parallelness_test(model_system, allsubjects_params, fit_args)
     #plot_divisive_normalisation(model_system, allsubjects_params, fit_args)
     # plot_subtractive_normalisation(model_system, allsubjects_params) # not written properly yet and unnecessary
-
+    return None
 # ---------------------------------------------------------------------------- #
 
 def main():
@@ -951,10 +951,7 @@ def main():
     # fitting settings
     fit_method = 'fit_to_mean'  # 'fit_to_mean'  'individual' 'cross_val' 'cross_val_5fold'
     #model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
-
-    # Multiprocessing settings
-    n_processors = mp.cpu_count()
-    print("\nParallelising fitting over all {} available CPU cores.\n".format(n_processors))
+    parallelize = False
 
     for model_system in ['EEG']:
         metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
@@ -1004,17 +1001,20 @@ def main():
         # - divisive normalisation: model3 v model4
         # - subtractive normalisation: model5 v model6
 
-        # Parallelize fitting of different models to different cores
-        pool = mp.Pool(n_processors)
-        parameter_args = [[fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set] for keep_parallel, div_norm, sub_norm in parameter_combinations]
-        print(parameter_args)
-        results = [ pool.apply(fit_models, args=(datasets, fit_method, model_system, fit_args)) for fit_args in parameter_args]
-        pool.close()
-
-        # Serial option
-        #for keep_parallel, div_norm, sub_norm in parameter_combinations:
-        #    fit_args = [fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set]
-        #    fit_models(datasets, fit_method, model_system, fit_args)
+        if parallelize:
+            # Parallelize fitting of different models to different cores
+            n_processors = mp.cpu_count()
+            print("\nParallelising fitting over all {} available CPU cores.\n".format(n_processors))
+            # create a multiprocessing pool
+            pool = mp.Pool(n_processors)
+            parameter_args = [[fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set] for keep_parallel, div_norm, sub_norm in parameter_combinations]
+            results = [ pool.apply(fit_models, args=(datasets, fit_method, model_system, fit_args)) for fit_args in parameter_args]
+            pool.close()
+        else:
+            # Serial option
+            for keep_parallel, div_norm, sub_norm in parameter_combinations:
+                fit_args = [fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set]
+                fit_models(datasets, fit_method, model_system, fit_args)
 
 # ---------------------------------------------------------------------------- #
 
