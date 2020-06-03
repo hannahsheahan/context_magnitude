@@ -250,13 +250,13 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    args.label_context = 'constant'
+    args.label_context = 'true'
     args.train_lesion_freq=0.1
     #args.model_id = 2951
     #args.model_id = 7388  # an example case
 
     # Train the network from scratch
-    #trainAndSaveANetwork(args)
+    trainAndSaveANetwork(args)
 
     # Analyse the trained network (extract and save network activations)
     #MDS_dict = analyseNetwork(args)

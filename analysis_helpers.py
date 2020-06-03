@@ -269,17 +269,17 @@ def lesionperfbyNumerosity(lesiondata):
     numberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
     globalnumberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
     perf = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
-    globalmean = 8.5
+    globalmean = const.CONTEXT_FULL_MEAN
 
     for seq in range(lesiondata.shape[0]):
         for compare_idx in range(lesiondata.shape[1]):
             context = lesiondata[seq][compare_idx]["underlying_context"]
             if context==1:
-                contextmean[seq][compare_idx] = 8.5
+                contextmean[seq][compare_idx] = const.CONTEXT_FULL_MEAN
             elif context==2:
-                contextmean[seq][compare_idx] = 6
+                contextmean[seq][compare_idx] = const.CONTEXT_LOW_MEAN
             elif context==3:
-                contextmean[seq][compare_idx] = 11
+                contextmean[seq][compare_idx] = const.CONTEXT_HIGH_MEAN
 
             # calculate difference between current number and context or global mean
             numberdiffs[seq][compare_idx] = np.abs(np.asarray(lesiondata[seq][compare_idx]["assess_number"]-contextmean[seq][compare_idx]))
