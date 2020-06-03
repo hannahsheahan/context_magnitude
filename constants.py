@@ -2,6 +2,8 @@
 # Author: Hannah Sheahan, sheahan.hannah@gmail.com
 # Date: 13/03/2020
 
+import numpy as np
+
 # Total maximum numbers for one-hot coding
 TOTALMAXNUM = 16    # max numerosity
 NCONTEXTS = 3       # max number of contexts for one-hot coding
@@ -26,3 +28,8 @@ TRIAL_COMPARE = 1
 # the same as the spans... but used in lines_model
 N_POINTS_LONG = 16
 N_POINTS_SHORT = 11
+
+# mean values for each context
+CONTEXT_FULL_MEAN = np.mean(range(FULLR_LLIM, FULLR_ULIM+1))  # 8.5
+CONTEXT_LOW_MEAN = np.mean(range(LOWR_LLIM, LOWR_ULIM+1))     # 6
+CONTEXT_HIGH_MEAN = np.mean(range(HIGHR_LLIM, HIGHR_ULIM+1))  # 11

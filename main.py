@@ -250,7 +250,7 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
-    args.label_context = 'constant'
+    args.label_context = 'true'
     args.train_lesion_freq=0.1
     #args.model_id = 2951
     #args.model_id = 7388  # an example case
@@ -267,10 +267,10 @@ if __name__ == '__main__':
 
     # Plot the lesion test performance
     #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
-    MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Assess whether this class of trained networks use local-context or global-context policy
     #args.train_lesion_freq = 0.1
-    #anh.getSSEForContextModels(args, device)
+    anh.getSSEForContextModels(args, device)
 
 # ---------------------------------------------------------------------------- #

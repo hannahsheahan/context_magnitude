@@ -953,7 +953,7 @@ def main():
     #model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
     parallelize = False
 
-    for model_system in ['EEG']:
+    for model_system in ['RNN']:
         metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
         fit_algorithm = 'default'  # 'default'  'Nelder-Mead'
         keep_parallel = False
@@ -965,7 +965,7 @@ def main():
 
         # figure saving settings
         saveFig = True
-        RNN_args = network_args('blocked', 'truecontext', 0.0)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
+        RNN_args = network_args('intermingled', 'truecontext', 0.0)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
         EEG_args = network_args('blocked', 'truecontext', 0.0)
 
         # Load our data
