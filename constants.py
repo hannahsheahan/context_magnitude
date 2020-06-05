@@ -33,3 +33,11 @@ N_POINTS_SHORT = 11
 CONTEXT_FULL_MEAN = np.mean(range(FULLR_LLIM, FULLR_ULIM+1))  # 8.5
 CONTEXT_LOW_MEAN = np.mean(range(LOWR_LLIM, LOWR_ULIM+1))     # 6
 CONTEXT_HIGH_MEAN = np.mean(range(HIGHR_LLIM, HIGHR_ULIM+1))  # 11
+GLOBAL_MEAN = 8.5 #np.mean([list(range(FULLR_LLIM, FULLR_ULIM+1)), list(range(LOWR_LLIM, LOWR_ULIM+1)), list(range(HIGHR_LLIM, HIGHR_ULIM+1))])
+
+# Save directories
+FIGURE_DIRECTORY = 'figures/'
+
+# Figure colours
+CONTEXT_COLOURS = ['gold', 'dodgerblue', 'orangered']  # 1-16, 1-11, 6-16 like fabrices colours
+MODEL_COLOURS = ['darkkhaki', 'olivedrab','darkolivegreen']  # change to show both local and global on same plot easily and keep main colours for data

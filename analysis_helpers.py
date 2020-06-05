@@ -227,8 +227,8 @@ def performLesionTests(args, testParams, basefilename):
     # perform and save the lesion tests
     try:
         lesiondata = (np.load(filename, allow_pickle=True)).item()
-        print('Loaded existing lesion analysis: ('+filename+')')
-        print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesiondata["lesioned_testaccuracy"]))
+        #print('Loaded existing lesion analysis: ('+filename+')')
+        #print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesiondata["lesioned_testaccuracy"]))
     except:
         # evaluate network at test with lesions
         print('Performing lesion tests...')
@@ -244,14 +244,13 @@ def performLesionTests(args, testParams, basefilename):
     # Evaluate the unlesioned performance as a benchmark
     try:
         regulartestdata = (np.load(regularfilename, allow_pickle=True)).item()
-        print('Loaded regular test performance...')
         normal_testaccuracy = regulartestdata["normal_testaccuracy"]
     except:
         print('Evaluating regular network test performance...')
         _, normal_testaccuracy = mnet.recurrent_test(*testParams)
         regulartestdata = {"normal_testaccuracy":normal_testaccuracy}
         np.save(regularfilename, regulartestdata)
-    print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
+    #print('Regular network, test performance: {:.2f}%'.format(normal_testaccuracy))
 
     return lesiondata, regulartestdata
 
@@ -269,7 +268,7 @@ def lesionperfbyNumerosity(lesiondata):
     numberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
     globalnumberdiffs = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
     perf = np.zeros((lesiondata.shape[0],lesiondata.shape[1]))
-    globalmean = const.CONTEXT_FULL_MEAN
+    globalmean = const.GLOBAL_MEAN
 
     for seq in range(lesiondata.shape[0]):
         for compare_idx in range(lesiondata.shape[1]):

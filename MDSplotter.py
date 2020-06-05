@@ -11,6 +11,7 @@ import define_dataset as dset
 import constants as const
 import magnitude_network as mnet
 import analysis_helpers as anh
+import theoretical_performance as theory
 
 from mpl_toolkits import mplot3d
 import numpy as np
@@ -73,6 +74,13 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
 
     plt.close()
     return basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+labeltext+retainstatetext+'_n'+str(args.noise_std)+str_args
+
+# ---------------------------------------------------------------------------- #
+
+def shadeplot(ax, x_values, means, sems, colour='black'):
+    """Plot mean+-sem shaded"""
+    #ax.plot(x_values, means, color=colourname, label=linelabel)
+    ax.fill_between(x_values, means-sems, means+sems, color=colour, alpha=0.25, linewidth=0.0)
 
 # ---------------------------------------------------------------------------- #
 
@@ -565,21 +573,30 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
 def plotOptimalReferencePerformance(ax, args):
     # ***HRS these numbers need changing for the new longer number ranges
     if args.which_context==0:
-        globalpolicy_optimal = ax.axhline(y=73.43, linestyle=':', color='lightblue')
-        plt.scatter(0.5, 73.43, color='lightblue', s=5)
-        plt.scatter(0.5+0.01, 76.67, color=contextcolours[0], s=4)
-        plt.scatter(0.5+0.02, 71.82, color=contextcolours[1], s=4)
-        plt.scatter(0.5+0.03, 71.82, color=contextcolours[2], s=4)
 
-        localpolicy_optimal = ax.axhline(y=77.07, linestyle=':', color='lightpink')
-        plt.scatter(0.6, 77.07, color='lightpink', s=5)
-        plt.scatter(0.6+0.01, 76.67, color=contextcolours[0], s=4)
-        plt.scatter(0.6+0.02, 77.27, color=contextcolours[1], s=4)
-        plt.scatter(0.6+0.03, 77.27, color=contextcolours[2], s=4)
+        # set height of bar
+        full_context_bars = [76.67, 76.67]
+        low_context_bars = [71.82, 77.27]
+        high_context_bars = [71.82, 77.27]
+
+        # Set position of bar on X axis
+        barWidth = 0.25
+        r1 = np.arange(len(full_context_bars))
+        r2 = [x + barWidth+0.02 for x in r1]
+        r3 = [x + barWidth+0.02 for x in r2]
+
+        # Make the plot
+        h1 = plt.bar(r1, full_context_bars, color=const.CONTEXT_COLOURS[0], alpha=0.5,  width=barWidth, edgecolor='white', label='full context')
+        h2 = plt.bar(r2, low_context_bars, color=const.CONTEXT_COLOURS[1], alpha=0.5, width=barWidth, edgecolor='white',  label='low context')
+        h3 = plt.bar(r3, high_context_bars, color=const.CONTEXT_COLOURS[2], alpha=0.5, width=barWidth, edgecolor='white',  label='high context')
+
+        # Add xticks on the middle of the group bars
+        plt.xlabel('Policy', fontweight='bold')
+        plt.xticks([r + barWidth for r in range(len(full_context_bars))], ['global', 'local'])
 
         #globaldistpolicy_optimal = ax.axhline(y=76.5, linestyle=':', color='lightgreen')
         #handles = [localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal]
-        handles = [localpolicy_optimal, globalpolicy_optimal]
+        handles = [h1, h2, h3]#localpolicy_optimal, globalpolicy_optimal]
     else:
         #oldbenchmark1 = ax.axhline(y=77.41, linestyle=':', color='grey')
         #oldbenchmark2 = ax.axhline(y=72.58, linestyle=':', color='grey')
@@ -604,12 +621,12 @@ def compareLesionTests(args, device):
     """
     plt.figure()
     ax = plt.gca()
-    #localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal = plotOptimalReferencePerformance(ax, args)
-    localpolicy_optimal, globalpolicy_optimal = plotOptimalReferencePerformance(ax, args)
+    handles = plotOptimalReferencePerformance(ax, args)
     #frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
-    offsets = [0.01,0.02,0.03]
+    offsets = [0-.05,.2+0.02,.2+.25+0.04]
     overall_lesioned_tests = []
+    markershape = ['^','P']
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
@@ -624,7 +641,7 @@ def compareLesionTests(args, device):
     elif args.which_context==3:
         range_txt = '_highrangeonly'
 
-    for train_lesion_frequency in frequencylist:
+    for whichfreq, train_lesion_frequency in enumerate(frequencylist):
 
         args.train_lesion_freq = train_lesion_frequency
         allmodels = anh.getModelNames(args)
@@ -670,27 +687,19 @@ def compareLesionTests(args, device):
         mean_contextlesion_test = np.nanmean(context_tests,axis=1)
         sem_contextlesion_test = sp.stats.sem(context_tests,axis=1)
 
-        # plot unlesioned performance
-        hnolesion = plt.errorbar(train_lesion_frequency, mean_unlesioned_test, sem_unlesioned_test, color='black', markersize=5, fmt='o')
-
-        # plot lesioned network performance
-        #plt.plot(train_lesion_frequency, overall_lesioned_tests, '.', color='black')
-        #htotal, = plt.plot(freq, overall_lesioned_tests, color='black')
-        hlesion = plt.errorbar(train_lesion_frequency, mean_lesioned_test, sem_lesioned_test, color='grey', markersize=5, fmt='o')
-        #plt.text(train_lesion_frequency,lesioned_testaccuracy+1, '{:.2f}%'.format(lesioned_testaccuracy), color='blue')
-
         # plot post-lesion performance divided up by context
-        context_handles = []
+
         for context in range(const.NCONTEXTS):
-            tmp = plt.errorbar(train_lesion_frequency+offsets[context], mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context], markersize=4, fmt='o')
-            context_handles.append(tmp)
+            tmp = plt.errorbar(train_lesion_frequency+offsets[context], mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context], markersize=9, marker=markershape[whichfreq])
+            plt.errorbar(train_lesion_frequency+offsets[context]+1, mean_contextlesion_test[context], sem_contextlesion_test[context], color=contextcolours[context], markersize=9, marker=markershape[whichfreq])
+            if context==0:
+                handles.append(tmp)
         print('\n')
 
     plt.xlabel('Lesion frequency during training')
     plt.ylabel('Test perf. post-single lesion')
     ax.set_ylim((50,103))
-    plt.legend((localpolicy_optimal, globalpolicy_optimal, hnolesion, hlesion, context_handles[0], context_handles[1], context_handles[2]),('Optimal | local \u03C0, local #distr.','Optimal | global \u03C0, local #distr.','Unlesioned perf. across whole sequence', 'Perf. immediately post-lesion','Perf. immediately post-lesion, context A: 1-16','Perf. immediately post-lesion, context B: 1-11','Perf. immediately post-lesion, context C: 6-16'))
-    plt.title('RNN ('+blcktxt[1:]+', '+contexttxt[1:]+', trained with lesions)')
+    plt.legend(handles,['full context','low context','high context','RNN not lesioned during training','RNN lesioned during training (10%)'])
     whichTrialType = 'compare'
     autoSaveFigure('figures/lesionfreq_trainedlesions_'+contexttxt, args, True, False, whichTrialType, True)
 
@@ -713,16 +722,18 @@ def perfVdistContextMean(args, device):
     elif args.which_context==3:
         range_txt = '_highrangeonly'
 
+    # generate theoretical predictions under local and global context policies
+    numberdiffs, globalnumberdiffs, perf = theory.simulate_theoretical_policies()
+
+    fig, ax = plt.subplots(2,2, figsize=(5,7))
+    marker = ['^','P']
     for j,train_lesion_frequency in enumerate(frequencylist):
-        plt.subplot(1,2,j+1)
+
         if j==0:
-            plt.ylabel('Performance post-lesion')
-            plt.title('Trained without lesions')
-        if j==1:
-            plt.title('Trained with 10% lesions')
+            ax[0,j].set_ylabel('Theoretical performance\npost-lesion')
+            ax[1,j].set_ylabel('RNN performance\npost-lesion')
 
-        ax = plt.gca()
-
+        context1_numberdiffs, context2_numberdiffs, context3_numberdiffs = [[] for i in range(3)]
         args.train_lesion_freq = train_lesion_frequency
         allmodels = anh.getModelNames(args)
         data = [[] for i in range(len(allmodels))]
@@ -734,7 +745,7 @@ def perfVdistContextMean(args, device):
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
             args.model_id = anh.getIdfromName(m)
-            print('modelid: ' + str(args.model_id))
+            #print('modelid: ' + str(args.model_id))
             testParams = mnet.setupTestParameters(args, device)
             basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
             filename = basefilename+'.npy'
@@ -777,24 +788,32 @@ def perfVdistContextMean(args, device):
         context2_numberdiffs = np.mean(context2_numberdiffs, axis=0)
         context3_numberdiffs = np.mean(context3_numberdiffs, axis=0)
 
-        # plotting
-        global_contextmean = plt.errorbar(global_uniquediffs, global_meanperf_mean, global_meanperf_sem, color='black', fmt='-o',markersize=2) # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
-        plt.xlabel('|current# - \u03BC|')
-        #ax.set_xticks([0, 7.5])
-        #ax.set_xticklabels([0, 7.5])
+        # plot model predictions under local or global predictions
+        handles = theory.plot_theoretical_predictions(ax[1,j], numberdiffs, globalnumberdiffs, perf, j)
+        handles = theory.plot_theoretical_predictions(ax[1,j], numberdiffs, globalnumberdiffs, perf, j)
 
-        print(context3_perf_sem)
-
-        # plot and save the figure
-        ref7, = plt.plot([0,7.5],[.5,1],linestyle=':',color='grey')
-        ref4, = plt.plot([0,5],[.5,1],linestyle=':',color='grey')
+        # plot RNN data
+        shadeplot(ax[1,j],context1_numberdiffs, context1_perf_mean, context1_perf_sem, 'gold') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
+        shadeplot(ax[1,j],context2_numberdiffs, context2_perf_mean, context2_perf_sem, 'dodgerblue') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
+        shadeplot(ax[1,j],context3_numberdiffs, context3_perf_mean, context3_perf_sem, 'orangered') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
+        ax[1,j].set_xlabel('absolute context distance')
 
         # context-specific performance i.e. how did performance change with dist. to mean in each context
-        local_contextmean_context1 = plt.errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color='gold', fmt='-o',markersize=2)
-        local_contextmean_context2 = plt.errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color='dodgerblue', fmt='-o',markersize=2)
-        local_contextmean_context3 = plt.errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color='orangered', fmt='-o',markersize=2)
-    plt.legend((ref7, global_contextmean, local_contextmean_context1, local_contextmean_context2, local_contextmean_context3), ('unity refs, max|\u0394|={5,7.5}', '\u03BC = global median', '\u03BC = local median | context A, 1:16','\u03BC = local median | context B, 1:11','\u03BC = local median | context C, 6-16'))
+        local_contextmean_context1 = ax[1,j].errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color='gold', fmt=marker[j],markersize=5)
+        local_contextmean_context2 = ax[1,j].errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color='dodgerblue', fmt=marker[j],markersize=5)
+        local_contextmean_context3 = ax[1,j].errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color='orangered', fmt=marker[j],markersize=5)
+
+        ax[0,j].set_xlim([-0.5, 8])
+        ax[1,j].set_xlim([-0.5, 8])
+        ax[0,j].set_ylim([0.47, 1.03])
+        ax[1,j].set_ylim([0.47, 1.03])
+
+    #ax[j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3, *handles),
+    #('full context','low context','high context','global policy model: full context', 'global policy model: low context', 'global policy model: high context',
+    #'local policy model: full context', 'local policy model: low context', 'local policy model: high context'))
+    ax[1,j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3),('full context','low context','high context'))
     whichTrialType = 'compare'
-    autoSaveFigure('figures/perf_v_distToContextMean_postlesion_', args, True, False, whichTrialType, True)
+    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
+    #autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion_'), args, True, False, whichTrialType, True)
 
 # ---------------------------------------------------------------------------- #
