@@ -12,6 +12,7 @@ import constants as const
 import magnitude_network as mnet
 import analysis_helpers as anh
 import theoretical_performance as theory
+import lines_model
 
 from mpl_toolkits import mplot3d
 import numpy as np
@@ -133,7 +134,7 @@ def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', sav
     ax.set_yticks(ticks)
     ax.set_yticklabels(labelticks)
 
-    n = autoSaveFigure('figures/RDM_'+differenceCodeText, args, False, plot_diff_code, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'RDM_'+differenceCodeText), args, False, plot_diff_code, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -232,7 +233,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
 
                 ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
 
-        n = autoSaveFigure('figures/3MDS60_'+tx, args, labelNumerosity, False, whichTrialType, saveFig)
+        n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_' + tx), args, labelNumerosity, False, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -274,14 +275,15 @@ def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare', 
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_', args, labelNumerosity, False, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_'), args, labelNumerosity, False, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True):
+def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8)):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
+     - rotate the angle of the data on the 2d component axes by angle theta (degrees)
     """
 
     if whichTrialType=='filler':
@@ -309,6 +311,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
         differenceCodeText = ''
 
     for j in range(3):  # 3 MDS dimensions
+
         if j==0:
             dimA = 0
             dimB = 1
@@ -341,10 +344,15 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
                 contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
                 contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
 
-            # only plot lines between the MDS dots when plotting the average A activations, not A-B difference code (A-B structured differently)
-            ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=contextcolours[0])
-            ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=contextcolours[1])
-            ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=contextcolours[2])
+            # Rotate the components on the 2d plot since global orientation doesnt matter (axes are arbitrary)
+            rotated_act = copy.deepcopy(MDS_act)
+            rotated_act[contextA, dimA], rotated_act[contextA, dimB] = lines_model.rotate_axes(MDS_act[contextA, dimA], MDS_act[contextA, dimB], theta)
+            rotated_act[contextB, dimA], rotated_act[contextB, dimB] = lines_model.rotate_axes(MDS_act[contextB, dimA], MDS_act[contextB, dimB], theta)
+            rotated_act[contextC, dimA], rotated_act[contextC, dimB] = lines_model.rotate_axes(MDS_act[contextC, dimA], MDS_act[contextC, dimB], theta)
+
+            ax[j].plot(rotated_act[contextA, dimA], rotated_act[contextA, dimB], color=contextcolours[0])
+            ax[j].plot(rotated_act[contextB, dimA], rotated_act[contextB, dimB], color=contextcolours[1])
+            ax[j].plot(rotated_act[contextC, dimA], rotated_act[contextC, dimB], color=contextcolours[2])
 
         markercount=0
         lastc = -1
@@ -361,22 +369,21 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
 
             # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=gradedcolour, edgecolor=contextcolours[int(contextlabel[i])], s=80, linewidths=2)
+            ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=contextcolours[int(contextlabel[i])], s=80, linewidths=2)
             markercount +=1
             # label numerosity in white inside the marker
             firstincontext = [0,15,16,16+10,16+11, 16+21]
             if i in firstincontext:
-                ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(24+int(numberlabel[i])), color=contextcolours[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
+                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=contextcolours[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
-        if args.network_style=='mlp':
-            ax[j].set(xlim=(-2, 2), ylim=(-2, 2))
-        else:
-            #ax[j].set(xlim=(-1, 1), ylim=(-1, 1))
-            ax[j].set(xlim=(-0.65, 0.65), ylim=(-0.65, 0.65))
-            #ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
 
-    n = autoSaveFigure('figures/3MDS60_'+differenceCodeText+'meanJudgement_', args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
+        if args.network_style=='mlp':
+            ax[j].set(xlim=axislimits, ylim=axislimits)
+        else:
+            ax[j].set(xlim=axislimits, ylim=axislimits)
+
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_'+differenceCodeText+'meanJudgement_'), args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -466,7 +473,7 @@ def instanceCounter(MDS_dict, args, whichTrialType='compare'):
     plt.xlabel('Numbers and contexts')
     plt.ylabel('Instances in training set')
 
-    n = autoSaveFigure('figures/InstanceCounter_meanJudgement', args, True, False, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'InstanceCounter_meanJudgement'), args, True, False, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -484,14 +491,14 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True)
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Context (0: 1-16; 1: 1-11; 2: 6-16)')
-    n = autoSaveFigure('figures/temporalcontext_', args, True, False, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'temporalcontext_'), args, True, False, whichTrialType, saveFig)
 
     # trial types changing with time in training set
     plt.figure()
     plt.plot(temporal_trialtypes.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Trial type: 0-filler; 1-compare')
-    n = autoSaveFigure('figures/temporaltrialtype_', True, False, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'temporaltrialtype_'), True, False, whichTrialType, saveFig)
 
     # latent state drift in time/trials in training set
     fig,ax = plt.subplots(1,3, figsize=(18,5))
@@ -527,7 +534,7 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True)
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure('figures/latentstatedrift_', True, False, whichTrialType, saveFig)
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'latentstatedrift_'), True, False, whichTrialType, saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -701,7 +708,7 @@ def compareLesionTests(args, device):
     ax.set_ylim((50,103))
     plt.legend(handles,['full context','low context','high context','RNN not lesioned during training','RNN lesioned during training (10%)'])
     whichTrialType = 'compare'
-    autoSaveFigure('figures/lesionfreq_trainedlesions_'+contexttxt, args, True, False, whichTrialType, True)
+    autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'lesionfreq_trainedlesions_'+contexttxt), args, True, False, whichTrialType, True)
 
 # ---------------------------------------------------------------------------- #
 
@@ -807,6 +814,8 @@ def perfVdistContextMean(args, device):
         ax[1,j].set_xlim([-0.5, 8])
         ax[0,j].set_ylim([0.47, 1.03])
         ax[1,j].set_ylim([0.47, 1.03])
+        ax[0,j].set_xticks([0,2,4,6,8])
+        ax[1,j].set_xticks([0,2,4,6,8])
 
     #ax[j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3, *handles),
     #('full context','low context','high context','global policy model: full context', 'global policy model: low context', 'global policy model: high context',

@@ -15,6 +15,7 @@ import define_dataset as dset
 import MDSplotter as MDSplt
 import analysis_helpers as anh
 import constants as const
+import lines_model
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -171,7 +172,9 @@ def generatePlots(MDS_dict, args):
     for whichTrialType in trialTypes:
         # Label activations by mean number A numerosity
         MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
-        MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType) # mean MDS of our hidden activations (averaged across number B)
+        axislimits = (-0.8, 0.8)
+        MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
+
         #MDSplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
@@ -190,7 +193,7 @@ def generatePlots(MDS_dict, args):
         #MDSplt.plot3MDSContexts(MDS_dict, labelNumerosity, args)  # plot the MDS with context labels. ***HRS obsolete?
 
         # 3D Animations
-        MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
+        #MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
         #MDSplt.animate3DdriftMDS(MDS_dict, args)             # plot a 3D version of the latent state MDS
 
 # ---------------------------------------------------------------------------- #
@@ -229,17 +232,29 @@ def averageActivationsAcrossModels(args):
     MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_numberlabel, axis=0)
 
     # Now do MDS on the mean activations across all networks
-    randseed = 2#3   # so that we get the same MDS each time
-    sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
-    D = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
-    MDS_slactivations = sl_embedding.fit_transform(D)
+    #randseed = 2#3   # so that we get the same MDS each time
+    #sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+    #D = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
+    #MDS_slactivations = sl_embedding.fit_transform(D)
 
-    filler_sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
-    D = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
-    filler_MDS_slactivations = filler_sl_embedding.fit_transform(D)
+    #filler_sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+    #D = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
+    #filler_MDS_slactivations = filler_sl_embedding.fit_transform(D)
 
-    MDS_meandict["MDS_slactivations"] = MDS_slactivations
-    MDS_meandict["filler_dict"]["MDS_slactivations"] = filler_MDS_slactivations
+    # using CMDscale so that it works well with the EEG too
+    # fo the compare trial data
+    pairwise_data = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    MDS_act, evals = lines_model.cmdscale(pairwise_data)
+
+    # for the filler trial data
+    pairwise_data = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    MDS_act_filler, evals = lines_model.cmdscale(pairwise_data)
+
+
+    MDS_meandict["MDS_slactivations"] = MDS_act
+    MDS_meandict["filler_dict"]["MDS_slactivations"] = MDS_act_filler
     args.model_id = 0
 
     return MDS_meandict, args
@@ -262,11 +277,11 @@ if __name__ == '__main__':
     #MDS_dict = analyseNetwork(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #MDS_dict, args = averageActivationsAcrossModels(args)
-    #generatePlots(MDS_dict, args)
+    MDS_dict, args = averageActivationsAcrossModels(args)
+    generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
-    MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
+    #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
     #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Assess whether this class of trained networks use local-context or global-context policy
