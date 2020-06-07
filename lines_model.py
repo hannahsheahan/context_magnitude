@@ -49,7 +49,7 @@ SAVE_FILELOC = 'linesmodel_parameters/'
 contextcolours = ['dodgerblue', 'orangered', np.asarray([1.0, 0.69803921, 0.0, 1.0]), 'black']   # 1-16, 1-11, 6-16 like fabrices colours
 modelcolours = ['mediumblue','saddlebrown','darkgoldenrod']
 
-condition_colours = [['blue','red'],['lightblue','pink']]
+condition_colours = [['teal','sienna'],['turquoise','darkorange']]
 
 
 # ---------------------------------------------------------------------------- #
@@ -984,8 +984,12 @@ def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
             params_data = np.load(filepath)
 
     params_data = np.asarray(params_data)
+    n_models = params_data.shape[0]
     context_distance = []
-    for i in range(params_data.shape[0]):
+    subnorm_ratios = []
+    divnorm_ratios = []
+
+    for i in range(n_models):
         params = params_data[i]
         xB,yB,zB, xC,yC,zC, lenRatio, dirxB,diryB,dirzB, dirxC,diryC,dirzC = params
 
@@ -993,23 +997,46 @@ def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
         centre_A = np.asarray([0,0,0])
         centre_B = np.asarray([xB,yB,zB])
         centre_C = np.asarray([xC,yC,zC])
-        dist_AB = np.linalg.norm(centre_A - centre_B)
-        dist_AC = np.linalg.norm(centre_A - centre_C)
-        dist_BC = np.linalg.norm(centre_B - centre_C)
+        dist_AB = np.absolute(np.linalg.norm(centre_A - centre_B))
+        dist_AC = np.absolute(np.linalg.norm(centre_A - centre_C))
+        dist_BC = np.absolute(np.linalg.norm(centre_B - centre_C))
         context_distance.append(np.mean([dist_AB, dist_AC, dist_BC]))
 
-    mean_params = np.mean(params_data, axis=0)
-    std_params = np.std(params_data, axis=0)
-    xB,yB,zB, xC,yC,zC, lenRatio, dirxB,diryB,dirzB, dirxC,diryC,dirzC = mean_params
-    xB_std,yB_std,zB_std, xC_std,yC_std,zC_std, lenRatio_std, dirxB_std,diryB_std,dirzB_std, dirxC_std,diryC_std,dirzC_std = std_params
+        # evaluate subtractive normalisation
+        # full centre is at 0 in magnitude dimension by definition
+        low_offset = centre_B[0]
+        high_offset = -centre_C[0]
+
+        #theoretical full offset values
+        lenLong = lenShort*lenRatio
+        full_offset_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        full_offset_centre_high = -full_offset_centre_low
+
+        low_subratio = np.absolute(low_offset/full_offset_centre_low)
+        high_subratio = np.absolute(high_offset/full_offset_centre_high)
+        mean_offset = np.mean([low_subratio, high_subratio])
+        subnorm_ratios.append(1-mean_offset)  # make so that higher value means more normalised
+
+        lenRatio = 1.0/lenRatio
+        divnorm_ratios.append(lenRatio)
+
+    mean_divnorm_ratios = np.mean(divnorm_ratios)
+    std_divnorm_ratios = np.std(divnorm_ratios)
 
     mean_context_distance = np.mean(context_distance)
     std_context_distance = np.std(context_distance)
 
+    mean_subnorm_ratios = np.mean(subnorm_ratios)
+    std_subnorm_ratios = np.std(subnorm_ratios)
+
+    lenRatio = lenRatio # make so that higher value means more normalised
+
     print('--------')
-    print('length ratio: {:.4f} +- {:.4f}'.format(lenRatio, lenRatio_std))
+    print('length ratio (short/long): {:.4f} +- {:.4f}'.format(mean_divnorm_ratios, std_divnorm_ratios))
+    print('subtractive norm ratio: {:.4f} +- {:.4f}'.format(mean_subnorm_ratios, std_subnorm_ratios))
     print('context distance: {:.4f} +- {:.4f}'.format(mean_context_distance, std_context_distance))
-    summary_params = [mean_context_distance, std_context_distance], [lenRatio, lenRatio_std]
+
+    summary_params = [mean_context_distance, std_context_distance], [mean_divnorm_ratios, std_divnorm_ratios], [mean_subnorm_ratios, std_subnorm_ratios]
 
     return summary_params
 
@@ -1027,11 +1054,17 @@ def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelli
     constcontext_lesioned_contextdist = []
     constcontext_unlesioned_contextdist = []
 
+    truecontext_lesioned_subnorm = []
+    truecontext_unlesioned_subnorm = []
+    constcontext_lesioned_subnorm = []
+    constcontext_unlesioned_subnorm = []
+
     for i, params in enumerate(summary_parameters):
 
-        context_dist, div_norm = params
+        context_dist, div_norm, sub_norm = params
         mean_context_distance, std_context_distance = context_dist
         lenRatio, lenRatio_std = div_norm
+        subRatio, subRatio_std = sub_norm
         lesion_state = lesioning[i]
         block_state = block[i]
         contextlabel = contextlabelling[i]
@@ -1047,40 +1080,59 @@ def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelli
         ax[0].set_xticklabels(['interleaved','blocked'], rotation=45)
         ax[0].set_title('context distance')
 
-        ax[1].axhline(1.0, color='lightgrey')
-        ax[1].axhline(16.0/11.0, color='lightgrey')
+        ax[1].axhline(1.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[1].axhline(11.0/16.0, color='lightgrey', linestyle=':', linewidth=1)
         ax[1].errorbar(xloc, lenRatio, lenRatio_std, color=colour)
         h = ax[1].scatter(xloc, lenRatio, color=colour)
         ax[1].set_xticks([0,1])
         ax[1].set_xticklabels(['interleaved','blocked'], rotation=45)
         ax[1].set_title('divisive norm')
-        ax[1].set_ylim([0.9, 1.7])
+        #ax[1].set_ylim([0.95, 1.7])
+
+        ax[2].axhline(1.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[2].axhline(0.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[2].errorbar(xloc, subRatio, subRatio_std, color=colour)
+        h = ax[2].scatter(xloc, subRatio, color=colour)
+        ax[2].set_xticks([0,1])
+        ax[2].set_xticklabels(['interleaved','blocked'], rotation=45)
+        ax[2].set_title('subtractive norm')
+        #ax[2].set_ylim([0.9, 1.7])
 
         if contextlabel =='truecontext':
             if lesion_state == False:
                 truecontext_unlesioned_divnorm.append(lenRatio)
                 truecontext_unlesioned_contextdist.append(mean_context_distance)
+                truecontext_unlesioned_subnorm.append(subRatio)
             else:
                 truecontext_lesioned_divnorm.append(lenRatio)
                 truecontext_lesioned_contextdist.append(mean_context_distance)
+                truecontext_lesioned_subnorm.append(subRatio)
         else:
             if lesion_state == False:
                 constcontext_unlesioned_divnorm.append(lenRatio)
                 constcontext_unlesioned_contextdist.append(mean_context_distance)
+                constcontext_unlesioned_subnorm.append(subRatio)
             else:
                 constcontext_lesioned_divnorm.append(lenRatio)
                 constcontext_lesioned_contextdist.append(mean_context_distance)
+                constcontext_lesioned_subnorm.append(subRatio)
 
     ax[0].plot([0,1], truecontext_unlesioned_contextdist, color=condition_colours[0][0])
-    ax[0].plot([0,1], truecontext_lesioned_contextdist, color=condition_colours[0][1])
     ax[0].plot([0,1], constcontext_unlesioned_contextdist, color=condition_colours[1][0])
+    ax[0].plot([0,1], truecontext_lesioned_contextdist, color=condition_colours[0][1])
     ax[0].plot([0,1], constcontext_lesioned_contextdist, color=condition_colours[1][1])
 
     ax[1].plot([0,1], truecontext_unlesioned_divnorm, color=condition_colours[0][0])
-    ax[1].plot([0,1], truecontext_lesioned_divnorm, color=condition_colours[0][1])
     ax[1].plot([0,1], constcontext_unlesioned_divnorm, color=condition_colours[1][0])
+    ax[1].plot([0,1], truecontext_lesioned_divnorm, color=condition_colours[0][1])
     ax[1].plot([0,1], constcontext_lesioned_divnorm, color=condition_colours[1][1])
 
+    h1, = ax[2].plot([0,1], truecontext_unlesioned_subnorm, color=condition_colours[0][0])
+    h2, = ax[2].plot([0,1], constcontext_unlesioned_subnorm, color=condition_colours[1][0])
+    h3, = ax[2].plot([0,1], truecontext_lesioned_subnorm, color=condition_colours[0][1])
+    h4, = ax[2].plot([0,1], constcontext_lesioned_subnorm, color=condition_colours[1][1])
+
+    plt.legend((h1,h2,h3,h4), ('not lesioned, context labelled','not lesioned, context not labelled','lesioned, context labelled', 'lesioned, context not labelled'))
 
 # ---------------------------------------------------------------------------- #
 
