@@ -261,11 +261,54 @@ def averageActivationsAcrossModels(args):
 
 # ---------------------------------------------------------------------------- #
 
+def averagePerformanceAcrossModels(args):
+
+    matched_models = anh.getModelNames(args)
+    print(matched_models)
+    all_training_records = os.listdir(const.TRAININGRECORDS_DIRECTORY)
+
+    train_performance = []
+    test_performance = []
+    for ind, m in enumerate(matched_models):
+        args.model_id = anh.getIdfromName(m)
+
+        for training_record in all_training_records:
+            if ('_id'+str(args.model_id)+'.' in training_record):
+                if  ('trlf'+str(args.train_lesion_freq) in training_record) and (args.label_context in training_record):
+                    print('Found matching model: id{}'.format(args.model_id))
+                    # we've found the training record for a model we care about
+                    with open(os.path.join(const.TRAININGRECORDS_DIRECTORY, training_record)) as record_file:
+                        record = json.load(record_file)
+                        train_performance.append(record["trainingPerformance"])
+                        test_performance.append(record["testPerformance"])
+
+    train_performance = np.asarray(train_performance)
+    test_performance = np.asarray(test_performance)
+    n_models = train_performance.shape[0]
+
+    mean_train_performance = np.mean(train_performance, axis=0)
+    std_train_performance = np.std(train_performance, axis=0) / np.sqrt(n_models)
+
+    mean_test_performance = np.mean(test_performance, axis=0)
+    std_test_performance = np.std(test_performance, axis=0) / np.sqrt(n_models)
+
+    print('Final training performance across {} models: {:.3f} +- {:.3f}'.format(n_models, mean_train_performance[-1], std_train_performance[-1]))  # mean +- std
+    print('Final test performance across {} models: {:.3f} +- {:.3f}'.format(n_models, mean_test_performance[-1], std_test_performance[-1]))  # mean +- std
+    plt.figure()
+    h1 = plt.errorbar(range(11), mean_train_performance, std_train_performance, color='dodgerblue')
+    h2 = plt.errorbar(range(11), mean_test_performance, std_test_performance, color='green')
+    plt.legend((h1,h2), ['train','test'])
+
+    MDSplt.autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY, '_trainingrecord_'), args, True, False, 'compare', True)
+
+# ---------------------------------------------------------------------------- #
+
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'
+    args.all_fullrange = False
     args.train_lesion_freq=0.0
 
     #args.model_id = 7388  # an example case
@@ -276,12 +319,15 @@ if __name__ == '__main__':
     # Analyse the trained network (extract and save network activations)
     #MDS_dict = analyseNetwork(args)
 
+    # Check the average final performance for trained models matching args
+    #averagePerformanceAcrossModels(args)
+
     # Visualise the resultant network activations (RDMs and MDS)
-    MDS_dict, args = averageActivationsAcrossModels(args)
-    generatePlots(MDS_dict, args)
+    #MDS_dict, args = averageActivationsAcrossModels(args)
+    #generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
-    #MDSplt.perfVdistContextMean(args, device)  # Assess performance after a lesion as a function of the 'seen' number
+    MDSplt.perfVdistContextMean(args, device)     # Assess performance after a lesion vs context distance
     #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Assess whether this class of trained networks use local-context or global-context policy

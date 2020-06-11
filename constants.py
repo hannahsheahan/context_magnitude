@@ -38,6 +38,8 @@ GLOBAL_MEAN = 8.5 #np.mean([list(range(FULLR_LLIM, FULLR_ULIM+1)), list(range(LO
 # Save directories
 FIGURE_DIRECTORY = 'figures/'
 PARAMETER_DIRECTORY = 'linesmodel_parameters/'
+TRAININGRECORDS_DIRECTORY = 'trainingrecords/'
+
 
 # Figure colours
 CONTEXT_COLOURS = ['gold', 'dodgerblue', 'orangered']  # 1-16, 1-11, 6-16 like fabrices colours

@@ -116,7 +116,7 @@ def import_EEG_data(basepath, filename, which_set):
 def import_RNN_data(basepath, args):
     """ import the rnn activations for each of ten models we care about"""
     rnn_files = os.listdir(basepath)
-    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.context_label in x) ]
+    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.label_context in x) ]
     rnn_files = [x for x in rnn_files if ('trlf' + str(args.train_lesion_freq) in x)]
     rnn_activations = []
 
@@ -168,11 +168,10 @@ def import_all_data(metric, RNN_args, which_set):
 
 class network_args():
     def __init__(self, blocking, label, train_lesion_freq):
+        self.all_fullrange = True if blocking=='intermingled' else False
         self.blocking = blocking
-        self.context_label = label
+        self.label_context = label
         self.network_style = 'recurrent'
-        self.all_fullrange = False
-        self.label_context = 'true'
         self.retain_hidden_state = True
         self.which_context = 0
         self.batch_size_multi = [0]
@@ -298,11 +297,15 @@ def plotMDS(pairwise_data, args, label, theta, axislimits, saveFig):
     #embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed', max_iter=5000)
     #MDS_act = embedding.fit_transform(pairwise_data)
 
+    print(args.blocking)
+    print(args.label_context)
+
+
     # new method which does what matlab does in cmdscale
     np.fill_diagonal(np.asarray(pairwise_data), 0)
     MDS_act, evals = cmdscale(pairwise_data)
     fig = plot_components(MDS_act, theta, axislimits)
-    n = MDSplt.autoSaveFigure('figures/'+label, args, False, False, 'compare', saveFig)
+    n = MDSplt.autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,label), args, False, False, 'compare', saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -322,11 +325,11 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
     # MDS plots
     plotMDS(rnn_RDM, rnn_args, 'rnn_mds_', 90, (-0.65,0.65), saveFig)
-    plotMDS(eeg_RDM, eeg_args, 'eeg_mds_chrisdata_',  -20, (-0.35,0.35), saveFig)
+    #plotMDS(eeg_RDM, eeg_args, 'eeg_mds_chrisdata_',  -20, (-0.35,0.35), saveFig)
 
     # RDM matrices
     plotRDM(rnn_RDM, rnn_args, 'rnn_rdm_', saveFig)
-    plotRDM(eeg_RDM, eeg_args, 'eeg_rdm_chrisdata_', saveFig)
+    #plotRDM(eeg_RDM, eeg_args, 'eeg_rdm_chrisdata_', saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -839,7 +842,7 @@ def get_model_description(model_id, model_system, fit_args, fit_method, RNN_args
 
     fit_algorithm, keep_parallel, div_norm, sub_norm, _, metric, _, which_set, line_centre_method = fit_args
     keep_parallel_text = '_keptparallel_' if keep_parallel else '_notkeptparallel_'
-    model_description = model_system + '_' + fit_method +  '_' + RNN_args.blocking + '_' + RNN_args.context_label + 'contextlabel' + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_linecentres_' + line_centre_method + '_datametric_' + metric + str(model_id) + '_' + fit_algorithm + '_' + which_set + '_trlf' + str(RNN_args.train_lesion_freq)
+    model_description = model_system + '_' + fit_method +  '_' + RNN_args.blocking + '_' + RNN_args.label_context + 'contextlabel' + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_linecentres_' + line_centre_method + '_datametric_' + metric + str(model_id) + '_' + fit_algorithm + '_' + which_set + '_trlf' + str(RNN_args.train_lesion_freq)
 
     return model_description
 
@@ -964,7 +967,7 @@ def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
     fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method = fit_args
 
     # restrict by RNN training conditions
-    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.context_label in x) ]
+    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.label_context in x) ]
     rnn_files = [x for x in rnn_files if ('trlf' + str(args.train_lesion_freq) in x)]
     rnn_files = [x for x in rnn_files if model_system in x]
 
@@ -997,9 +1000,9 @@ def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
         centre_A = np.asarray([0,0,0])
         centre_B = np.asarray([xB,yB,zB])
         centre_C = np.asarray([xC,yC,zC])
-        dist_AB = np.absolute(np.linalg.norm(centre_A - centre_B))
-        dist_AC = np.absolute(np.linalg.norm(centre_A - centre_C))
-        dist_BC = np.absolute(np.linalg.norm(centre_B - centre_C))
+        dist_AB = np.absolute(np.linalg.norm(centre_A[1:2] - centre_B[1:2]))  # ignore magnitude dimension offsets when calculating context distance
+        dist_AC = np.absolute(np.linalg.norm(centre_A[1:2] - centre_C[1:2]))
+        dist_BC = np.absolute(np.linalg.norm(centre_B[1:2] - centre_C[1:2]))
         context_distance.append(np.mean([dist_AB, dist_AC, dist_BC]))
 
         # evaluate subtractive normalisation
@@ -1021,13 +1024,13 @@ def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
         divnorm_ratios.append(lenRatio)
 
     mean_divnorm_ratios = np.mean(divnorm_ratios)
-    std_divnorm_ratios = np.std(divnorm_ratios)
+    std_divnorm_ratios = np.std(divnorm_ratios) / np.sqrt(n_models)
 
     mean_context_distance = np.mean(context_distance)
-    std_context_distance = np.std(context_distance)
+    std_context_distance = np.std(context_distance) / np.sqrt(n_models)
 
     mean_subnorm_ratios = np.mean(subnorm_ratios)
-    std_subnorm_ratios = np.std(subnorm_ratios)
+    std_subnorm_ratios = np.std(subnorm_ratios) / np.sqrt(n_models)
 
     lenRatio = lenRatio # make so that higher value means more normalised
 
@@ -1070,7 +1073,7 @@ def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelli
         contextlabel = contextlabelling[i]
 
         xloc = 1 if block_state == 'blocked' else 0
-        cue = 0 if contextlabel == 'truecontext' else 1
+        cue = 0 if contextlabel == 'true' else 1
         lesioned = 0 if lesion_state == False else 1
         colour = condition_colours[cue][lesioned]
 
@@ -1098,7 +1101,7 @@ def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelli
         ax[2].set_title('subtractive norm')
         #ax[2].set_ylim([0.9, 1.7])
 
-        if contextlabel =='truecontext':
+        if contextlabel =='true':
             if lesion_state == False:
                 truecontext_unlesioned_divnorm.append(lenRatio)
                 truecontext_unlesioned_contextdist.append(mean_context_distance)
@@ -1121,6 +1124,7 @@ def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelli
     ax[0].plot([0,1], constcontext_unlesioned_contextdist, color=condition_colours[1][0])
     ax[0].plot([0,1], truecontext_lesioned_contextdist, color=condition_colours[0][1])
     ax[0].plot([0,1], constcontext_lesioned_contextdist, color=condition_colours[1][1])
+    #ax[0].set_ylim([0.1,0.35])
 
     ax[1].plot([0,1], truecontext_unlesioned_divnorm, color=condition_colours[0][0])
     ax[1].plot([0,1], constcontext_unlesioned_divnorm, color=condition_colours[1][0])
@@ -1140,7 +1144,7 @@ def main():
 
     # fitting settings
     fit_models = False
-    plot_parameters = True
+    plot_parameters = False
     fit_method = 'individual'  # 'fit_to_mean'  'individual' 'cross_val' 'cross_val_5fold'
     model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
     lesioned = True            # True/False selects 0.0f during training or 0.1f during training
@@ -1152,7 +1156,7 @@ def main():
     block = []
 
     for i, lesioned in enumerate([True, False]):
-        for j, contextlabel in enumerate(['truecontext','constantcontext']):
+        for j, contextlabel in enumerate(['true','constant']):
             for k, blocking in enumerate(['intermingled', 'blocked']):
 
                 metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
@@ -1171,10 +1175,9 @@ def main():
                 RNN_args = network_args(blocking, contextlabel, lesion_freq)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
                 EEG_args = network_args('blocked', 'truecontext', 0.0)
 
-                if fit_models:
-                    # Load our data
-                    mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args, which_set)
-                    datasets = [mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs]
+                # Load our data
+                mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args, which_set)
+                datasets = [mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs]
 
                 # Plot low dimensional representations of the rnn and eeg data
                 #generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
@@ -1223,9 +1226,9 @@ def main():
                     block.append(blocking)
                     contextlabelling.append(contextlabel)
 
-    #plt.legend(handles, ['lesioned','lesioned','','','','','',''])
-    plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelling)
-    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'parameters_plot.pdf'), bbox_inches='tight')
+    if plot_parameters:
+        plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelling)
+        plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'parameters_plot.pdf'), bbox_inches='tight')
 
 # ---------------------------------------------------------------------------- #
 

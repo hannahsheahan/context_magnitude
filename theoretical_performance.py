@@ -94,3 +94,7 @@ def plot_theoretical_predictions(ax, numberdiffs, globalnumberdiffs, perf, which
         ax.set_ylim([0.27, 1.03])
 
     return handles
+
+
+if __name__ is '__main__':
+    simulate_theoretical_policies()
