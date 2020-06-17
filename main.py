@@ -309,7 +309,7 @@ if __name__ == '__main__':
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'
     args.all_fullrange = False
-    args.train_lesion_freq=0.0
+    args.train_lesion_freq=0.1
 
     #args.model_id = 7388  # an example case
 
@@ -320,14 +320,14 @@ if __name__ == '__main__':
     #MDS_dict = analyseNetwork(args)
 
     # Check the average final performance for trained models matching args
-    #averagePerformanceAcrossModels(args)
+    averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
     #MDS_dict, args = averageActivationsAcrossModels(args)
     #generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
-    MDSplt.perfVdistContextMean(args, device)     # Assess performance after a lesion vs context distance
+    #MDSplt.perfVdistContextMean(args, device)     # Assess performance after a lesion vs context distance
     #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Assess whether this class of trained networks use local-context or global-context policy

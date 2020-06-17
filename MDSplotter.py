@@ -29,9 +29,6 @@ from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
 
-# generic plotting settings
-contextcolours = [np.asarray([1.0, 0.69803921, 0.0, 1.0]), 'dodgerblue', 'orangered', 'black']   # 1-16, 1-11, 6-16 like fabrices colours
-
 # ---------------------------------------------------------------------------- #
 
 def get_cmap(n, name='hsv'):
@@ -190,7 +187,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                 # colour by numerosity
                 if k==0:   # difference labels
 
-                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(int(10+MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(int(10+MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(dnorm(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i]))), s=20)
                     #ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), color='black', size=4, horizontalalignment='center', verticalalignment='center')
                     if j==2:
@@ -199,7 +196,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                             if labelNumerosity:
                                 cbar.ax.set_yticklabels(['-14','14'])
                 elif k==1:  # B values
-                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_refValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_refValues"][i])-1), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_refValues"][i])-1)), s=20)
                     if j==2:
                         if i == (MDS_act.shape[0])-1:
@@ -207,7 +204,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                             if labelNumerosity:
                                 cbar.ax.set_yticklabels(['1','16'])
                 elif k==2:  # A values
-                    #im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=contextcolours[int(MDS_dict["labels_contexts"][i])-1])
+                    #im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_judgeValues"][i])-1)), s=20)
                     if j==2:
                         if i == (MDS_act.shape[0])-1:
@@ -215,7 +212,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                             if labelNumerosity:
                                 cbar.ax.set_yticklabels(['1','16'])
                 elif k==3:  # context labels
-                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(MDS_dict["labels_contexts"][i])-1], s=20)
+                    im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1], s=20)
 
                 elif k==4:
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=outcomecolours[int(MDS_dict["MDSlabels"][i])], s=20)
@@ -278,7 +275,7 @@ def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare', 
         ax[j].set_title('context')
         for i in range((MDS_act.shape[0])):
             # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=contextcolours[int(labels_contexts[i])-1])
+            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=const.CONTEXT_COLOURS[int(labels_contexts[i])-1])
 
         ax[j].axis('equal')
         ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
@@ -302,7 +299,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
 
     fig,ax = plt.subplots(1,3, figsize=(18,5))
     #colours = get_cmap(10, 'magma')
-    rbg_contextcolours = [mplcol.to_rgba(i) for i in contextcolours]
+    rbg_contextcolours = [mplcol.to_rgba(i) for i in const.CONTEXT_COLOURS]
     white = (1.0, 1.0, 1.0, 1.0)
 
     diffcolours = get_cmap(20, 'magma')
@@ -358,9 +355,9 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             rotated_act[contextB, dimA], rotated_act[contextB, dimB] = rotate_axes(MDS_act[contextB, dimA], MDS_act[contextB, dimB], theta)
             rotated_act[contextC, dimA], rotated_act[contextC, dimB] = rotate_axes(MDS_act[contextC, dimA], MDS_act[contextC, dimB], theta)
 
-            ax[j].plot(rotated_act[contextA, dimA], rotated_act[contextA, dimB], color=contextcolours[0])
-            ax[j].plot(rotated_act[contextB, dimA], rotated_act[contextB, dimB], color=contextcolours[1])
-            ax[j].plot(rotated_act[contextC, dimA], rotated_act[contextC, dimB], color=contextcolours[2])
+            ax[j].plot(rotated_act[contextA, dimA], rotated_act[contextA, dimB], color=const.CONTEXT_COLOURS[0])
+            ax[j].plot(rotated_act[contextB, dimA], rotated_act[contextB, dimB], color=const.CONTEXT_COLOURS[1])
+            ax[j].plot(rotated_act[contextC, dimA], rotated_act[contextC, dimB], color=const.CONTEXT_COLOURS[2])
 
         markercount=0
         lastc = -1
@@ -377,12 +374,12 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
 
             # colour by context
-            ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=contextcolours[int(contextlabel[i])], s=80, linewidths=2)
+            ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
             markercount +=1
             # label numerosity in white inside the marker
             firstincontext = [0,15,16,16+10,16+11, 16+21]
             if i in firstincontext:
-                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=contextcolours[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
+                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=const.CONTEXT_COLOURS[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
 
@@ -435,10 +432,10 @@ def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare',
         points = [contextA, contextB, contextC] #if labelContext else [contextA]
 
         for i in range(len(points)):
-            ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+            ax.scatter(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=const.CONTEXT_COLOURS[i])
 
             if not plot_diff_code:  # the difference code is arranged differently
-                ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+                ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=const.CONTEXT_COLOURS[i])
             for j in range(len(points[i])):
                 label = str(24+int(labels[points[i][j]]))
                 ax.text(slMDS[points[i][j], 0], slMDS[points[i][j], 1], slMDS[points[i][j], 2], label, color='black', size=8, horizontalalignment='center', verticalalignment='center')
@@ -536,8 +533,8 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True)
         #for i in range((MDS_latentstate.shape[0])):
         for i in range(2000,3500): # a subset of trials
             # colour by context
-            ax[j].scatter(MDS_latentstate[i, dimA], MDS_latentstate[i, dimB], color=contextcolours[int(temporal_context[i])-1], s=20)
-            ax[j].plot([MDS_latentstate[i, dimA], MDS_latentstate[i+1, dimA]], [MDS_latentstate[i, dimB],MDS_latentstate[i+1, dimB]], color=contextcolours[int(temporal_context[i])-1])
+            ax[j].scatter(MDS_latentstate[i, dimA], MDS_latentstate[i, dimB], color=const.CONTEXT_COLOURS[int(temporal_context[i])-1], s=20)
+            ax[j].plot([MDS_latentstate[i, dimA], MDS_latentstate[i+1, dimA]], [MDS_latentstate[i, dimB],MDS_latentstate[i+1, dimB]], color=const.CONTEXT_COLOURS[int(temporal_context[i])-1])
 
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
@@ -561,8 +558,8 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
         #points = [contextA, contextB, contextC] #if labelContext else [contextA]
 
         for i in range(2000,3500):
-            ax.scatter(MDS_latentstate[i, 0], MDS_latentstate[i, 1], MDS_latentstate[i, 2], color=contextcolours[int(temporal_context[i])-1])
-            #ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=contextcolours[i])
+            ax.scatter(MDS_latentstate[i, 0], MDS_latentstate[i, 1], MDS_latentstate[i, 2], color=const.CONTEXT_COLOURS[int(temporal_context[i])-1])
+            #ax.plot(slMDS[points[i], 0], slMDS[points[i], 1], slMDS[points[i], 2], color=const.CONTEXT_COLOURS[i])
 
         ax.set_xlabel('MDS dim 1')
         ax.set_ylabel('MDS dim 2')
@@ -713,8 +710,8 @@ def compareLesionTests(args, device):
         count =0
         for context in range(const.NCONTEXTS):
             colour = context+1 if context<2 else 0
-            tmp = ax[whichfreq].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=contextcolours[colour], markersize=9)
-            ax[whichfreq].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=contextcolours[colour], markersize=9, marker='o')
+            tmp = ax[whichfreq].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=const.CONTEXT_COLOURS[colour], markersize=9)
+            ax[whichfreq].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=const.CONTEXT_COLOURS[colour], markersize=9, marker='o')
             count +=1
             if context==0:
                 handles.append(tmp)
@@ -826,9 +823,9 @@ def perfVdistContextMean(args, device):
         ax[j].set_xlabel('context distance')
 
         # context-specific performance i.e. how did performance change with dist. to mean in each context
-        local_contextmean_context1 = ax[j].errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color='gold', fmt=marker[j],markersize=5)
-        local_contextmean_context2 = ax[j].errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color='dodgerblue', fmt=marker[j],markersize=5)
-        local_contextmean_context3 = ax[j].errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color='orangered', fmt=marker[j],markersize=5)
+        local_contextmean_context1 = ax[j].errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color=const.CONTEXT_COLOURS[0], fmt=marker[j],markersize=5)
+        local_contextmean_context2 = ax[j].errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color=const.CONTEXT_COLOURS[1], fmt=marker[j],markersize=5)
+        local_contextmean_context3 = ax[j].errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color=const.CONTEXT_COLOURS[2], fmt=marker[j],markersize=5)
 
         ax[j].set_xlim([-0.5, 8])
         ax[j].set_xlim([-0.5, 8])
