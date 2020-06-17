@@ -41,13 +41,16 @@ import sklearn.decomposition
 from matplotlib import animation
 from mpl_toolkits import mplot3d
 
-RNN_BASEPATH = 'lines_model/rnn_RDMs_nolesion/' #'lines_model/rnn_RDMs_nolesion/' #'lines_model/rnn_RDMs/'
+RNN_BASEPATH = 'lines_model/rnn_RDMs/'
 EEG_BASEPATH = 'lines_model/brain_RDMs/'
 EEG_FILE_FABRICE = 'avRDM_magn.mat'
 EEG_FILE_CHRIS = 'chris_eeg_data.mat'
 SAVE_FILELOC = 'linesmodel_parameters/'
 contextcolours = ['dodgerblue', 'orangered', np.asarray([1.0, 0.69803921, 0.0, 1.0]), 'black']   # 1-16, 1-11, 6-16 like fabrices colours
 modelcolours = ['mediumblue','saddlebrown','darkgoldenrod']
+
+condition_colours = [['teal','sienna'],['turquoise','darkorange']]
+
 
 # ---------------------------------------------------------------------------- #
 def cmdscale(D):
@@ -113,7 +116,8 @@ def import_EEG_data(basepath, filename, which_set):
 def import_RNN_data(basepath, args):
     """ import the rnn activations for each of ten models we care about"""
     rnn_files = os.listdir(basepath)
-    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.context_label in x) ]
+    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.label_context in x) ]
+    rnn_files = [x for x in rnn_files if ('trlf' + str(args.train_lesion_freq) in x)]
     rnn_activations = []
 
     # data for each rnn instance
@@ -164,11 +168,10 @@ def import_all_data(metric, RNN_args, which_set):
 
 class network_args():
     def __init__(self, blocking, label, train_lesion_freq):
+        self.all_fullrange = True if blocking=='intermingled' else False
         self.blocking = blocking
-        self.context_label = label
+        self.label_context = label
         self.network_style = 'recurrent'
-        self.all_fullrange = False
-        self.label_context = 'true'
         self.retain_hidden_state = True
         self.which_context = 0
         self.batch_size_multi = [0]
@@ -294,11 +297,15 @@ def plotMDS(pairwise_data, args, label, theta, axislimits, saveFig):
     #embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed', max_iter=5000)
     #MDS_act = embedding.fit_transform(pairwise_data)
 
+    print(args.blocking)
+    print(args.label_context)
+
+
     # new method which does what matlab does in cmdscale
     np.fill_diagonal(np.asarray(pairwise_data), 0)
     MDS_act, evals = cmdscale(pairwise_data)
     fig = plot_components(MDS_act, theta, axislimits)
-    n = MDSplt.autoSaveFigure('figures/'+label, args, False, False, 'compare', saveFig)
+    n = MDSplt.autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,label), args, False, False, 'compare', saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -318,11 +325,11 @@ def generatePlots(rnn_RDM, eeg_RDM, rnn_args, eeg_args, saveFig):
 
     # MDS plots
     plotMDS(rnn_RDM, rnn_args, 'rnn_mds_', 90, (-0.65,0.65), saveFig)
-    plotMDS(eeg_RDM, eeg_args, 'eeg_mds_chrisdata_',  -20, (-0.35,0.35), saveFig)
+    #plotMDS(eeg_RDM, eeg_args, 'eeg_mds_chrisdata_',  -20, (-0.35,0.35), saveFig)
 
     # RDM matrices
     plotRDM(rnn_RDM, rnn_args, 'rnn_rdm_', saveFig)
-    plotRDM(eeg_RDM, eeg_args, 'eeg_rdm_chrisdata_', saveFig)
+    #plotRDM(eeg_RDM, eeg_args, 'eeg_rdm_chrisdata_', saveFig)
 
 # ---------------------------------------------------------------------------- #
 
@@ -341,7 +348,7 @@ def reconstrain_params(params, fit_args):
      because even generating predictions will reconstrain these lines.
      ***HRS note that this could be put inside generate_lines() for better practice to ensure they are they same"""
 
-    _, keep_parallel, div_norm, sub_norm, _, _, lenShort,_ = fit_args
+    _, keep_parallel, div_norm, sub_norm, _, _, lenShort, _, line_centre_method = fit_args
 
     if sub_norm == 'centred':
         params[0] = 0      # set this line-centre parameter to zero
@@ -372,7 +379,7 @@ def reconstrain_params(params, fit_args):
 def generate_lines(params, fit_args):
     """Build 3x parallel lines in 3d based on the parameters in params"""
     xB,yB,zB, xC,yC,zC, lenRatio, dirxB, diryB, dirzB, dirxC, diryC, dirzC = params
-    _, keep_parallel, div_norm, sub_norm, _, _, lenShort,_ = fit_args
+    _, keep_parallel, div_norm, sub_norm, _, _, lenShort,_,line_centre_method = fit_args
 
     x0,y0,z0 = [0,0,0]
 
@@ -402,20 +409,27 @@ def generate_lines(params, fit_args):
 
     # constrain subtractive normalisation inside the function
     if sub_norm == 'centred':
-        centre_A = [x0,y0,z0]
-        centre_B = [x0,yB,zB]
-        centre_C = [x0,yC,zC]
+        if line_centre_method == 'free':
+            centre_A = [x0,y0,z0]
+            centre_B = [x0,yB,zB]
+            centre_C = [x0,yC,zC]
     elif sub_norm == 'offset':
-        # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
-        mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
-        mag_centre_high = -mag_centre_low
-        centre_A = [x0,y0,z0]
-        centre_B = [mag_centre_low,yB,zB]
-        centre_C = [mag_centre_high,yC,zC]
+        if line_centre_method == 'free':
+            # constrain the centre of the three lines to be perfectly offset in the magnitude dimension
+            mag_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+            mag_centre_high = -mag_centre_low
+            centre_A = [x0,y0,z0]
+            centre_B = [mag_centre_low,yB,zB]
+            centre_C = [mag_centre_high,yC,zC]
     elif sub_norm == 'unconstrained':
-        centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
-        centre_B = [xB,yB,zB]
-        centre_C = [xC,yC,zC]
+        if line_centre_method == 'free':
+            centre_A = [x0,y0,z0]  # coordinate origin for centre of line A, long line
+            centre_B = [xB,yB,zB]
+            centre_C = [xC,yC,zC]
+        #else:
+        #    centre_A = cluster_centres[0] # set the line centres to the centre of each cluster
+        #    centre_B = cluster_centres[1]
+        #    centre_C = cluster_centres[2]
 
     # each point on the line to be equally spaced (big assumption)
     # constrain lengths of lines B and C (short) to be the same
@@ -477,7 +491,7 @@ def fitmodelRDM(data, fit_args):
     """Fit the model using euclidean distance (because its the only one that really makes sense for a deterministic lines model)"""
 
     uppertri_data, ind = data
-    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort,_ = fit_args
+    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, _, line_centre_method = fit_args
 
     n_params = 13
     fitted_params = nanArray((n_iter,n_params))
@@ -608,12 +622,12 @@ def plot_bestmodel_data(mtx1, mtx2, model_description):
 
 # ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_data, MDS_model, model_id, model_system, fit_args, fit_method, saveFig=True):
+def animate3DMDS(MDS_data, MDS_model, model_id, model_system, fit_args, fit_method, RNN_args, saveFig=True):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
     """
-    model_description = get_model_description(model_id, model_system, fit_args, fit_method)
+    model_description = get_model_description(model_id, model_system, fit_args, fit_method, RNN_args)
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
     contextA = range(const.LOWR_SPAN)
@@ -682,7 +696,7 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
       Note that a rayleigh test will just reject the H0 that the angles are uniform around a circle
       (but wont say they are actually parallel, but it should be totally obvious from the distribution of angles plot)."""
 
-    _, keep_parallel, div_norm, sub_norm, _, _, _, _ = fit_args
+    _, keep_parallel, div_norm, sub_norm, _, _, _, _, _ = fit_args
     parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
     model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
     model_string = model_string + '_meanfit' if mean_fits else model_string
@@ -726,7 +740,7 @@ def parallelness_test(model_system, allsubjects_params, fit_args):
 
 def plot_divisive_normalisation(model_system, allsubjects_params, fit_args):
 
-    _, keep_parallel, div_norm, sub_norm, _, _, _, which_set = fit_args
+    _, keep_parallel, div_norm, sub_norm, _, _, _, which_set, _ = fit_args
     parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
     model_string = parallel_fig_text + '_divnorm' + div_norm + '_subnorm' + sub_norm
 
@@ -774,11 +788,11 @@ def plot_subtractive_normalisation(model_system, allsubjects_params, fit_args):
 
 # ---------------------------------------------------------------------------- #
 
-def fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method):
+def fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method, RNN_args):
     """ Fit a euclidean distance lines model to the input data RDM."""
 
-    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set = fit_args
-    model_description = get_model_description(model_id, model_system, fit_args, fit_method)
+    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method = fit_args
+    model_description = get_model_description(model_id, model_system, fit_args, fit_method, RNN_args)
     model_description = model_description + '_' + fit_method if 'cross' in fit_method else model_description
 
     # zscore the data RDM to make sure its on same scale as model for the fit
@@ -808,7 +822,7 @@ def fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, 
     plot_bestmodel_data(procrustes_data, procrustes_model, model_description)
 
     # Generate an animation of the procrustes-transformed MDS of the model and MDS of the data on top of each other
-    #animate3DMDS(procrustes_data, procrustes_model, model_id, model_system, fit_args, fit_method)
+    #animate3DMDS(procrustes_data, procrustes_model, model_id, model_system, fit_args, fit_method, lesionFrequency)
 
     # now compute the final SSE by testing the model against the test set
     zscored_test_data = stats.zscore(test_data, axis=None)
@@ -823,23 +837,23 @@ def fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, 
 
 # ---------------------------------------------------------------------------- #
 
-def get_model_description(model_id, model_system, fit_args, fit_method):
+def get_model_description(model_id, model_system, fit_args, fit_method, RNN_args):
     """Turn the model arguments into a descriptive string for figure and saved parameter file naming."""
 
-    fit_algorithm, keep_parallel, div_norm, sub_norm, _, metric, _, which_set = fit_args
+    fit_algorithm, keep_parallel, div_norm, sub_norm, _, metric, _, which_set, line_centre_method = fit_args
     keep_parallel_text = '_keptparallel_' if keep_parallel else '_notkeptparallel_'
-    model_description = model_system + '_' + fit_method +  '_' + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_datametric_' + metric + str(model_id) + '_' + fit_algorithm + '_' + which_set
+    model_description = model_system + '_' + fit_method +  '_' + RNN_args.blocking + '_' + RNN_args.label_context + 'contextlabel' + keep_parallel_text + 'divnorm' + div_norm + '_subnorm' + sub_norm + '_linecentres_' + line_centre_method + '_datametric_' + metric + str(model_id) + '_' + fit_algorithm + '_' + which_set + '_trlf' + str(RNN_args.train_lesion_freq)
 
     return model_description
 
 # ---------------------------------------------------------------------------- #
 
-def fit_models(datasets, fit_method, model_system, fit_args):
+def fit_models(datasets, fit_method, model_system, fit_args, RNN_args):
     """Fit model defined by fit_args to all the subjects (or to mean, if instructed),
     and plot and save the resulting parameters/SSE/MDS etc results."""
 
     mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = datasets
-    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set = fit_args
+    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method = fit_args
 
     # Confirming fitting settings
     parallel_text = '' if keep_parallel else 'NOT '
@@ -863,7 +877,8 @@ def fit_models(datasets, fit_method, model_system, fit_args):
         model_id = 999  # code id for fitting to mean
         train_data = mean_RNN_RDM if model_system == 'RNN' else mean_EEG_RDM
         test_data = copy.deepcopy(train_data)
-        transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method)
+
+        transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method, RNN_args)
         allsubjects_params = [params]
         allsubjects_SSE = [SSE]
 
@@ -875,7 +890,7 @@ def fit_models(datasets, fit_method, model_system, fit_args):
             train_data = allsubjects_data[model_id]
             test_data = copy.deepcopy(train_data)
             print('\nFitting ' + model_system + ' subject ' + str(model_id+1) + '/' + str(allsubjects_data.shape[0]) + '...')
-            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method)
+            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, model_id, fit_args, fit_method, RNN_args)
             allsubjects_params.append(params)
             allsubjects_SSE.append(SSE)
 
@@ -895,7 +910,7 @@ def fit_models(datasets, fit_method, model_system, fit_args):
 
             # fit a model to the mean of the k-1 data subset (and test it on the left-out test data)
             print('\nFitting ' + model_system + ', leaving out subject ' + str(fold+1) + '/' + str(allsubjects_data.shape[0]) + '...')
-            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, fold, fit_args, fit_method)
+            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, fold, fit_args, fit_method, RNN_args)
             allsubjects_params.append(params)
             allsubjects_SSE.append(SSE)
             fold += 1
@@ -918,7 +933,7 @@ def fit_models(datasets, fit_method, model_system, fit_args):
 
             # fit a model to the mean of the k-1 data subset (and test it on the left-out test data)
             print('\nFitting ' + model_system + ', leaving out fold ' + str(fold+1) + '/' + str(n_folds) + '...')
-            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, fold, fit_args, fit_method)
+            transformed_data, transformed_model, SSE, params = fit_and_plot_model(train_data, test_data, model_system, fold, fit_args, fit_method, RNN_args)
             allsubjects_params.append(params)
             allsubjects_SSE.append(SSE)
             fold += 1
@@ -927,7 +942,7 @@ def fit_models(datasets, fit_method, model_system, fit_args):
     print('Fitting complete.')
 
     # Save the best fit parameters so we dont have to repeat this whole process
-    model_description = get_model_description(model_id, model_system, fit_args, fit_method)
+    model_description = get_model_description(model_id, model_system, fit_args, fit_method, RNN_args)
     model_description = model_description + '_' + fit_method if 'cross' in fit_method else model_description
 
     filename_parameters = 'bestfit_parameters_' + model_description
@@ -946,76 +961,276 @@ def fit_models(datasets, fit_method, model_system, fit_args):
     return None
 # ---------------------------------------------------------------------------- #
 
-def main():
+def import_fit_parameters(ax, args, fit_args, model_system, fit_method):
 
-    # fitting settings
-    fit_method = 'fit_to_mean'  # 'fit_to_mean'  'individual' 'cross_val' 'cross_val_5fold'
-    #model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
-    parallelize = False
+    rnn_files = os.listdir(const.PARAMETER_DIRECTORY)
+    fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method = fit_args
 
-    for model_system in ['RNN']:
-        metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
-        fit_algorithm = 'default'  # 'default'  'Nelder-Mead'
-        keep_parallel = False
-        div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
-        sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
-        n_iter = 100               # number of random initialisations for each fit
-        lenShort = 3               # somewhat arbitrary fixed parameter for the length of the short lines (we just fit a length ratio). Keep small ~3 otherwise true line centre params will move outside bounds
-        which_set = 'chris'   #'fabrice' 'chris'
+    # restrict by RNN training conditions
+    rnn_files = [x for x in rnn_files if (args.blocking in x) and (args.label_context in x) ]
+    rnn_files = [x for x in rnn_files if ('trlf' + str(args.train_lesion_freq) in x)]
+    rnn_files = [x for x in rnn_files if model_system in x]
 
-        # figure saving settings
-        saveFig = True
-        RNN_args = network_args('intermingled', 'truecontext', 0.0)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
-        EEG_args = network_args('blocked', 'truecontext', 0.0)
+    # restrict by lines model fitting conditions
+    parallel_fig_text = '_keptparallel' if keep_parallel else '_notkeptparallel'
+    rnn_files = [x for x in rnn_files if (parallel_fig_text in x) and ('_divnorm' + div_norm in x)]
+    rnn_files = [x for x in rnn_files if ('_subnorm' + sub_norm in x) and (fit_method in x)]
 
-        # Load our data
-        mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args, which_set)
-        datasets = [mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs]
+    SSE_files = [x for x in rnn_files if ('_SSE_' in x)]
+    params_files = [x for x in rnn_files if ('_parameters_' in x)]
 
-        # Plot low dimensional representations of the rnn and eeg data
-        #generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+    # data for each rnn instance
+    for filename in params_files:
+        filepath = os.path.join(const.PARAMETER_DIRECTORY, filename)
 
-        # Sets of parameter settings for looping
-        parameter_set_1 = [False,  'unconstrained', 'unconstrained']  # totally free model: 1
-        parameter_set_2 = [True,  'unconstrained', 'unconstrained']   # free but parallel model: 2
-        parameter_set_3 = [True,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
-        parameter_set_4 = [True,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
-        parameter_set_5 = [True,  'unconstrained', 'centred']      # parallel and sub centred model: 5
-        parameter_set_6 = [True,  'unconstrained', 'offset']       # parallel and sub offset model: 6
-        #parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5, parameter_set_6]
+        with open(filepath) as rnn_file:
+            params_data = np.load(filepath)
 
+    params_data = np.asarray(params_data)
+    n_models = params_data.shape[0]
+    context_distance = []
+    subnorm_ratios = []
+    divnorm_ratios = []
 
-        # actually when we dont restrict it to be parallel it seems that there is more divisive normalisation in the EEG subjects so lets do that model
-        parameter_set_7 = [False,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
-        parameter_set_8 = [False,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
-        parameter_set_9 = [False,  'unconstrained', 'centred']      # parallel and sub centred model: 5
-        parameter_set_10 = [False,  'unconstrained', 'offset']       # parallel and sub offset model: 6
-        parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5,
-                                  parameter_set_6, parameter_set_7, parameter_set_8, parameter_set_9, parameter_set_10]
+    for i in range(n_models):
+        params = params_data[i]
+        xB,yB,zB, xC,yC,zC, lenRatio, dirxB,diryB,dirzB, dirxC,diryC,dirzC = params
 
-        #parameter_combinations = [parameter_set_1, parameter_set_2]
+        # evaluate context separation
+        centre_A = np.asarray([0,0,0])
+        centre_B = np.asarray([xB,yB,zB])
+        centre_C = np.asarray([xC,yC,zC])
+        dist_AB = np.absolute(np.linalg.norm(centre_A[1:2] - centre_B[1:2]))  # ignore magnitude dimension offsets when calculating context distance
+        dist_AC = np.absolute(np.linalg.norm(centre_A[1:2] - centre_C[1:2]))
+        dist_BC = np.absolute(np.linalg.norm(centre_B[1:2] - centre_C[1:2]))
+        context_distance.append(np.mean([dist_AB, dist_AC, dist_BC]))
 
-        # i.e. each time test one hypothesis by restricting a set of parameters, and keep all others free.
-        # We will compare:
-        # - parallelness: model1 v model2
-        # - divisive normalisation: model3 v model4
-        # - subtractive normalisation: model5 v model6
+        # evaluate subtractive normalisation
+        # full centre is at 0 in magnitude dimension by definition
+        low_offset = centre_B[0]
+        high_offset = -centre_C[0]
 
-        if parallelize:
-            # Parallelize fitting of different models to different cores
-            n_processors = mp.cpu_count()
-            print("\nParallelising fitting over all {} available CPU cores.\n".format(n_processors))
-            # create a multiprocessing pool
-            pool = mp.Pool(n_processors)
-            parameter_args = [[fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set] for keep_parallel, div_norm, sub_norm in parameter_combinations]
-            results = [ pool.apply(fit_models, args=(datasets, fit_method, model_system, fit_args)) for fit_args in parameter_args]
-            pool.close()
-        else:
-            # Serial option
-            for keep_parallel, div_norm, sub_norm in parameter_combinations:
-                fit_args = [fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set]
-                fit_models(datasets, fit_method, model_system, fit_args)
+        #theoretical full offset values
+        lenLong = lenShort*lenRatio
+        full_offset_centre_low = -2.5 * (lenLong/const.N_POINTS_LONG)
+        full_offset_centre_high = -full_offset_centre_low
+
+        low_subratio = np.absolute(low_offset/full_offset_centre_low)
+        high_subratio = np.absolute(high_offset/full_offset_centre_high)
+        mean_offset = np.mean([low_subratio, high_subratio])
+        subnorm_ratios.append(1-mean_offset)  # make so that higher value means more normalised
+
+        lenRatio = 1.0/lenRatio
+        divnorm_ratios.append(lenRatio)
+
+    mean_divnorm_ratios = np.mean(divnorm_ratios)
+    std_divnorm_ratios = np.std(divnorm_ratios) / np.sqrt(n_models)
+
+    mean_context_distance = np.mean(context_distance)
+    std_context_distance = np.std(context_distance) / np.sqrt(n_models)
+
+    mean_subnorm_ratios = np.mean(subnorm_ratios)
+    std_subnorm_ratios = np.std(subnorm_ratios) / np.sqrt(n_models)
+
+    lenRatio = lenRatio # make so that higher value means more normalised
+
+    print('--------')
+    print('length ratio (short/long): {:.4f} +- {:.4f}'.format(mean_divnorm_ratios, std_divnorm_ratios))
+    print('subtractive norm ratio: {:.4f} +- {:.4f}'.format(mean_subnorm_ratios, std_subnorm_ratios))
+    print('context distance: {:.4f} +- {:.4f}'.format(mean_context_distance, std_context_distance))
+
+    summary_params = [mean_context_distance, std_context_distance], [mean_divnorm_ratios, std_divnorm_ratios], [mean_subnorm_ratios, std_subnorm_ratios]
+
+    return summary_params
 
 # ---------------------------------------------------------------------------- #
 
+def plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelling):
+
+    truecontext_lesioned_divnorm = []
+    truecontext_unlesioned_divnorm = []
+    constcontext_lesioned_divnorm = []
+    constcontext_unlesioned_divnorm = []
+
+    truecontext_lesioned_contextdist = []
+    truecontext_unlesioned_contextdist = []
+    constcontext_lesioned_contextdist = []
+    constcontext_unlesioned_contextdist = []
+
+    truecontext_lesioned_subnorm = []
+    truecontext_unlesioned_subnorm = []
+    constcontext_lesioned_subnorm = []
+    constcontext_unlesioned_subnorm = []
+
+    for i, params in enumerate(summary_parameters):
+
+        context_dist, div_norm, sub_norm = params
+        mean_context_distance, std_context_distance = context_dist
+        lenRatio, lenRatio_std = div_norm
+        subRatio, subRatio_std = sub_norm
+        lesion_state = lesioning[i]
+        block_state = block[i]
+        contextlabel = contextlabelling[i]
+
+        xloc = 1 if block_state == 'blocked' else 0
+        cue = 0 if contextlabel == 'true' else 1
+        lesioned = 0 if lesion_state == False else 1
+        colour = condition_colours[cue][lesioned]
+
+        ax[0].errorbar(xloc, mean_context_distance, std_context_distance, color=colour)
+        ax[0].scatter(xloc, mean_context_distance, color=colour)
+        ax[0].set_xticks([0,1])
+        ax[0].set_xticklabels(['interleaved','blocked'], rotation=45)
+        ax[0].set_title('context distance')
+
+        ax[1].axhline(1.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[1].axhline(11.0/16.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[1].errorbar(xloc, lenRatio, lenRatio_std, color=colour)
+        h = ax[1].scatter(xloc, lenRatio, color=colour)
+        ax[1].set_xticks([0,1])
+        ax[1].set_xticklabels(['interleaved','blocked'], rotation=45)
+        ax[1].set_title('divisive norm')
+        #ax[1].set_ylim([0.95, 1.7])
+
+        ax[2].axhline(1.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[2].axhline(0.0, color='lightgrey', linestyle=':', linewidth=1)
+        ax[2].errorbar(xloc, subRatio, subRatio_std, color=colour)
+        h = ax[2].scatter(xloc, subRatio, color=colour)
+        ax[2].set_xticks([0,1])
+        ax[2].set_xticklabels(['interleaved','blocked'], rotation=45)
+        ax[2].set_title('subtractive norm')
+        #ax[2].set_ylim([0.9, 1.7])
+
+        if contextlabel =='true':
+            if lesion_state == False:
+                truecontext_unlesioned_divnorm.append(lenRatio)
+                truecontext_unlesioned_contextdist.append(mean_context_distance)
+                truecontext_unlesioned_subnorm.append(subRatio)
+            else:
+                truecontext_lesioned_divnorm.append(lenRatio)
+                truecontext_lesioned_contextdist.append(mean_context_distance)
+                truecontext_lesioned_subnorm.append(subRatio)
+        else:
+            if lesion_state == False:
+                constcontext_unlesioned_divnorm.append(lenRatio)
+                constcontext_unlesioned_contextdist.append(mean_context_distance)
+                constcontext_unlesioned_subnorm.append(subRatio)
+            else:
+                constcontext_lesioned_divnorm.append(lenRatio)
+                constcontext_lesioned_contextdist.append(mean_context_distance)
+                constcontext_lesioned_subnorm.append(subRatio)
+
+    ax[0].plot([0,1], truecontext_unlesioned_contextdist, color=condition_colours[0][0])
+    ax[0].plot([0,1], constcontext_unlesioned_contextdist, color=condition_colours[1][0])
+    ax[0].plot([0,1], truecontext_lesioned_contextdist, color=condition_colours[0][1])
+    ax[0].plot([0,1], constcontext_lesioned_contextdist, color=condition_colours[1][1])
+    #ax[0].set_ylim([0.1,0.35])
+
+    ax[1].plot([0,1], truecontext_unlesioned_divnorm, color=condition_colours[0][0])
+    ax[1].plot([0,1], constcontext_unlesioned_divnorm, color=condition_colours[1][0])
+    ax[1].plot([0,1], truecontext_lesioned_divnorm, color=condition_colours[0][1])
+    ax[1].plot([0,1], constcontext_lesioned_divnorm, color=condition_colours[1][1])
+
+    h1, = ax[2].plot([0,1], truecontext_unlesioned_subnorm, color=condition_colours[0][0])
+    h2, = ax[2].plot([0,1], constcontext_unlesioned_subnorm, color=condition_colours[1][0])
+    h3, = ax[2].plot([0,1], truecontext_lesioned_subnorm, color=condition_colours[0][1])
+    h4, = ax[2].plot([0,1], constcontext_lesioned_subnorm, color=condition_colours[1][1])
+
+    plt.legend((h1,h2,h3,h4), ('not lesioned, context labelled','not lesioned, context not labelled','lesioned, context labelled', 'lesioned, context not labelled'))
+
+# ---------------------------------------------------------------------------- #
+
+def main():
+
+    # fitting settings
+    fit_models = False
+    plot_parameters = False
+    fit_method = 'individual'  # 'fit_to_mean'  'individual' 'cross_val' 'cross_val_5fold'
+    model_system = 'RNN'       # fit to 'RNN' or 'EEG' data
+    lesioned = True            # True/False selects 0.0f during training or 0.1f during training
+    parallelize = False
+    fig, ax = plt.subplots(1,3, figsize=(8,4))
+    summary_parameters = []
+    lesioning = []
+    contextlabelling = []
+    block = []
+
+    for i, lesioned in enumerate([True, False]):
+        for j, contextlabel in enumerate(['true','constant']):
+            for k, blocking in enumerate(['intermingled', 'blocked']):
+
+                metric = 'correlation'  # the distance metric for the data (note that the lines model will be in euclidean space)
+                fit_algorithm = 'default'  # 'default'  'Nelder-Mead'
+                keep_parallel = True
+                line_centre_method = 'free' # 'free' or 'cluster_centres'
+                div_norm = 'unconstrained' # 'unconstrained' 'normalised'  'absolute'
+                sub_norm = 'unconstrained' # 'unconstrained' 'centred'  'offset'
+                n_iter = 100               # number of random initialisations for each fit
+                lenShort = 3               # somewhat arbitrary fixed parameter for the length of the short lines (we just fit a length ratio). Keep small ~3 otherwise true line centre params will move outside bounds
+                which_set = 'chris'   #'fabrice' 'chris'
+
+                # figure saving settings
+                saveFig = True
+                lesion_freq = 0.1 if lesioned else 0.0
+                RNN_args = network_args(blocking, contextlabel, lesion_freq)  # ***HRS beware this is no longer part of the saving string and will overwrite other figures/saved params
+                EEG_args = network_args('blocked', 'truecontext', 0.0)
+
+                # Load our data
+                mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs = import_all_data(metric, RNN_args, which_set)
+                datasets = [mean_RNN_RDM, mean_EEG_RDM, subjects_RNN_RDMs, subjects_EEG_RDMs]
+
+                # Plot low dimensional representations of the rnn and eeg data
+                #generatePlots(mean_RNN_RDM, mean_EEG_RDM, RNN_args, EEG_args, saveFig)
+
+                # Sets of parameter settings for looping
+                parameter_set_1 = [False,  'unconstrained', 'unconstrained']  # totally free model: 1
+                parameter_set_2 = [True,  'unconstrained', 'unconstrained']   # free but parallel model: 2
+                parameter_set_3 = [True,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
+                parameter_set_4 = [True,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
+                parameter_set_5 = [True,  'unconstrained', 'centred']      # parallel and sub centred model: 5
+                parameter_set_6 = [True,  'unconstrained', 'offset']       # parallel and sub offset model: 6
+                #parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5, parameter_set_6]
+
+                # actually when we dont restrict it to be parallel it seems that there is more divisive normalisation in the EEG subjects so lets do that model
+                parameter_set_7 = [False,  'normalised', 'unconstrained']   # parallel and div normalised model: 3
+                parameter_set_8 = [False,  'absolute', 'unconstrained']     # parallel and div absolute model: 4
+                parameter_set_9 = [False,  'unconstrained', 'centred']      # parallel and sub centred model: 5
+                parameter_set_10 = [False,  'unconstrained', 'offset']       # parallel and sub offset model: 6
+                #parameter_combinations = [parameter_set_1, parameter_set_2, parameter_set_3, parameter_set_4, parameter_set_5,
+                #                          parameter_set_6, parameter_set_7, parameter_set_8, parameter_set_9, parameter_set_10]
+                parameter_combinations = [parameter_set_2]
+
+                if fit_models:
+                    if parallelize:
+                        # Parallelize fitting of different models to different cores
+                        n_processors = mp.cpu_count()
+                        print("\nParallelising fitting over all {} available CPU cores.\n".format(n_processors))
+                        # create a multiprocessing pool
+                        pool = mp.Pool(n_processors)
+                        parameter_args = [[fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set] for keep_parallel, div_norm, sub_norm in parameter_combinations]
+                        results = [ pool.apply(fit_models, args=(datasets, fit_method, model_system, fit_args, lesion_freq)) for fit_args in parameter_args]
+                        pool.close()
+                    else:
+                        # Serial option
+                        for keep_parallel, div_norm, sub_norm in parameter_combinations:
+                            fit_args = [fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method]
+                            fit_models(datasets, fit_method, model_system, fit_args, RNN_args)
+
+                # compare fit model parameters
+                if plot_parameters:
+                    keep_parallel, div_norm, sub_norm = parameter_set_2
+                    fit_args = [fit_algorithm, keep_parallel, div_norm, sub_norm, n_iter, metric, lenShort, which_set, line_centre_method]
+                    params = import_fit_parameters(ax, RNN_args, fit_args, model_system, fit_method)
+                    summary_parameters.append(params)
+                    lesioning.append(lesioned)
+                    block.append(blocking)
+                    contextlabelling.append(contextlabel)
+
+    if plot_parameters:
+        plot_fit_parameters(ax, summary_parameters, lesioning, block, contextlabelling)
+        plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'parameters_plot.pdf'), bbox_inches='tight')
+
+# ---------------------------------------------------------------------------- #
+
+#if __name__ is '__main__':
 main()

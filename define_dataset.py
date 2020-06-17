@@ -102,7 +102,7 @@ class createDataset(Dataset):
     def __getitem__(self, idx):
         # for retrieving either a single sample of data, or a subset of data
 
-        # lets us retrieve several items at once - check that this is working correctly HRS
+        # lets us retrieve several items at once (HRS: may not be actually used)
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -132,7 +132,8 @@ def generateTrialSequence(include_fillers=True):
     """
     For generating a sequence of trials combining both the filler task and the compare task, as in Fabrice's experiment
     This will be used in createSeparateInputData()
-     - HRS note that this sequence will always be 120 trials long
+     - this sequence will always be 120 trials long
+     - compare trials are separated by between 2 and 4 filler trials (same as Fabrice's trial scheduling)
      - include_fillers flag determines whether our dataset will contain some filler
     trials like Fabrice used, or whether we have trials solely of the type 'compare'.
      """
@@ -179,9 +180,8 @@ def createSeparateInputData(filename, args):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
-    - 18/02 updated for training on sequences with BPTT
-    - 19/02 BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len < block length
-    - HRS this function is long and messy, should really be divided up into more manageable chunks
+    - BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len <= block length
+    - messy but functional. To be tidied.
 
     """
     print('Generating dataset...')
@@ -207,7 +207,7 @@ def createSeparateInputData(filename, args):
     print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
 
 
-    Mtestsets = 2                          # have multiple test sets for cross-validation of activations (hardcoded for 2 right now HRS)
+    Mtestsets = 2                          # have multiple test sets for cross-validation of activations
     print('- {} test sets generated for cross-validation'.format(Mtestsets))
 
     Ntrain = 2880                          # how many examples we want to use (each of these is a sequence on numbers)
@@ -322,7 +322,8 @@ def createSeparateInputData(filename, args):
                                 input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
 
                         previousFillerNum = copy.copy(input2)
-                        # when the trials are intermingled, filler trials should have random contexts  so that their labels are not grouped in time *HRS note that actually this doesnt matter for training since when we train we remove the context part on filler trials
+                        # when the trials are interleaved, set filler trials to have random contets
+                        # (NOTE this doesnt actually matter because context is later zeroed on fillers)
                         if args.all_fullrange:
                             context = random.randint(1,3)
 
