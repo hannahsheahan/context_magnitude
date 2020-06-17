@@ -14,6 +14,7 @@ import analysis_helpers as anh
 import theoretical_performance as theory
 
 from mpl_toolkits import mplot3d
+import math
 import numpy as np
 import scipy as sp
 import copy

@@ -190,7 +190,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
     test_loss = 0
     correct = 0
 
-    # reset hidden recurrent weights on the very first trial ***HRS be really careful with this, ***HRS this is not right yet.
+    # reset hidden recurrent weights on the very first trial
     hidden = torch.zeros(args.batch_size, model.recurrent_size)
     latentstate = torch.zeros(args.batch_size, model.recurrent_size)
 
@@ -332,7 +332,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
 
                     for trial in range(assess_idx+1):
 
-                        # if trial designated for lesioning, apply the lesion ***HRS to check these indices are correct for lesions
+                        # if trial designated for lesioning, apply the lesion
                         if lesionRecord[trial]==1:
                             lesion_number = dset.turnOneHotToInteger(tmpinputs[trial][0][0:const.TOTALMAXNUM])
                             if whichLesion=='number':
@@ -372,7 +372,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                         noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                         hidden.add_(noise)
                         output, hidden = model(tmpinputs[i], hidden)  # this should be the sequence of trials that are all lesioned with probability F
-                    latentstate = hidden.detach()  # ***HRS the exact trial and lesion sequence that this is passed on from will need checking, but should be approximately right
+                    latentstate = hidden.detach()
 
             allLesionAssessments.append(sequenceAssessment)
 
@@ -399,8 +399,7 @@ def sortAllVarsbyX(allvars, sortind):
 
 def sortActivations(allvars):
     """This function sortActivations() just sorts all the activation- and label-related variables we care about,
-     first into context order and then input number order within each context
-     - HRS not sure if I need to make temporary variables first in line 509"""
+     first into context order and then input number order within each context"""
 
     contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = allvars
 
@@ -566,7 +565,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
                     inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
                     inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
                     recurrentinputs = [inputA, inputB]
-                    h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
+                    h0activations = torch.zeros(1,trained_model.recurrent_size)  # reset hidden recurrent weights
 
                     # pass inputs through the recurrent network
                     for i in range(2):
@@ -577,7 +576,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
     else:
         # Do a single pass through the whole training set and look out for ALL instances of each unique input.
         # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
-        # reset hidden recurrent weights on the very first trial ***HRS be careful with this
+        # reset hidden recurrent weights on the very first trial
 
         h0activations = torch.zeros(1, trained_model.recurrent_size)
         latentstate = torch.zeros(1, trained_model.recurrent_size)
@@ -653,7 +652,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
                         aggregate_activations[index] += activations[index]
                         counter[index] += 1    # captures how many instances of each unique input there are in the training set
 
-            temporal_activation_drift[batch_idx, :] = latentstate   # HRS this is not correct yet since only taking end of sequence
+            temporal_activation_drift[batch_idx, :] = latentstate   # Note: not currently used.
 
         # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
         for i in range(counter.shape[0]):

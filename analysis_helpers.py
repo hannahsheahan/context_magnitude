@@ -11,6 +11,8 @@ import constants as const
 import numpy as np
 import scipy
 import os
+import json
+import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------- #
 
@@ -124,8 +126,7 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
 # ---------------------------------------------------------------------------- #
 
 def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
-    """
-     This is a hacky variant of averageReferenceNumerosity(), which averages over numbers which have the same difference (A-B).
+    """  This is a messy variant of averageReferenceNumerosity(), which averages over numbers which have the same difference (A-B).
     """
 
     # initializing
@@ -140,7 +141,6 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
-
     flattenValues = [labels_judgeValues[i] - labels_refValues[i] for i in range(len(labels_refValues))]
 
     # pick out all the activations that meet this condition for each context and then average over them
@@ -213,8 +213,6 @@ def performLesionTests(args, testParams, basefilename):
     """
     This function performLesionTests() performs lesion tests on a single network
     We will only consider performance after a single lesion, because the other metrics are boring sanity checks.
-    Plus it seems like performing more lesions in the sequence at test dont do much.
-    - modelname helps us deal with the different model instances (model ids)
     """
     # lesion settings
     whichLesion = 'number'    # default: 'number'. That's all we care about really
@@ -224,11 +222,10 @@ def performLesionTests(args, testParams, basefilename):
     contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
     regularfilename = basefilename + '_regular.npy'
     filename = basefilename+'.npy'
+
     # perform and save the lesion tests
     try:
         lesiondata = (np.load(filename, allow_pickle=True)).item()
-        #print('Loaded existing lesion analysis: ('+filename+')')
-        #print('{}-lesioned network, test performance: {:.2f}%'.format(whichLesion, lesiondata["lesioned_testaccuracy"]))
     except:
         # evaluate network at test with lesions
         print('Performing lesion tests...')
@@ -257,7 +254,7 @@ def performLesionTests(args, testParams, basefilename):
 # ---------------------------------------------------------------------------- #
 
 def lesionperfbyNumerosity(lesiondata):
-    # determine how a given model performs post lesion on different numbers and contexts
+    """This function determines how a given model performs post lesion on different numbers and contexts"""
 
     context_perf = [[] for i in range(const.NCONTEXTS)]
     context_numberdiffs = [[] for i in range(const.NCONTEXTS)]
@@ -297,7 +294,7 @@ def lesionperfbyNumerosity(lesiondata):
     meanperf, uniquediffs = performanceMean(numberdiffs, perf)
     global_meanperf, global_uniquediffs = performanceMean(globalnumberdiffs, perf)
 
-    # assess mean performance under each context (HRS hacky for now)
+    # assess mean performance under each context
     context1_meanperf, context1_uniquediffs = performanceMean(context_numberdiffs[0], context_perf[0])
     context2_meanperf, context2_uniquediffs = performanceMean(context_numberdiffs[1], context_perf[1])
     context3_meanperf, context3_uniquediffs = performanceMean(context_numberdiffs[2], context_perf[2])
@@ -309,7 +306,8 @@ def lesionperfbyNumerosity(lesiondata):
 # ---------------------------------------------------------------------------- #
 
 def getSSEForContextModels(args, device):
-    # Determine the sum squared error between the rnn responses and the local vs global context models, for each RNN instance.
+    """This function determines the sum squared error between the rnn responses and the local vs global context models, for each RNN instance."""
+
     allmodels = getModelNames(args)
     SSE_local = [0 for i in range(len(allmodels))]
     SSE_global = [0 for i in range(len(allmodels))]
@@ -336,5 +334,49 @@ def getSSEForContextModels(args, device):
     print('local model, SSE: {}'.format(SSE_local))
     print('global model, SSE: {}'.format(SSE_global))
     print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))
+
+# ---------------------------------------------------------------------------- #
+
+def averagePerformanceAcrossModels(args):
+    """Take the training records and determine the average train and test performance
+     across all trained models that meet the conditions specified in args."""
+
+    matched_models = getModelNames(args)
+    all_training_records = os.listdir(const.TRAININGRECORDS_DIRECTORY)
+    record_name = ''
+    train_performance = []
+    test_performance = []
+    for ind, m in enumerate(matched_models):
+        args.model_id = getIdfromName(m)
+
+        for training_record in all_training_records:
+            if ('_id'+str(args.model_id)+'.' in training_record):
+                if  ('trlf'+str(args.train_lesion_freq) in training_record) and (args.label_context in training_record):
+                    print('Found matching model: id{}'.format(args.model_id))
+                    # we've found the training record for a model we care about
+                    with open(os.path.join(const.TRAININGRECORDS_DIRECTORY, training_record)) as record_file:
+                        record = json.load(record_file)
+                        train_performance.append(record["trainingPerformance"])
+                        test_performance.append(record["testPerformance"])
+                        record_name = training_record[:-5]
+
+    train_performance = np.asarray(train_performance)
+    test_performance = np.asarray(test_performance)
+    n_models = train_performance.shape[0]
+
+    mean_train_performance = np.mean(train_performance, axis=0)
+    std_train_performance = np.std(train_performance, axis=0) / np.sqrt(n_models)
+
+    mean_test_performance = np.mean(test_performance, axis=0)
+    std_test_performance = np.std(test_performance, axis=0) / np.sqrt(n_models)
+
+    print('Final training performance across {} models: {:.3f} +- {:.3f}'.format(n_models, mean_train_performance[-1], std_train_performance[-1]))  # mean +- std
+    print('Final test performance across {} models: {:.3f} +- {:.3f}'.format(n_models, mean_test_performance[-1], std_test_performance[-1]))  # mean +- std
+    plt.figure()
+    h1 = plt.errorbar(range(11), mean_train_performance, std_train_performance, color='dodgerblue')
+    h2 = plt.errorbar(range(11), mean_test_performance, std_test_performance, color='green')
+    plt.legend((h1,h2), ['train','test'])
+
+    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, record_name + '.pdf'), bbox_inches='tight')
 
 # ---------------------------------------------------------------------------- #
