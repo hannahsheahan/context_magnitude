@@ -1,7 +1,7 @@
 """
 This is a selection of functions and classes relating to pytorch network training
 on the contextual magnitude mapping project with Fabrice.
-A simple MLP is trained on a relational magnitude problem: is input A > input B?
+A simple RNN or MLP is trained on a relational magnitude problem: is input A > input B?
 
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 13/12/2019
@@ -75,10 +75,9 @@ def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     """
     This function will take a look at the gradients in all layers of our model during training.
     This will help us to see whether our gradients are flowing well through our RNN
-    For my RNN it really needs to be divided up so that the loop is over recurrent steps rather than an unfolded model.
-
+    - For my RNN it really needs to be divided up so that the loop is over recurrent steps rather than an unfolded model.
     - Edited from code on forum: https://discuss.pytorch.org/t/check-gradient-flow-in-network/15063/7 by Roshan Rane (downloaded 20/02/2020)
-    - ave_grads are the gradients from our model. Call this function jsut after each backwards pass.
+    - ave_grads are the gradients from our model. Call this function just after each backwards pass.
     """
     plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
     plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
@@ -99,11 +98,11 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     """ Train a recurrent neural network on the training set.
     This now trains whilst retaining the hidden state across all trials in the training sequence
     but being evaluated just on pairs of inputs and considering each input pair as a trial for minibatching.
-    - 16/03/2020 we now lesion the number input on compare trails with frequency args.train_lesion_freq to see if this enhances the use of local context
-    - we will include in our total cost function the performance when assessed on a trial that is lesioned (should encourage use of context + previous trial data),
-     AND on the compare trial after a lesion (to encourage use of context and previous trial)
-
+    - we lesion the number input on compare trails with frequency args.train_lesion_freq to enhances the network's use of local context
+    - we will include in our total cost function the performance when assessed on a trial that is lesioned
+       AND on the compare trial after a lesion
      """
+
     model.train()
     train_loss = 0
     correct = 0
@@ -145,11 +144,11 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
         # perform N-steps of recurrence
         for item_idx in range(sequenceLength):
-            # inject some noise ~= forgetting of the previous number
+            # inject some noise (Note: no longer in use, set model.hidden_noise to 0.0)
             noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
             hidden.add_(noise)
             output, hidden = model(recurrentinputs[item_idx], hidden)
-            if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
+            if item_idx==(sequenceLength-2):                  # extract the hidden state just before the last input in the sequence is presented
                 latentstate = hidden.detach()
 
             # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
@@ -157,9 +156,9 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                 loss += criterion(output, labels[item_idx])   # accumulate the loss (autograd should sort this out for us: https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
                 correct += answerCorrect(output, labels[item_idx])
 
-        loss.backward()             # passes the loss backwards to compute the dE/dW gradients
+        loss.backward()
 
-        # record and visualise our gradients (code from: Roshan Rane, https://discuss.pytorch.org/t/check-gradient-flow-in-network/15063/10)
+        # record and visualise our gradients
         if (batch_idx % 100) == 0:
             for n, p in model.named_parameters():
                 if(p.requires_grad) and ("bias" not in n):
@@ -168,12 +167,11 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                         ave_grads.append(p.grad.abs().mean())
                         max_grads.append(p.grad.abs().max())
                     else:
-                        # this might just trigger on leaf variables
                         print("Warning: p.grad gradient is type None at batch {} in sequence of length {}".format(batch_idx, sequenceLength) )
-            plot_grad_flow(args, layers, ave_grads, max_grads, batch_idx)   # plot our gradients to check that they are flowing well through the RNN
+            plot_grad_flow(args, layers, ave_grads, max_grads, batch_idx)
 
         optimizer.step()            # update our weights
-        train_loss += loss.item()   # keep track for display purposes
+        train_loss += loss.item()
 
         if batch_idx % args.log_interval == 0:
             if printOutput:
@@ -187,12 +185,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 # ---------------------------------------------------------------------------- #
 
 def recurrent_test(args, model, device, test_loader, criterion, printOutput=True):
-    """Test a recurrent neural network on the test set.
-    Note that this will need to be modified such that it tracks test performance JUST
-    on the subset of trials towards the end of each block (initially for a proof of concept)
-    and then later across all trials regardless of position in block. So the later trials in a block
-    will have a clearer context signal because of the stats of previous inputs held in the recurrent hidden state.
-    """
+    """Test a recurrent neural network on the test set (without lesions)."""
     model.eval()
     test_loss = 0
     correct = 0
@@ -217,10 +210,8 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
                     context_in = torch.full_like(context, 0)
                 else:
                     context_in = copy.deepcopy(context)
-
                 inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
-
 
 
             if not args.retain_hidden_state:  # only if you want to reset hidden state between trials
@@ -231,7 +222,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
             # perform a N-step recurrence for the whole sequence of numbers in the input
             for item_idx in range(sequenceLength):
 
-                # inject some noise ~= forgetting of the previous number
+                # inject some noise (Note: no longer in use, set model.hidden_noise to 0.0)
                 noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                 hidden.add_(noise)
                 output, hidden = model(recurrentinputs[item_idx], hidden)
@@ -252,7 +243,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
 def getLocalModelResponse(number, context, label):
     # evaluate whether a simulated local context policy would have got this trial correct
-    localmedians = [8.5, 6, 11]  # full range, low range, high range
+    localmedians = [const.CONTEXT_FULL_MEAN, const.CONTEXT_LOW_MEAN, const.CONTEXT_HIGH_MEAN]
     response = 1 if number > localmedians[context-1] else 0
     iscorrect = 1 if response == label else 0
     return iscorrect
@@ -261,7 +252,7 @@ def getLocalModelResponse(number, context, label):
 
 def getGlobalModelResponse(number, context, label):
     # evaluate whether a simulated local context policy would have got this trial correct
-    globalmedian = 8.5
+    globalmedian = const.GLOBAL_MEAN
     response = 1 if number > globalmedian else 0
     iscorrect = 1 if response == label else 0
     return iscorrect
@@ -271,15 +262,9 @@ def getGlobalModelResponse(number, context, label):
 def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutput=True, whichLesion='number', lesionFrequency=1):
     """
     Test a recurrent neural network on the test set, while lesioning occasional inputs.
-
-    Lesioning inputs: either the context part of the input, or the number input can be lesioned
-    - lesionFrequency is the percentage (0-1) of compare trials that get randomly 'forgotten'.
-       The prediction is that (for a network in which no explicit indicator of context is provided) even if we assess performance only on trials immediately after a lesion,
-       as the number of lesions in the dataset increases, the ability to determine the context will decrease and performance should approach 50% chance.
-       This should happen as the only way to use context to increase the P()
-    - another way to test this prediction is just to look at the impact of lesioning a single trial in the dataset, and testing on the compare trial immediately following, but vary the position in the sequence at which the lesion happens.
-
-    - should make sure that the lesioned inputs are not used to evaluate performance on (unless you explicitly want to test the impact of distance from previous number to context mean)
+    Lesioning inputs: select either the context part of the input, or the number input to be lesioned
+    - we will assess impact of lesioning a single trial in the dataset, and testing on the primary target (compare trial) immediately following,
+      but vary the position in the sequence at which the lesion happens.
     """
     model.eval()
 
@@ -345,12 +330,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                     overallperf = 0
                     ncomparetrials = 0
 
-                    # debug sanity checking that lesioning is working correctly. It seems to be! :)
-                    #print('Sequence #: {}'.format(batch_idx))
-                    #print('Assessment trial: {}'.format(assess_idx))
-                    #print(lesionRecord)
-                    #print('----')
-
                     for trial in range(assess_idx+1):
 
                         # if trial designated for lesioning, apply the lesion ***HRS to check these indices are correct for lesions
@@ -361,7 +340,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                             else:
                                 tmpinputs[trial][0][const.TOTALMAXNUM:const.TOTALMAXNUM+const.NCONTEXTS] = torch.full_like(tmpinputs[trial][0][const.TOTALMAXNUM:const.TOTALMAXNUM+const.NCONTEXTS], 0)
 
-                        # inject some noise ~= forgetting of the previous number
+                        # inject some noise (Note: no longer in use, set model.hidden_noise to 0.0)
                         noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                         hidden.add_(noise)
                         output, hidden = model(tmpinputs[trial], hidden)
@@ -408,80 +387,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
 
 # ---------------------------------------------------------------------------- #
 
-def train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
-    """
-    * HRS this is obsolete: only used for MLP *
-    Train a neural network on the training set """
-    model.train()
-    train_loss = 0
-    correct = 0
-    for batch_idx, data in enumerate(train_loader):
-        optimizer.zero_grad()   # zero the parameter gradients
-        inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
-        output = model(inputs)
-        output = np.squeeze(output, axis=1)
-
-        loss = criterion(output, labels)
-        loss.backward()         # passes the loss backwards to compute the dE/dW gradients
-        optimizer.step()        # update our weights
-
-        # evaluate performance
-        train_loss += loss.item()
-
-        pred = np.zeros((output.size()))
-        for i in range((output.size()[0])):
-            if output[i]>0.5:
-                pred[i] = 1
-            else:
-                pred[i] = 0
-
-        tmp = np.squeeze(np.asarray(labels))
-        correct += (pred==tmp).sum().item()
-
-        if batch_idx % args.log_interval == 0:
-            if printOutput:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(inputs), len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader), loss.item()))
-
-    train_loss /= len(train_loader.dataset)
-    accuracy = 100. * correct / len(train_loader.dataset)
-    return train_loss, accuracy
-
-# ---------------------------------------------------------------------------- #
-
-def test(args, model, device, test_loader, criterion, printOutput=True):
-    """
-    * HRS this is obsolete: only used for MLP *
-    Test a neural network on the test set. """
-    model.eval()
-    test_loss = 0
-    correct = 0
-
-    with torch.no_grad():  # dont track the gradients
-        for batch_idx, data in enumerate(test_loader):
-            inputs, labels = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)
-            output = model(inputs)
-            output = np.squeeze(output, axis=1)
-            test_loss += criterion(output, labels).item()
-
-            pred = np.zeros((output.size()))
-            for i in range((output.size()[0])):
-                if output[i]>0.5:
-                    pred[i] = 1
-                else:
-                    pred[i] = 0
-
-            tmp = np.squeeze(np.asarray(labels))
-            correct += (pred==tmp).sum().item()
-
-    test_loss /= len(test_loader.dataset)
-    accuracy = 100. * correct / len(test_loader.dataset)
-    if printOutput:
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset), accuracy))
-    return test_loss, accuracy
-
-# ---------------------------------------------------------------------------- #
-
 def sortAllVarsbyX(allvars, sortind):
     """This function sortAllVarsbyX() will sort all variables input in allvars according to the indices of sortind."""
     sortedvars = []
@@ -515,7 +420,8 @@ def sortActivations(allvars):
 # ---------------------------------------------------------------------------- #
 
 def formatInputSequence(TRIAL_TYPE, testset):
-    """ This function formatInputSequence() is for tidying up getActivations(),
+    """ *This function is obsolete*
+    This function formatInputSequence() is for tidying up getActivations(),
     and will determine the unique inputs in the test set (there will be repeats in the original test set).
     """
     testset_input_n_context, seq_record = [[] for i in range(2)]
@@ -562,214 +468,13 @@ def flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys):
 
 # ---------------------------------------------------------------------------- #
 
-def getNonsequentialActivations(args, trained_model, uniqueind, uniquevars, testsize, sequenceLength):
-    """
-    The method for use in getActivations() if we don't care about the order in which inputs were presented in the test set.
-    i.e. if we don't care about retaining the hidden state (if recurrent), or if its an mlp not trained on sequences.
-    - note that we basically wont use this anymore (19/03/2020), but keep for completeness.
-    """
-    # Set up some space
-    unique_inputs, unique_labels, unique_refValue, unique_judgementValue, unique_context = uniquevars
-    N_unique = (unique_inputs_n_context.shape)[0]
-    labels_refValues = np.empty((len(uniqueind),1))
-    labels_judgeValues = np.empty((len(uniqueind),1))
-    contexts = np.empty((len(uniqueind),1))
-    time_index = np.empty((len(uniqueind),1))
-    MDSlabels = np.empty((len(uniqueind),1))
-    activations = np.empty((len(uniqueind), trained_model.hidden_size))
-
-    # set up some dummy variables for matching the ouput for getSequentialActivations()
-    temporal_trialtypes = np.zeros((testsize,sequenceLength))
-    temporal_activation_drift = np.zeros((testsize, trained_model.recurrent_size))
-    temporal_context = np.zeros((testsize,sequenceLength))
-    counter = np.zeros((len(uniqueind),1))
-    drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
-
-    for sample in range(len(uniqueind)):
-        sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
-        sample_label = unique_labels[sample]
-        labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
-        labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
-        MDSlabels[sample] = sample_label
-        contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
-
-        # get the activations for that input
-        if args.network_style=='mlp':
-            h1activations,h2activations,_ = trained_model.get_activations(sample_input)
-        elif args.network_style=='recurrent':
-            if not args.retain_hidden_state:
-                # reformat the paired input so that it works for our recurrent model
-                context = sample_input[contextrange]
-                inputA = (torch.cat((sample_input[Arange], context),0)).unsqueeze(0)
-                inputB = (torch.cat((sample_input[Brange], context),0)).unsqueeze(0)
-                recurrentinputs = [inputA, inputB]
-                h0activations = torch.zeros(1,trained_model.recurrent_size) # # reset hidden recurrent weights ***HRS hardcoding of hidden unit size for now
-
-                # pass inputs through the recurrent network
-                for i in range(2):
-                    h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[i], h0activations)
-                activations[sample] = h1activations.detach()
-
-    return [activations, labels_refValues, labels_judgeValues, MDSlabels, contexts, time_index, counter, drift, temporal_trialtypes]
-
-# ---------------------------------------------------------------------------- #
-
-def getSequentialActivations(TRIAL_TYPE, trained_model, test_loader, unique_inputs_n_context, uniqueind, uniquevars, testsize, sequenceLength):
-    """
-    This function  getSequentialActivations() is for retrieving the unique activations
-    in the test set, and averaging across all instances of each unique input/context combo, across all sequences.
-    Each instance of a given input/context combo will have slightly different activation because of the retained hidden state in the RNN.
-    """
-    # Initialise/set up some space
-    unique_inputs, unique_labels, unique_refValue, unique_judgementValue, unique_context = uniquevars
-    N_unique = (unique_inputs_n_context.shape)[0]
-    labels_refValues = np.empty((len(uniqueind),1))
-    labels_judgeValues = np.empty((len(uniqueind),1))
-    contexts = np.empty((len(uniqueind),1))
-    time_index = np.empty((len(uniqueind),1))
-    MDSlabels = np.empty((len(uniqueind),1))
-    activations = np.empty((len(uniqueind), trained_model.hidden_size))
-
-    # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
-    aggregate_activations = np.zeros((len(uniqueind), trained_model.hidden_size))  # for adding each instance of activations to
-    counter = np.zeros((len(uniqueind),1))               # for counting how many instances of each unique input/context we find
-    h0activations = torch.zeros(1, trained_model.recurrent_size)
-    latentstate = torch.zeros(1, trained_model.recurrent_size)
-    temporal_trialtypes = np.zeros((testsize,sequenceLength))
-    temporal_activation_drift = np.zeros((testsize, trained_model.recurrent_size))
-    temporal_context = np.zeros((testsize,sequenceLength))            # for tracking the evolution of context in time across the set
-
-    for batch_idx, data in enumerate(test_loader):
-        inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
-        recurrentinputs = []
-        sequenceLength = inputs.shape[1]
-        temporal_trialtypes[batch_idx] = data['trialtypeinput']
-
-        # reformat the input sequence for passing into our RNN, removing the context input from filler numbers as usual
-        for i in range(sequenceLength):
-            temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextsequence[:,i])[0]
-            contextin = contextinputsequence[:,i]
-            if trialtype[0,i]==0:              # remove context indicator on the filler trials
-                contextinput = torch.full_like(contextin, 0)
-            else:
-                contextinput = copy.deepcopy(contextin)
-            inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
-            recurrentinputs.append(inputX)
-        h0activations = latentstate            # because we have overlapping sequential trials
-
-        # perform N-steps of recurrence
-        inputA, inputB = [None for i in range(2)]
-        for item_idx in range(sequenceLength):
-            h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
-            if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
-                latentstate = h0activations.detach()
-            context = contextsequence[:,item_idx]
-
-            # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
-            if trialtype[0,item_idx] == TRIAL_TYPE:
-                if TRIAL_TYPE==const.TRIAL_COMPARE:    # if we are looking at act. for the compare trials only
-                    inputA = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]
-                    if inputB is not None:
-                        input_n_context = np.append(np.append(inputA, inputB), context)  # actual underlying range context
-                        for i in range(N_unique):
-                            if np.all(unique_inputs_n_context[i,:]==input_n_context):
-                                #print('{}, {}, context {}'.format(dset.turnOneHotToInteger(inputA)[0],  dset.turnOneHotToInteger(inputB)[0] , np.squeeze(dset.turnOneHotToInteger(context))[0]  ))
-                                index = i
-                                break
-
-                        activations[index] = h1activations.detach()
-                        labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
-                        labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
-                        MDSlabels[index] = unique_labels[index]
-                        contexts[index] = dset.turnOneHotToInteger(unique_context[index])
-                        time_index[index] = batch_idx
-                    inputB = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]  # previous state <= current state
-
-                else:  # for filler trials only, consider just the current number and context
-
-                    inputA = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]
-                    input_n_context = np.append(inputA, context)  # actual underlying range context
-                    for i in range(N_unique):
-                        if np.all(unique_inputs_n_context[i,:]==input_n_context):
-                            index = i
-                            break
-                    activations[index] = h1activations.detach()
-                    labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
-                    labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
-                    MDSlabels[index] = unique_labels[index]
-                    contexts[index] = dset.turnOneHotToInteger(unique_context[index])
-                    time_index[index] = batch_idx
-
-                if item_idx > 0:
-                    # Aggregate activity associated with each instance of each input
-                    aggregate_activations[index] += activations[index]
-                    counter[index] += 1    # captures how many instances of each unique input there are in the training set
-        temporal_activation_drift[batch_idx, :] = latentstate   # HRS this is not correct yet since only taking end of sequence
-
-    # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
-    for i in range(counter.shape[0]):
-        if counter[i]==0:
-            counter[i]=1  # prevent divide by zero
-            print('Warning: index ' + str(i) + ' input had no instances?')
-    activations = np.divide(aggregate_activations, counter)
-    drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
-
-    return [activations, labels_refValues, labels_judgeValues, MDSlabels, contexts, time_index, counter, drift, temporal_trialtypes]
-# ---------------------------------------------------------------------------- #
-
-def _getActivations(args, testset, trained_model, test_loader, whichType='compare'):
-    """ This will determine the hidden unit activations for each *unique* input pair in a test set.
-     There are many repeats of inputs in the test set.
-     If retainHiddenState is set to True, then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
-     This will lead to slightly different activations for each instance of a particular input pair.
-     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
-    """
-
-    # initialisation
-    TRIAL_TYPE = const.TRIAL_COMPARE if whichType=='compare' else const.TRIAL_FILLER
-
-    # find the unique input/context combinations in the test set
-    seq_record, testset_input_n_context = formatInputSequence(TRIAL_TYPE, testset)
-    unique_inputs_n_context, uniqueind = np.unique(testset_input_n_context, axis=0, return_index=True)
-    print(whichType)
-    print(unique_inputs_n_context.shape)  # good
-
-    sequence_id = [seq_record[uniqueind[i]][0] for i in range(len(uniqueind))]
-    seqitem_id = [seq_record[uniqueind[i]][1] for i in range(len(uniqueind))]
-    num_unique = len(uniqueind)
-    sequenceLength = testset["input"].shape[1]
-    testsize = testset["label"].shape[0]
-
-    # reformat some of our variables from the test set
-    allvarkeys = ["input", "label", "context", "refValue", "judgementValue"]
-    uniquevars = flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys)
-
-    #  Pass each input through the network and see what happens to the hidden layer activations
-    if not ((args.network_style=='recurrent') and args.retain_hidden_state):
-        activation_set = getNonsequentialActivations(args, trained_model, uniqueind, uniquevars, testsize, sequenceLength)
-    else:
-        # Pass test set through RNN, retain hidden state and extract all activation instances of inputs of interest
-        activation_set = getSequentialActivations(TRIAL_TYPE, trained_model, test_loader, unique_inputs_n_context, uniqueind, uniquevars, testsize, sequenceLength)
-    activations, labels_refValues, labels_judgeValues, MDSlabels, contexts, time_index, counter, drift, temporal_trialtypes = activation_set
-
-    # Finally, reshape the output activations and labels so that we can easily interpret RDMs on the activations
-    allvars = [contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter]
-    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sortActivations(allvars)
-
-    return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
-
-# ---------------------------------------------------------------------------- #
-
 def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
-    """ This will determine the hidden unit activations for each *unique* input pair in the training set.
-     There are many repeats of inputs in the training set.If retainHiddenState is set to True,
-     then we will evaluate the activations while considering the hidden state retained across several trials and blocks.
+    """ This will determine the hidden unit activations for each input pair in the train/test set.
+     There are many repeats of each input pair in the train/test set. If retainHiddenState is set to True,
+     then we will evaluate the activations while considering the hidden state retained across all trials and blocks.
      This will lead to slightly different activations for each instance of a particular input pair.
      We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
-      - HRS could change ativation assessment to be for the test set, but shouldn't make a big difference.
-
-      - HRS note that this function could really do with a cleanup. It's a long ugly mess.
-
+      - messy but functional. To be tidied.
     """
 
     # reformat the input sequences for our recurrent model
@@ -988,29 +693,6 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
 
 # ---------------------------------------------------------------------------- #
 
-class separateinputMLP(nn.Module):
-    """
-    * HRS this is obsolete and no longer used *
-        This is a simple 3-layer MLP which compares the magnitude of input nodes A (4) to input nodes B (4)
-    """
-    def __init__(self, D_in):
-        super(separateinputMLP, self).__init__()
-        self.hidden_size = 200   # was 60, now increase to 200 to prevent bottleneck in capacity.
-        self.fc1 = nn.Linear(D_in, self.hidden_size)  # size input, size output
-        self.fc2 = nn.Linear(self.hidden_size, 1)
-
-    def forward(self, x):
-        self.fc1_activations = F.relu(self.fc1(x))
-        self.fc2_activations = self.fc2(self.fc1_activations)
-        self.output = torch.sigmoid(self.fc2_activations)
-        return self.output
-
-    def get_activations(self, x):
-        self.forward(x)  # update the activations with the particular input
-        return self.fc1_activations, self.fc2_activations, self.output
-
-# ---------------------------------------------------------------------------- #
-
 class OneStepRNN(nn.Module):
 
     def __init__(self, D_in, D_out, noise_std, recurrent_size, hidden_size):
@@ -1050,8 +732,6 @@ def defineHyperparams():
     use_cuda = False #not args.no_cuda and torch.cuda.is_available()  # lets go back to CPU because this network is small
     device = torch.device("cuda" if use_cuda else "cpu")
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-
-    #use_default = mt.query_yes_no("Use default hyperparameters? ")
 
     command_line = True  # if running from jupyter notebook, set this to false and adjust argsparser() instead
     if command_line:
@@ -1144,7 +824,6 @@ class argsparser():
 def setupTestParameters(args, device):
     """
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    - HRS beware this is set for the main test set but we may also want to use the crossval test set, so should change to pass this which set as input
     """
     datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
 
@@ -1163,8 +842,9 @@ def setupTestParameters(args, device):
 # ---------------------------------------------------------------------------- #
 
 def getDatasetName(args):
+    """Return the (unique) name of the dataset, trained model, analysis and training record, based on args."""
 
-    # conver the hyperparameter settings into a string ID
+    # convert the hyperparameter settings into a string ID
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id'+ str(args.model_id)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
@@ -1192,70 +872,6 @@ def getDatasetName(args):
 
 # ---------------------------------------------------------------------------- #
 
-def trainMLPNetwork(args, device, multiparams, trainset, testset):
-    """
-    * HRS this is obsolete and no longer used *
-    This function performs the train/test loop for different parameter settings
-     input by the user in multiparams.
-     - Train/test performance is logged with a SummaryWriter
-     - the trained model is returned
-     """
-
-    _, _, _, trainingrecord_name = getDatasetName(args)
-
-    # Repeat the train/test model assessment for different sets of hyperparameters
-    for batch_size, lr in product(*multiparams):
-        args.batch_size = batch_size
-        args.test_batch_size = batch_size
-        args.lr = lr
-        print("Network training conditions: ")
-        print(args)
-        print("\n")
-
-        # Define a model for training
-        model = separateinputMLP(2*const.TOTALMAXNUM+const.NCONTEXTS).to(device)
-        criterion = nn.BCELoss() #nn.CrossEntropyLoss()  #nn.BCELoss()   # binary cross entropy loss
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-
-        # Define our dataloaders
-        trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False)
-        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-        # Log the model on TensorBoard and label it with the date/time and some other naming string
-        now = datetime.now()
-        date = now.strftime("_%d-%m-%y_%H-%M-%S")
-        comment = "_batch_size-{}_lr-{}_epochs-{}_wdecay-{}".format(args.batch_size, args.lr, args.epochs, args.weight_decay)
-        writer = SummaryWriter(log_dir='results/runs/' + trainingrecord_name + args.modeltype + date + comment)
-        print("Open tensorboard in another shell to monitor network training (hannahsheahan$  tensorboard --logdir=runs)")
-
-        # Train/test loop
-        n_epochs = args.epochs
-        printOutput = False
-
-        print("Training network...")
-        for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
-
-            # train network
-            standard_train_loss, standard_train_accuracy = train(args, model, device, trainloader, optimizer, criterion, epoch, printOutput)
-
-            # assess network
-            fair_train_loss, fair_train_accuracy = test(args, model, device, trainloader, criterion, printOutput)
-            test_loss, test_accuracy = test(args, model, device, testloader, criterion, printOutput)
-
-            # log performance
-            train_perf = [standard_train_loss, standard_train_accuracy, fair_train_loss, fair_train_accuracy]
-            test_perf = [test_loss, test_accuracy]
-            print(standard_train_accuracy, test_accuracy)
-            logPerformance(writer, epoch, train_perf, test_perf)
-            printProgress(epoch, n_epochs)
-
-        print("Training complete.")
-
-    writer.close()
-    return model
-
-# ---------------------------------------------------------------------------- #
-
 def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
     """
     This function performs the train/test loop for different parameter settings
@@ -1278,7 +894,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
         model = OneStepRNN(const.TOTALMAXNUM+const.NCONTEXTS+1, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
-        
+
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 

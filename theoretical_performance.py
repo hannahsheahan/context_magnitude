@@ -1,4 +1,4 @@
-# Script for calculating optimal performance under two different policies post-lesion:
+# Script for calculating and plotting optimal performance under two different policies post-lesion:
 # 1. a local policy that uses the local context mean when responding whether number A>B
 # 2. a global policy that uses the global number mean across all contexts when responding whether A>B
 
@@ -17,6 +17,10 @@ import os
 # ---------------------------------------------------------------------------- #
 
 def simulate_theoretical_policies():
+    """This function calculates the theoretical performance of an agent,
+    when making relative magnitude decisions seeing just the current number and using either local or global context info.
+    - distribution of numbers in each context are the same as for the human and network relative magnitude task.
+    """
     # Define the ranges of primary targets displayed in each context
     localxranges = [[const.FULLR_LLIM,const.FULLR_ULIM], [const.LOWR_LLIM,const.LOWR_ULIM], [const.HIGHR_LLIM,const.HIGHR_ULIM]]
     globalxrange = [i for contextrange in localxranges for i in range(contextrange[0], contextrange[1]+1)]
@@ -45,10 +49,6 @@ def simulate_theoretical_policies():
             Nb = Na-1         # xA never equals xB
             P_a = 1/Na        # uniform distribution for sampling a from xA
 
-            #print('Range {}, x values:'.format(whichrange))
-            #print(xvalues)
-            #print('mean for policy evaluation: {}'.format(xmean))
-
             Pcorrect = 0
             for a in xvalues:
                 P_agreaterB = (a-xmin)/Nb
@@ -63,7 +63,6 @@ def simulate_theoretical_policies():
                 globalnumberdiffs[policy][whichrange].append(abs(a-globalmean))
                 perf[policy][whichrange].append(Pcorrect_a)
 
-
             print(('{:.2f}% correct for range {}, under policy '+policy).format(Pcorrect*100, whichrange))
             Ptotal += Pcorrect
 
@@ -76,25 +75,24 @@ def simulate_theoretical_policies():
 # ---------------------------------------------------------------------------- #
 
 def plot_theoretical_predictions(ax, numberdiffs, globalnumberdiffs, perf, whichpolicy):
-    # Now evaluate performance under each policy as a function of numerical each distance to mean
+    """ This function plots performance under each policy as a function of numerical each distance to context median (context distance).
+    - plots just the policy specied in 'whichpolicy' i.e. 0=global, 1=local. """
+
     localxranges = [[const.FULLR_LLIM,const.FULLR_ULIM], [const.LOWR_LLIM,const.LOWR_ULIM], [const.HIGHR_LLIM,const.HIGHR_ULIM]]
     linestyles = ['solid', 'dotted', 'dashed']
     handles = []
     policies = ['global', 'local']
     policy = policies[whichpolicy]
-    #for whichpolicy, policy in enumerate([ 'global', 'local']):
+
     for whichrange in range(len(localxranges)):
-
         context_perf, context_numberdiffs = anh.performanceMean(numberdiffs[policy][whichrange], perf[policy][whichrange])
-        #global_meanperf, global_uniquediffs = anh.performanceMean(globalnumberdiffs[whichpolicy, whichrange], perf[whichpolicy, whichrange])
-        #h = ax.scatter(context_numberdiffs, context_perf, color=const.CONTEXT_COLOURS[whichrange], linestyle=linestyles[whichrange])
         h = ax.plot(context_numberdiffs, context_perf, color=const.CONTEXT_COLOURS[whichrange])
-
         handles.append(h)
         ax.set_ylim([0.27, 1.03])
 
     return handles
 
+# ---------------------------------------------------------------------------- #
 
 if __name__ is '__main__':
     simulate_theoretical_policies()

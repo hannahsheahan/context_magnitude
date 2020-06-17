@@ -1,5 +1,5 @@
 """
-This is a selection of functions for plotting MDS projections of relative magnitude-trained networks.
+This is a selection of functions for plotting figures in the magnitude project.
 
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 14/12/2019
@@ -85,7 +85,6 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
 
 def shadeplot(ax, x_values, means, sems, colour='black'):
     """Plot mean+-sem shaded"""
-    #ax.plot(x_values, means, color=colourname, label=linelabel)
     ax.fill_between(x_values, means-sems, means+sems, color=colour, alpha=0.25, linewidth=0.0)
 
 # ---------------------------------------------------------------------------- #
@@ -187,16 +186,13 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                 # colour by numerosity
                 if k==0:   # difference labels
 
-                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(int(10+MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=diffcolours(dnorm(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i]))), s=20)
-                    #ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(int(MDS_dict["labels_judgeValues"][i]-MDS_dict["labels_refValues"][i])), color='black', size=4, horizontalalignment='center', verticalalignment='center')
                     if j==2:
                         if i == (MDS_act.shape[0])-1:
                             cbar = fig.colorbar(im, ticks=[0,1])
                             if labelNumerosity:
                                 cbar.ax.set_yticklabels(['-14','14'])
                 elif k==1:  # B values
-                    #ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_refValues"][i])-1), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_refValues"][i])-1)), s=20)
                     if j==2:
                         if i == (MDS_act.shape[0])-1:
@@ -204,7 +200,6 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                             if labelNumerosity:
                                 cbar.ax.set_yticklabels(['1','16'])
                 elif k==2:  # A values
-                    #im = ax[k,j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(int(MDS_dict["labels_judgeValues"][i])-1), edgecolors=const.CONTEXT_COLOURS[int(MDS_dict["labels_contexts"][i])-1])
                     im = ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=colours(norm(int(MDS_dict["labels_judgeValues"][i])-1)), s=20)
                     if j==2:
                         if i == (MDS_act.shape[0])-1:
@@ -242,48 +237,6 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSContexts(MDS_dict, args, labelNumerosity, whichTrialType='compare', saveFig=True):
-    """This is a just function to plot the MDS of activations and label the dots with the colour of the context."""
-
-    if whichTrialType=='filler':
-        MDS_dict = MDS_dict["filler_dict"]
-
-    labels_contexts = MDS_dict["labels_contexts"]
-
-    MDS_act = MDS_dict["MDS_activations"]
-    fig,ax = plt.subplots(1,3, figsize=(14,5))
-    colours = get_cmap(10, 'magma')
-    diffcolours = get_cmap(20, 'magma')
-    for j in range(3):  # 3 MDS dimensions
-
-        if j==0:
-            dimA = 0
-            dimB = 1
-            ax[j].set_xlabel('dim 1')
-            ax[j].set_ylabel('dim 2')
-        elif j==1:
-            dimA = 0
-            dimB = 2
-            ax[j].set_xlabel('dim 1')
-            ax[j].set_ylabel('dim 3')
-        elif j==2:
-            dimA = 1
-            dimB = 2
-            ax[j].set_xlabel('dim 2')
-            ax[j].set_ylabel('dim 3')
-
-        ax[j].set_title('context')
-        for i in range((MDS_act.shape[0])):
-            # colour by context
-            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=const.CONTEXT_COLOURS[int(labels_contexts[i])-1])
-
-        ax[j].axis('equal')
-        ax[j].set(xlim=(-3, 3), ylim=(-3, 3))
-
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_'), args, labelNumerosity, False, whichTrialType, saveFig)
-
-# ---------------------------------------------------------------------------- #
-
 def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8)):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
@@ -298,7 +251,6 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
         Ns = [16,11,11]
 
     fig,ax = plt.subplots(1,3, figsize=(18,5))
-    #colours = get_cmap(10, 'magma')
     rbg_contextcolours = [mplcol.to_rgba(i) for i in const.CONTEXT_COLOURS]
     white = (1.0, 1.0, 1.0, 1.0)
 
@@ -426,9 +378,7 @@ def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare',
             contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
             contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
 
-
     def init():
-
         points = [contextA, contextB, contextC] #if labelContext else [contextA]
 
         for i in range(len(points)):
@@ -547,6 +497,7 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
     """ This function will plot the latent state drift MDS projections
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
+     - currently unused.
     """
     fig = plt.figure()
     ax = mplot3d.Axes3D(fig)
@@ -583,46 +534,25 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
 # ---------------------------------------------------------------------------- #
 
 def plotOptimalReferencePerformance(ax, args):
-    # ***HRS these numbers need changing for the new longer number ranges
-    if args.which_context==0:
+    """This function plots the performance in each context of theoretical agents
+     making decisions using only the current number and knowledge of the local or global context median. """
 
-        # set height of bar
-        full_context_bars = [76.67, 76.67]
-        low_context_bars = [71.82, 77.27]
-        high_context_bars = [71.82, 77.27]
+    # set height of bar
+    full_context_bars = [76.67, 76.67] # global, local
+    low_context_bars = [71.82, 77.27]
+    high_context_bars = [71.82, 77.27]
 
-        # Set position of bar on X axis
-        barWidth = 0.25
-        r1 = np.arange(len(full_context_bars))
-        r2 = [x + barWidth+0.02 for x in r1]
-        r3 = [x + barWidth+0.02 for x in r2]
+    # Set position of bar on X axis
+    barWidth = 0.25
+    r1 = np.arange(len(full_context_bars))
+    r2 = [x + barWidth+0.02 for x in r1]
+    r3 = [x + barWidth+0.02 for x in r2]
 
-        # Make the plot
-        #h1 = plt.bar(r1, full_context_bars, color=const.CONTEXT_COLOURS[0], alpha=0.5,  width=barWidth, edgecolor='white', label='full context')
-        #h2 = plt.bar(r2, low_context_bars, color=const.CONTEXT_COLOURS[1], alpha=0.5, width=barWidth, edgecolor='white',  label='low context')
-        #h3 = plt.bar(r3, high_context_bars, color=const.CONTEXT_COLOURS[2], alpha=0.5, width=barWidth, edgecolor='white',  label='high context')
-
-        # Add xticks on the middle of the group bars
-        #plt.xlabel('Policy', fontweight='bold')
-        #plt.xticks([r + barWidth for r in range(len(full_context_bars))], ['global', 'local'])
-
-        for whichfig in range(2):
-            h1 = ax[whichfig].bar(0,low_context_bars[whichfig], color=const.CONTEXT_COLOURS[1], alpha=0.5 )
-            h2 = ax[whichfig].bar(1,high_context_bars[whichfig], color=const.CONTEXT_COLOURS[2], alpha=0.5 )
-            h3 = ax[whichfig].bar(2,full_context_bars[whichfig], color=const.CONTEXT_COLOURS[0], alpha=0.5 )
-
-
-        #globaldistpolicy_optimal = ax.axhline(y=76.5, linestyle=':', color='lightgreen')
-        #handles = [localpolicy_optimal, globalpolicy_optimal, globaldistpolicy_optimal]
-        handles = [h1, h2, h3]#localpolicy_optimal, globalpolicy_optimal]
-    else:
-        #oldbenchmark1 = ax.axhline(y=77.41, linestyle=':', color='grey')
-        #oldbenchmark2 = ax.axhline(y=72.58, linestyle=':', color='grey')
-        #oldbenchmark3 = ax.axhline(y=76.5, linestyle=':', color='grey')
-        #contextA_localpolicy = ax.axhline(y=76.67, color='gold')
-        #contextBC_localpolicy = ax.axhline(y=77.78, color='orangered')
-        #handles = [oldbenchmark1, oldbenchmark2, oldbenchmark3, contextA_localpolicy, contextBC_localpolicy]
-        handles = []
+    for whichfig in range(2):
+        h1 = ax[whichfig].bar(0,low_context_bars[whichfig], color=const.CONTEXT_COLOURS[1], alpha=0.5 )
+        h2 = ax[whichfig].bar(1,high_context_bars[whichfig], color=const.CONTEXT_COLOURS[2], alpha=0.5 )
+        h3 = ax[whichfig].bar(2,full_context_bars[whichfig], color=const.CONTEXT_COLOURS[0], alpha=0.5 )
+    handles = [h1, h2, h3]
 
     return handles
 
@@ -634,17 +564,14 @@ def compareLesionTests(args, device):
      which were trained with different frequencies of lesions in the training set.
      - this will now search for the lesion assessments for all the model instances that match the args
      - this should now plot a dot +- SEM over model instances at each dot to see how variable it is.
-       Note that there will be more variability in the lesioned cases just because when we lesion during
-       training we do so randomly with a frequency, which will be different every time.
     """
     plt.figure()
     fig, ax = plt.subplots(1,2)
     handles = plotOptimalReferencePerformance(ax, args)
     #frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
-    offsets = [0-.05,.2+0.02,.2+.25+0.04]
+    offsets = [0-.05,.2+0.02,.2+.25+0.04]  # for plotting
     overall_lesioned_tests = []
-    markershape = ['^','P']
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
@@ -730,7 +657,8 @@ def compareLesionTests(args, device):
 
 # ---------------------------------------------------------------------------- #
 
-def perfVdistContextMean(args, device):
+def perfVContextDistance(args, device):
+    """This function plots post-lesion performance as a function of context distance (distance between input and context median)."""
     frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
     overall_lesioned_tests = []
 
@@ -834,12 +762,8 @@ def perfVdistContextMean(args, device):
         ax[j].set_xticks([0,2,4,6,8])
         ax[j].set_xticks([0,2,4,6,8])
 
-    #ax[j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3, *handles),
-    #('full context','low context','high context','global policy model: full context', 'global policy model: low context', 'global policy model: high context',
-    #'local policy model: full context', 'local policy model: low context', 'local policy model: high context'))
     ax[j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3),('full context','low context','high context'))
     whichTrialType = 'compare'
     plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
-    #autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion_'), args, True, False, whichTrialType, True)
 
 # ---------------------------------------------------------------------------- #

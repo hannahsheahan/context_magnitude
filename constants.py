@@ -42,5 +42,5 @@ TRAININGRECORDS_DIRECTORY = 'trainingrecords/'
 
 
 # Figure colours
-CONTEXT_COLOURS = [[253/256, 176/256, 4/256], 'dodgerblue', 'orangered', 'black']  # 1-16, 1-11, 6-16 like fabrices colours
+CONTEXT_COLOURS = [[253/256, 176/256, 4/256], 'dodgerblue', 'orangered', 'black']  # low, high, full
 MODEL_COLOURS = ['darkkhaki', 'olivedrab','darkolivegreen']  # change to show both local and global on same plot easily and keep main colours for data
