@@ -16,7 +16,6 @@ import define_dataset as dset
 import plotter as mplt
 import analysis_helpers as anh
 import constants as const
-import lines_model
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -167,7 +166,7 @@ def generatePlots(MDS_dict, args):
     saveFig = True
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
     labelNumerosity = True    # numerosity vs outcome labels
-    trialTypes = ['compare', 'filler']
+    trialTypes = ['compare']  # ['compare', 'filler'] if you want to also see the activations for filler numbers
 
     for whichTrialType in trialTypes:
 
@@ -234,12 +233,12 @@ def averageActivationsAcrossModels(args):
     # Perform MDS on averaged activations for the compare trial data
     pairwise_data = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
     np.fill_diagonal(np.asarray(pairwise_data), 0)
-    MDS_act, evals = lines_model.cmdscale(pairwise_data)
+    MDS_act, evals = anh.cmdscale(pairwise_data)
 
     # Perform MDS on averaged activations for the filler trial data
     pairwise_data = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
     np.fill_diagonal(np.asarray(pairwise_data), 0)
-    MDS_act_filler, evals = lines_model.cmdscale(pairwise_data)
+    MDS_act_filler, evals = anh.cmdscale(pairwise_data)
 
     MDS_meandict["MDS_slactivations"] = MDS_act
     MDS_meandict["filler_dict"]["MDS_slactivations"] = MDS_act_filler
@@ -255,7 +254,7 @@ if __name__ == '__main__':
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
     args.all_fullrange = False    # False = blocked; True = interleaved
-    args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
+    args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
 
     #args.model_id = 7388  # an example single model case
 
@@ -269,12 +268,12 @@ if __name__ == '__main__':
     #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #MDS_dict, args = averageActivationsAcrossModels(args)
-    #generatePlots(MDS_dict, args)
+    MDS_dict, args = averageActivationsAcrossModels(args)
+    generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
-    mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance
-    #mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    #mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
+    #mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.getSSEForContextModels(args, device)

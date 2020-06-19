@@ -123,7 +123,7 @@ def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', sav
 
         D = np.concatenate((Dlow, Dhigh, Dfull), axis=0)
 
-        np.save('meanactivations_trlf'+str(args.train_lesion_freq), D)
+        #np.save('meanactivations_trlf'+str(args.train_lesion_freq), D)
         D = pairwise_distances(D, metric='correlation')
         differenceCodeText = ''
 
@@ -238,7 +238,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
 
 # ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8)):
+def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8), gradedcolour=False):
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -312,27 +312,32 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
             ax[j].plot(rotated_act[contextB, dimA], rotated_act[contextB, dimB], color=const.CONTEXT_COLOURS[1])
             ax[j].plot(rotated_act[contextC, dimA], rotated_act[contextC, dimB], color=const.CONTEXT_COLOURS[2])
 
-        markercount=0
-        lastc = -1
-        for i in range((MDS_act.shape[0])):
+        if gradedcolour:
+            markercount=0
+            lastc = -1
+            for i in range((MDS_act.shape[0])):
 
-            # create colour gradient within each context to signal numerosity
-            c = int(contextlabel[i])
-            if c!=lastc:
-                markercount=0
-            lastc = int(contextlabel[i])
-            graded_contextcolours = np.zeros((4, Ns[c]))
-            for p in range(4):
-                graded_contextcolours[p] = np.linspace(white[p],rbg_contextcolours[c][p],Ns[c])
-            gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
+                # create colour gradient within each context to signal numerosity
+                c = int(contextlabel[i])
+                if c!=lastc:
+                    markercount=0
+                lastc = int(contextlabel[i])
+                graded_contextcolours = np.zeros((4, Ns[c]))
+                for p in range(4):
+                    graded_contextcolours[p] = np.linspace(white[p],rbg_contextcolours[c][p],Ns[c])
+                gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
 
-            # colour by context
-            ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
-            markercount +=1
-            # label numerosity in white inside the marker
-            firstincontext = [0,15,16,16+10,16+11, 16+21]
-            if i in firstincontext:
-                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=const.CONTEXT_COLOURS[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
+                # colour by context
+                ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
+                markercount +=1
+                # label numerosity in white inside the marker
+                firstincontext = [0,15,16,16+10,16+11, 16+21]
+                if i in firstincontext:
+                    ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=const.CONTEXT_COLOURS[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
+        else:
+            for i in range((MDS_act.shape[0])):
+                ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=const.CONTEXT_COLOURS[int(contextlabel[i])], edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
+                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color='white', size=6.5, horizontalalignment='center', verticalalignment='center')
 
         ax[j].axis('equal')
 
@@ -666,8 +671,21 @@ def compareLesionTests(args, device):
 
 # ---------------------------------------------------------------------------- #
 
+def get_summarystats(data, axis, method='std'):
+    """Calculate mean and std (or sem) along specified axis"""
+    mean = np.mean(data, axis=axis)
+    if method=='std':
+        err = np.std(data, axis=axis)
+    elif method=='sem':
+        err = np.std(data, axis=axis) / np.sqrt(data.shape[axis])
+    return mean, err
+
+# ---------------------------------------------------------------------------- #
+
 def perfVContextDistance(args, device):
-    """This function plots post-lesion performance as a function of context distance (distance between input and context median)."""
+    """This function plots post-lesion performance as a function of context distance (distance between input and context median).
+    - ugly but functional. This ugly list (rather than np matrix) method is because the number of context distance elements in each context is different."""
+
     #frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
     frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     overall_lesioned_tests = []
@@ -688,20 +706,20 @@ def perfVContextDistance(args, device):
     # generate theoretical predictions under local and global context policies
     numberdiffs, globalnumberdiffs, perf = theory.simulate_theoretical_policies()
 
+    print('Retrieving lesion data for each model meeting criteria...')
     fig, ax = plt.subplots(1,len(frequencylist), figsize=(14,3.5))
-
     for j,train_lesion_frequency in enumerate(frequencylist):
 
         ax[j].set_ylabel(r'p(correct | $\epsilon_{train}$ =' + str(train_lesion_frequency)+')')
-
-        context1_numberdiffs, context2_numberdiffs, context3_numberdiffs = [[] for i in range(3)]
         args.train_lesion_freq = train_lesion_frequency
         allmodels = anh.getModelNames(args)
+
+        # allocate some space
         data = [[] for i in range(len(allmodels))]
         global_meanperf = []
-        context1_perf, context2_perf, context3_perf = [[] for i in range(3)]
         global_uniquediffs = []
-        context1_numberdiffs, context2_numberdiffs, context3_numberdiffs = [[] for i in range(3)]
+        full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
+        full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
 
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
@@ -716,58 +734,52 @@ def perfVContextDistance(args, device):
             gp, cp, gd, cd = anh.lesionperfbyNumerosity(data[ind])
             global_meanperf.append(gp)
             global_uniquediffs.append(gd)
-            context1_perf.append(cp[0])
-            context2_perf.append(cp[1])
-            context3_perf.append(cp[2])
-            context1_numberdiffs.append(cd[0])
-            context2_numberdiffs.append(cd[1])
-            context3_numberdiffs.append(cd[2])
+            full_context_perf.append(cp[0])
+            low_context_perf.append(cp[1])
+            high_context_perf.append(cp[2])
+            full_context_numberdiffs.append(cd[0])
+            low_context_numberdiffs.append(cd[1])
+            high_context_numberdiffs.append(cd[2])
 
         # mean over models
         global_meanperf = np.array(global_meanperf)
-        context1_perf = np.array(context1_perf)
-        context2_perf = np.array(context2_perf)
-        context3_perf = np.array(context3_perf)
+        full_context_perf = np.array(full_context_perf)
+        low_context_perf = np.array(low_context_perf)
+        high_context_perf = np.array(high_context_perf)
         global_uniquediffs = np.array(global_uniquediffs)
-        context1_numberdiffs = np.array(context1_numberdiffs)
-        context2_numberdiffs = np.array(context2_numberdiffs)
-        context3_numberdiffs = np.array(context3_numberdiffs)
+        full_context_numberdiffs = np.array(full_context_numberdiffs)
+        low_context_numberdiffs = np.array(low_context_numberdiffs)
+        high_context_numberdiffs = np.array(high_context_numberdiffs)
 
-        global_meanperf_mean = np.mean(global_meanperf, axis=0)
-        global_meanperf_sem = np.std(global_meanperf, axis=0) #/ np.sqrt(global_meanperf.shape[0])
+        global_meanperf_mean, global_meanperf_sem = get_summarystats(global_meanperf, 0)
+        full_context_perf_mean, full_context_perf_sem = get_summarystats(full_context_perf, 0)
+        low_context_perf_mean, low_context_perf_sem = get_summarystats(low_context_perf, 0)
+        high_context_perf_mean, high_context_perf_sem = get_summarystats(high_context_perf, 0)
+
         global_uniquediffs = np.mean(global_uniquediffs, axis=0)
-
-        context1_perf_mean = np.mean(context1_perf, axis=0)
-        context1_perf_sem = np.std(context1_perf, axis=0) #/ np.sqrt(context1_perf.shape[0])
-        context2_perf_mean = np.mean(context2_perf, axis=0)
-        context2_perf_sem = np.std(context2_perf, axis=0) #/ np.sqrt(context2_perf.shape[0])
-        context3_perf_mean = np.mean(context3_perf, axis=0)
-        context3_perf_sem = np.std(context3_perf, axis=0) #/ np.sqrt(context3_perf.shape[0])
-
-        context1_numberdiffs = np.mean(context1_numberdiffs, axis=0)
-        context2_numberdiffs = np.mean(context2_numberdiffs, axis=0)
-        context3_numberdiffs = np.mean(context3_numberdiffs, axis=0)
+        full_context_numberdiffs = np.mean(full_context_numberdiffs, axis=0)
+        low_context_numberdiffs = np.mean(low_context_numberdiffs, axis=0)
+        high_context_numberdiffs = np.mean(high_context_numberdiffs, axis=0)
 
         # plot model predictions under local or global predictions
         handles = theory.plot_theoretical_predictions(ax[j], numberdiffs, globalnumberdiffs, perf, j)
-        handles = theory.plot_theoretical_predictions(ax[j], numberdiffs, globalnumberdiffs, perf, j)
-
-        # plot RNN data
-        shadeplot(ax[j],context1_numberdiffs, context1_perf_mean, context1_perf_sem, 'gold') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
-        shadeplot(ax[j],context2_numberdiffs, context2_perf_mean, context2_perf_sem, 'dodgerblue') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
-        shadeplot(ax[j],context3_numberdiffs, context3_perf_mean, context3_perf_sem, 'orangered') # this is captured already by the separation into contexts and looks jiggly because of different context values on x-axis
-        ax[j].set_xlabel('context distance')
 
         # context-specific performance i.e. how did performance change with dist. to mean in each context
-        local_contextmean_context1 = ax[j].errorbar(context1_numberdiffs, context1_perf_mean, context1_perf_sem, color=const.CONTEXT_COLOURS[0], fmt='o', markersize=5, markeredgecolor='black', ecolor='black')
-        local_contextmean_context2 = ax[j].errorbar(context2_numberdiffs, context2_perf_mean, context2_perf_sem, color=const.CONTEXT_COLOURS[1], fmt='o', markersize=5, markeredgecolor='black', ecolor='black')
-        local_contextmean_context3 = ax[j].errorbar(context3_numberdiffs, context3_perf_mean, context3_perf_sem, color=const.CONTEXT_COLOURS[2], fmt='o', markersize=5, markeredgecolor='black', ecolor='black')
+        xnumbers =  [full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs]
+        means = [full_context_perf_mean, low_context_perf_mean, high_context_perf_mean]
+        stds = [full_context_perf_sem, low_context_perf_sem, high_context_perf_sem]
 
+        for i in range(len(xnumbers)):
+            shadeplot(ax[j], xnumbers[i], means[i], stds[i], const.CONTEXT_COLOURS[i])
+            h = ax[j].errorbar(xnumbers[i], means[i], stds[i], color=const.CONTEXT_COLOURS[i], fmt='o', markersize=5, markeredgecolor='black', ecolor='black')
+            handles.append(h)
+
+        ax[j].set_xlabel('context distance')
         ax[j].set_xlim([-0.5, 8])
         ax[j].set_ylim([0.47, 1.03])
         ax[j].set_xticks([0,2,4,6,8])
 
-    ax[j].legend((local_contextmean_context1, local_contextmean_context2, local_contextmean_context3),('full context','low context','high context'))
+    ax[j].legend((handles[0], handles[-1]),('prediction','RNN'))
     whichTrialType = 'compare'
     plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
 
