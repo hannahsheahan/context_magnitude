@@ -13,7 +13,7 @@
  # my project-specific namespaces
 import magnitude_network as mnet
 import define_dataset as dset
-import MDSplotter as MDSplt
+import plotter as mplt
 import analysis_helpers as anh
 import constants as const
 import lines_model
@@ -61,7 +61,7 @@ def trainAndSaveANetwork(args):
     if args.create_new_dataset:
         trainset, testset = dset.createSeparateInputData(datasetname, args)
     else:
-        trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
+        trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
 
     # define and train a neural network model, log performance and output trained model
     if args.network_style == 'recurrent':
@@ -98,7 +98,7 @@ def analyseNetwork(args):
     if not preanalysed:
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
-        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(args.fileloc, datasetname)
+        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
 
         # pass each input through the model and determine the hidden unit activations
         setnames = ['test', 'crossval']
@@ -147,8 +147,8 @@ def analyseNetwork(args):
                     MDS_dict["filler_dict"] = dict
 
             # save our activation RDMs for easy access
-            np.save('network_analysis/RDMs/RDM_'+set+'_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
-            np.save('network_analysis/RDMs/RDM_'+set+'_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
+            np.save(const.RDM_DIRECTORY + 'RDM_'+set+'_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
+            np.save(const.RDM_DIRECTORY + 'RDM_'+set+'_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
             if set=='test':
                 MDS_dict['testset_assessment'] = MDS_dict
             elif set=='crossval':
@@ -172,28 +172,28 @@ def generatePlots(MDS_dict, args):
     for whichTrialType in trialTypes:
 
         # Label activations by mean number A numerosity
-        MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        mplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
         axislimits = (-0.8, 0.8)
-        MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
+        mplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
 
-        #MDSplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
+        #mplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
         #plot_diff_code = True
-        #MDSplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
-        #MDSplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
+        #mplt.activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        #mplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
 
         # Plot checks on the training data sequencing
         #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
-        #MDSplt.viewTrainingSequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
-        #MDSplt.instanceCounter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
+        #mplt.viewTrainingSequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
+        #mplt.instanceCounter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
 
         # MDS with output labels (true/false labels)
         #labelNumerosity = False
-        #MDSplt.plot3MDS(MDS_dict, args, labelNumerosity, plot_diff_code)
+        #mplt.plot3MDS(MDS_dict, args, labelNumerosity, plot_diff_code)
 
         # 3D Animations
-        #MDSplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
+        #mplt.animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
 
 # ---------------------------------------------------------------------------- #
 def averageActivationsAcrossModels(args):
@@ -255,7 +255,7 @@ if __name__ == '__main__':
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
     args.all_fullrange = False    # False = blocked; True = interleaved
-    args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
+    args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
 
     #args.model_id = 7388  # an example single model case
 
@@ -266,15 +266,15 @@ if __name__ == '__main__':
     #MDS_dict = analyseNetwork(args)
 
     # Check the average final performance for trained models matching args
-    anh.averagePerformanceAcrossModels(args)
+    #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    MDS_dict, args = averageActivationsAcrossModels(args)
-    generatePlots(MDS_dict, args)
+    #MDS_dict, args = averageActivationsAcrossModels(args)
+    #generatePlots(MDS_dict, args)
 
     # Plot the lesion test performance
-    #MDSplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance
-    #MDSplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
+    mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance
+    #mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.getSSEForContextModels(args, device)

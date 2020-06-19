@@ -21,6 +21,7 @@ def simulate_theoretical_policies():
     when making relative magnitude decisions seeing just the current number and using either local or global context info.
     - distribution of numbers in each context are the same as for the human and network relative magnitude task.
     """
+    print('Simulating theoretical agent performance...')
     # Define the ranges of primary targets displayed in each context
     localxranges = [[const.FULLR_LLIM,const.FULLR_ULIM], [const.LOWR_LLIM,const.LOWR_ULIM], [const.HIGHR_LLIM,const.HIGHR_ULIM]]
     globalxrange = [i for contextrange in localxranges for i in range(contextrange[0], contextrange[1]+1)]
@@ -81,7 +82,7 @@ def plot_theoretical_predictions(ax, numberdiffs, globalnumberdiffs, perf, which
     localxranges = [[const.FULLR_LLIM,const.FULLR_ULIM], [const.LOWR_LLIM,const.LOWR_ULIM], [const.HIGHR_LLIM,const.HIGHR_ULIM]]
     linestyles = ['solid', 'dotted', 'dashed']
     handles = []
-    policies = ['global', 'local']
+    policies = ['global', 'local', 'local', 'local', 'local']  # corresponds to same plots as each lesion frequency: 0.0, 0.1, 0.2, 0.3, 0.4
     policy = policies[whichpolicy]
 
     for whichrange in range(len(localxranges)):

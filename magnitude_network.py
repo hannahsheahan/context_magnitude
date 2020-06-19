@@ -12,7 +12,7 @@ Issues: N/A
 import define_dataset as dset
 import matplotlib.pyplot as plt
 import constants as const
-import MDSplotter as MDSplt
+import plotter as mplt
 import numpy as np
 import copy
 import sys
@@ -90,7 +90,7 @@ def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     plt.title("Gradient flow, update #{}".format(batch_number))
 
     # save figure of gradient flow (this will take ages if you do it every loop)
-    #MDSplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
+    #mplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
 
@@ -741,7 +741,6 @@ def defineHyperparams():
         parser.add_argument('--new-dataset', dest='create_new_dataset', action='store_true', help='create a new dataset for this condition? (default: False)')   # re-generate the random train/test dataset each time?
         parser.add_argument('--reuse-dataset', dest='create_new_dataset', action='store_false', help='reuse the existing dataset for this condition? (default: True)')
         parser.add_argument('--remove-fillers', dest='include_fillers', action='store_false', default=True, help='remove fillers from the dataset? (default: False)')     # True: task is like Fabrice's with filler trials; False: solely compare trials
-        parser.add_argument('--fileloc', default="datasets/", help='folder location for storing datasets (default: "datasets/")')
         parser.add_argument('--which_context', type=int, default=0, help='if we want to train on a single context range only: 0=all contexts, 1=full only, 2=low only, 3=high only (default: 0)')
         parser.add_argument('--interleave', dest='all_fullrange', action='store_true', help='interleave training (default: False)')
         parser.add_argument('--blockrange', dest='all_fullrange', action='store_false', help='block training by contextual number range (default: True)')
@@ -827,7 +826,7 @@ def setupTestParameters(args, device):
     datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
 
     # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.loadInputData(args.fileloc, datasetname)
+    trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
     # load our trained model
@@ -860,12 +859,12 @@ def getDatasetName(args):
         whichcontexttext = '_highrange_6-16_only'
 
     datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len) + '_id'+ str(args.model_id)
-    analysis_name = 'network_analysis/'+'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
+    analysis_name = const.NETANALYIS_DIRECTORY +'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
     trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
     if args.network_style=='recurrent':
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+'.pth'
+        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+'.pth'
     else:
-        trained_modelname = 'models/'+networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+str_args+'.pth'
+        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+str_args+'.pth'
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
@@ -892,7 +891,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
 
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
-        model = OneStepRNN(const.TOTALMAXNUM+const.NCONTEXTS+1, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
+        model = OneStepRNN(const.TOTALMAXNUM + const.NCONTEXTS + const.NTYPEBITS, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
 
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -905,7 +904,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
         now = datetime.now()
         date = now.strftime("_%d-%m-%y_%H-%M-%S")
         comment = "_batch_size-{}_lr-{}_epochs-{}_wdecay-{}".format(args.batch_size, args.lr, args.epochs, args.weight_decay)
-        writer = SummaryWriter(log_dir='results/runs/' + trainingrecord_name + args.modeltype + date + comment)
+        writer = SummaryWriter(log_dir=const.TB_LOG_DIRECTORY + trainingrecord_name + args.modeltype + date + comment)
         print("Open tensorboard in another shell to monitor network training (hannahsheahan$  tensorboard --logdir=runs)")
 
         # Train/test loop
@@ -947,7 +946,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
         record = {"trainingPerformance":trainingPerformance, "testPerformance":testPerformance, "args":vars(args) }
         randnum = str(random.randint(0,10000))
         dat = json.dumps(record)
-        f = open("trainingrecords/"+randnum + trainingrecord_name+".json","w")
+        f = open(const.TRAININGRECORDS_DIRECTORY+randnum + trainingrecord_name+".json","w")
         f.write(dat)
         f.close()
 

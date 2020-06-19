@@ -1,4 +1,4 @@
-# Miscellaneous analysis functions to go in here (some transferred from MDSplotter.py)
+# Miscellaneous analysis functions to go in here (some transferred from plotter.py)
 # Author: Hannah Sheahan
 # Date: 08/04/2020
 # Issues: N/A
@@ -315,7 +315,7 @@ def getSSEForContextModels(args, device):
     for ind, m in enumerate(allmodels):
         args.model_id = getIdfromName(m)
         testParams = mnet.setupTestParameters(args, device)
-        basefilename = 'network_analysis/lesion_tests/lesiontests'+m[:-4]
+        basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
 
         # perform or load the lesion tests
         lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
