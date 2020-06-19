@@ -25,7 +25,6 @@ import copy
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
 from datetime import datetime
 
 # ---------------------------------------------------------------------------- #
@@ -181,7 +180,7 @@ def createSeparateInputData(filename, args):
     - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
     - BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len <= block length
-    - messy but functional. To be tidied.
+    - messy but functional. To be modularised.
 
     """
     print('Generating dataset...')
@@ -433,7 +432,7 @@ def createSeparateInputData(filename, args):
     testset = testsets[0]
     crossvalset = testsets[1]
     dat = {"trainset":trainset, "testset":testset, "crossval_testset":crossvalset}
-    np.save(args.fileloc+filename+'.npy', dat)
+    np.save(const.DATASET_DIRECTORY+filename+'.npy', dat)
 
     # turn out datasets into pytorch Datasets
     trainset = createDataset(trainset)

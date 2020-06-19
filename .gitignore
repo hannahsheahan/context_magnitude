@@ -119,3 +119,4 @@ processed_data/
 *.npy
 results/
 datasets/
+miscellaneous/

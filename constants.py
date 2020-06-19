@@ -4,9 +4,23 @@
 
 import numpy as np
 
+# Save/load directories
+DATASET_DIRECTORY = 'datasets/'
+MODEL_DIRECTORY = 'models/'
+FIGURE_DIRECTORY = 'figures/'
+ANIMATION_DIRECTORY = 'animations/'
+TRAININGRECORDS_DIRECTORY = 'trainingrecords/'
+TB_LOG_DIRECTORY = 'results/runs/'                        # tensorboard records
+NETANALYIS_DIRECTORY = 'network_analysis/'
+LESIONS_DIRECTORY = 'network_analysis/lesion_tests/'
+RDM_DIRECTORY = 'network_analysis/RDMs/'
+PARAMETER_DIRECTORY = 'linesmodel_parameters/'
+
 # Total maximum numbers for one-hot coding
 TOTALMAXNUM = 16    # max numerosity
 NCONTEXTS = 3       # max number of contexts for one-hot coding
+NTYPEBITS = 1       # just need one input bit to flag whether current trial is 'compare' or 'filler'
+
 
 # define upper and lower limits for each # range)
 FULLR_LLIM = 1      # full # range, lower limit
@@ -34,12 +48,6 @@ CONTEXT_FULL_MEAN = np.mean(range(FULLR_LLIM, FULLR_ULIM+1))  # 8.5
 CONTEXT_LOW_MEAN = np.mean(range(LOWR_LLIM, LOWR_ULIM+1))     # 6
 CONTEXT_HIGH_MEAN = np.mean(range(HIGHR_LLIM, HIGHR_ULIM+1))  # 11
 GLOBAL_MEAN = 8.5 #np.mean([list(range(FULLR_LLIM, FULLR_ULIM+1)), list(range(LOWR_LLIM, LOWR_ULIM+1)), list(range(HIGHR_LLIM, HIGHR_ULIM+1))])
-
-# Save directories
-FIGURE_DIRECTORY = 'figures/'
-PARAMETER_DIRECTORY = 'linesmodel_parameters/'
-TRAININGRECORDS_DIRECTORY = 'trainingrecords/'
-
 
 # Figure colours
 CONTEXT_COLOURS = [[253/256, 176/256, 4/256], 'dodgerblue', 'orangered', 'black']  # low, high, full
