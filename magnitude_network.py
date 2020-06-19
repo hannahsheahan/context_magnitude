@@ -344,6 +344,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                         noise = torch.from_numpy(np.reshape(np.random.normal(0, model.hidden_noise, hidden.shape[0]*hidden.shape[1]), (hidden.shape)))
                         hidden.add_(noise)
                         output, hidden = model(tmpinputs[trial], hidden)
+                        h0activations, h1activations, _ = model.get_activations(tmpinputs[trial], hidden)
 
                         # assess aggregate performance on whole sequence (including all lesions)
                         if trialtype[:,trial]==1:
@@ -353,13 +354,15 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                             # once we get to the assessment trial, assess performance
                             if trial==assess_idx:
                                 lesionperf = answerCorrect(output, labels[trial])
+                                post_lesion_activations = h1activations
+                                print('this happens')
 
                     localmodel_perf = getLocalModelResponse(assess_number, context, labels[trial])   # correct or incorrect
                     globalmodel_perf = getGlobalModelResponse(assess_number, context, labels[trial]) # correct or incorrect
 
                     mydict = {"assess_number":assess_number, "lesion_number":lesion_number, "lesion_perf":lesionperf, "overall_perf":overallperf,\
                      "desired_lesionF":lesionFrequency, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials,\
-                     "localmodel_perf":localmodel_perf, "globalmodel_perf":globalmodel_perf }
+                     "localmodel_perf":localmodel_perf, "globalmodel_perf":globalmodel_perf, "post_lesion_activations":post_lesion_activations }
                     sequenceAssessment.append(mydict)
                     aggregateLesionPerf += lesionperf
                     aggregatePerf += overallperf

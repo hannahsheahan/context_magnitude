@@ -119,17 +119,18 @@ def analyseNetwork(args):
                 # do MDS on the activations for the test set
                 print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
                 tic = time.time()
-                randseed = 3 # so that we get the same MDS each time
 
-                embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
                 D = pairwise_distances(activations, metric='correlation') # using correlation distance
-                MDS_activations = embedding.fit_transform(D)
-                sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_activations, _ = anh.cmdscale(D)
+
                 D = pairwise_distances(sl_activations, metric='correlation') # using correlation distance
-                MDS_slactivations = sl_embedding.fit_transform(D)
-                diff_sl_embedding = MDS(n_components=3, random_state=randseed, dissimilarity='precomputed')
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_slactivations, _ = anh.cmdscale(D)
+
                 D = pairwise_distances(diff_sl_activations, metric='correlation') # using correlation distance
-                MDS_diff_slactivations = diff_sl_embedding.fit_transform(D)
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_diff_slactivations, _ = anh.cmdscale(D)
 
                 toc = time.time()
                 print('MDS fitting on trial types {} completed, took (s): {:.2f}'.format(whichTrialType, toc-tic))
@@ -268,12 +269,12 @@ if __name__ == '__main__':
     #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    MDS_dict, args = averageActivationsAcrossModels(args)
+    #MDS_dict, args = averageActivationsAcrossModels(args)
     generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
-    mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
-    mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
+    #mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
+    #mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.getSSEForContextModels(args, device)
