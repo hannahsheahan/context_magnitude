@@ -537,7 +537,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
     activations = np.empty((len(uniqueind), hdim))
     temporal_context = np.zeros((trainsize,sequenceLength))            # for tracking the evolution of context in the training set
     temporal_trialtypes = np.zeros((trainsize,sequenceLength))
-    temporal_activation_drift = np.zeros((trainsize, rdim))
+    temporal_activation_drift = np.zeros((trainsize, sequenceLength, rdim))
 
     #  Tally activations for each unique context/input instance, then divide by the count (i.e. take the mean across instances)
     aggregate_activations = np.zeros((len(uniqueind), hdim))  # for adding each instance of activations to
@@ -590,7 +590,8 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
-                temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextsequence[:,i])[0]
+
+                temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextinputsequence[:,i][0])
                 contextin = contextinputsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
                     contextinput = torch.full_like(contextin, 0)
@@ -608,6 +609,8 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
                 if item_idx==(sequenceLength-2):  # extract the hidden state just before the last input in the sequence is presented
                     latentstate = h0activations.detach()
+
+                temporal_activation_drift[batch_idx, item_idx,:] = h0activations.detach()   # Note: not currently used
 
                 context = contextsequence[:,item_idx]
 
@@ -652,7 +655,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
                         aggregate_activations[index] += activations[index]
                         counter[index] += 1    # captures how many instances of each unique input there are in the training set
 
-            temporal_activation_drift[batch_idx, :] = latentstate   # Note: not currently used.
+            #temporal_activation_drift[batch_idx, :] = latentstate   # Note: not currently used. This is latent state at end of a block.
 
         # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
         for i in range(counter.shape[0]):

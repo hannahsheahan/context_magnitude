@@ -784,3 +784,64 @@ def perfVContextDistance(args, device):
     plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
 
 # ---------------------------------------------------------------------------- #
+
+def visualise_recurrent_state(MDS_dict):
+    """This function does MDS on a subset of test trials to see if the latext recurrent state in the network separates by context.
+    - it looks highly structured, but not particularly context separated.
+    - the MDS takes ages to compute since over many samples.
+    - not currently used for anything.
+    """
+
+    states = np.reshape(MDS_dict["drift"]["temporal_activation_drift"], (MDS_dict["drift"]["temporal_activation_drift"].shape[0]*MDS_dict["drift"]["temporal_activation_drift"].shape[1], MDS_dict["drift"]["temporal_activation_drift"].shape[2]))
+    context = np.reshape(MDS_dict["drift"]["temporal_context"], (MDS_dict["drift"]["temporal_context"].shape[0]*MDS_dict["drift"]["temporal_context"].shape[1], ))
+
+    plt.figure()
+    ax = plt.gca()
+    plt.plot(context)
+    plt.xlabel('trials (time)')
+    plt.ylabel('context')
+    ax.set_yticks([1,2,3])
+    ax.set_yticklabels(['full','low','high'])
+
+    # select a subset of trials to make MDS compute faster
+    mini_context = context[10000:16700]
+    mini_states = states[10000:16700, :]
+
+    plt.figure()
+    ax = plt.gca()
+    plt.plot(mini_context)
+    plt.xlabel('trials (time)')
+    plt.ylabel('context')
+    ax.set_yticks([1,2,3])
+    ax.set_yticklabels(['full','low','high'])
+
+    # Do MDS on the latent states
+    pairwise_data = pairwise_distances(mini_states, metric='correlation')
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    MDS_act, evals = anh.cmdscale(pairwise_data)
+
+    MDS = MDS_act[:,:3]
+    fig,ax = plt.subplots(1,3, figsize=(18,5))
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        for i in range((MDS.shape[0])):
+            ax[j].scatter(MDS[i, dimA], MDS[i, dimB], color=const.CONTEXT_COLOURS[int(mini_context[i])-1], edgecolor=const.CONTEXT_COLOURS[int(mini_context[i])-1], s=8, linewidths=1)
+        ax[j].axis('equal')
+    plt.savefig('figures/drift_state.pdf',bbox_inches='tight')
+
+# ---------------------------------------------------------------------------- #
