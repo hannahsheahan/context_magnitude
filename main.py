@@ -272,8 +272,8 @@ if __name__ == '__main__':
     generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
-    #mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
-    #mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
+    mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
+    mplt.compareLesionTests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.getSSEForContextModels(args, device)
