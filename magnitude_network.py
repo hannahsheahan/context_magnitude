@@ -753,6 +753,7 @@ def defineHyperparams():
         parser.add_argument('--reset-state', dest='retain_hidden_state', action='store_false', help='reset the hidden state between sequences (default: False)')
         parser.add_argument('--retain-state', dest='retain_hidden_state', action='store_true', help='retain the hidden state between sequences (default: True)')
         parser.add_argument('--label-context', default="true", help='label the context explicitly in the input stream? (default: "true", other options: "constant (1)", "random (1-3)")')
+        parser.add_argument('--block_int_ttsplit', default="false", help='test on a different blocking/interleaving structure than training? (default: "false", train/test on same e.g. train block, test block")')
 
         # network training hyperparameters
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
@@ -849,6 +850,11 @@ def getDatasetName(args):
     """Return the (unique) name of the dataset, trained model, analysis and training record, based on args."""
 
     # convert the hyperparameter settings into a string ID
+    if args.block_int_ttsplit == False:
+        ttsplit = ''
+    else:
+        ttsplit = '_traintestblockintsplit'
+    
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id'+ str(args.model_id)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
@@ -865,7 +871,7 @@ def getDatasetName(args):
         whichcontexttext = '_highrange_6-16_only'
 
     datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len) + '_id'+ str(args.model_id)
-    analysis_name = const.NETANALYIS_DIRECTORY +'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
+    analysis_name = const.NETANALYIS_DIRECTORY +'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args + ttsplit
     trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
     if args.network_style=='recurrent':
         trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+'.pth'

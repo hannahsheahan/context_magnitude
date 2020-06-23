@@ -52,7 +52,12 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id' + str(args.model_id)
+    if args.block_int_ttsplit == False:
+        ttsplit = ''
+    else:
+        ttsplit = '_traintestblockintsplit'
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' +\
+                str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id' + str(args.model_id) + ttsplit
 
     # automatic save file title details
     if args.which_context==0:

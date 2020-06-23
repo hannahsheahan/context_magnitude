@@ -99,6 +99,21 @@ def analyseNetwork(args):
         trained_model = torch.load(trained_modelname)
         trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
 
+        if args.block_int_ttsplit:
+            paired_modelid = anh.getPairedTestModelID(args)
+
+            # test on a different (interleaved) dataset  (HRS for now hack to check something)
+            train_modelid = args.model_id
+            args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
+            args.model_id = paired_modelid
+            datasetname, _, _, _ = mnet.getDatasetName(args)
+            _, testset, crossvalset, _, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+
+            # revert the original model parameters for naming the analyses based on the training conditions
+            args.model_id = train_modelid
+            args.all_fullrange = not args.all_fullrange   # flip to return to original train block/interleaving
+
+
         # pass each input through the model and determine the hidden unit activations
         setnames = ['test', 'crossval']
         for set in setnames:
@@ -212,6 +227,11 @@ def averageActivationsAcrossModels(args):
     filler_contextlabel = [[] for i in range(len(allmodels))]
     filler_numberlabel = [[] for i in range(len(allmodels))]
 
+    if args.block_int_ttsplit:
+        print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
+    else:
+        print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
+
     for ind, m in enumerate(allmodels):
         args.model_id = anh.getIdfromName(m)
         print('Loading model: {}'.format(args.model_id))
@@ -254,10 +274,9 @@ if __name__ == '__main__':
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
-    args.all_fullrange = False    # False = blocked; True = interleaved
+    args.all_fullrange = True    # False = blocked; True = interleaved
     args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
-
-    #args.model_id = 7388  # an example single model case
+    args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
 
     # Train a network from scratch and save it
     #trainAndSaveANetwork(args)
@@ -269,7 +288,7 @@ if __name__ == '__main__':
     #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #MDS_dict, args = averageActivationsAcrossModels(args)
+    MDS_dict, args = averageActivationsAcrossModels(args)
     generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
