@@ -13,11 +13,13 @@ import scipy
 import os
 import json
 import matplotlib.pyplot as plt
+import copy
 
 # ---------------------------------------------------------------------------- #
 
 def getModelNames(args):
-    """This function finds and return all the lesion analysis file names"""
+    """This function finds and return all the trained model file names that meet the criteria in args
+    (ignoring model id)."""
 
     # included factors in name from getDatasetName()  (excluding random id for model instance)
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
@@ -426,5 +428,37 @@ def cmdscale(D):
     Y  = V.dot(L)
 
     return Y, evals
+
+# ---------------------------------------------------------------------------- #
+
+def getPairedTestModelID(args):
+    """Construct a bipartite graph linking train/test sets between the true cue,
+    blocked v interleaved conditions. So that we can take the models trained under one condition
+    (e.g. blocked) and test it under the dataset from the other (e.g. interleaved).
+    This function will return the test set paired with the training args listed in args.
+    """
+    original_blocking = copy.deepcopy(args.all_fullrange)
+    args.all_fullrange = False # blocked
+    all_blocked_datasets = getModelNames(args)
+
+    args.all_fullrange = True # interleaved
+    all_interleaved_datasets = getModelNames(args)
+
+    args.all_fullrange = original_blocking
+    bipartite_graph = [[] for i in range(len(all_blocked_datasets))]
+    test_id = None
+    if len(all_blocked_datasets) == len(all_interleaved_datasets):
+        # construct bipartite graph linking the elements in these lists
+        for i in range(len(all_blocked_datasets)):
+            if args.all_fullrange:  # interleaved training
+                if ('id'+str(args.model_id)) in all_interleaved_datasets[i]:
+                    test_id = getIdfromName(all_blocked_datasets[i])
+            else:                   # blocked training
+                if ('id'+str(args.model_id)) in all_blocked_datasets[i]:
+                    test_id = getIdfromName(all_interleaved_datasets[i])
+    else:
+        print('Warning: blocked and interleaved datasets under args not the same size')
+
+    return test_id
 
 # ---------------------------------------------------------------------------- #

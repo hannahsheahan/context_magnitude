@@ -52,7 +52,12 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
-    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id' + str(args.model_id)
+    if args.block_int_ttsplit == False:
+        ttsplit = ''
+    else:
+        ttsplit = '_traintestblockintsplit'
+    str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' +\
+                str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id' + str(args.model_id) + ttsplit
 
     # automatic save file title details
     if args.which_context==0:
@@ -232,7 +237,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                     ax[j].set_title('outcome labels')
                     tx = 'outcomelabel_'
 
-                ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
+                ax[j].set(xlim=(-1, 1), ylim=(-1, 1))  # set axes equal and the same for comparison
 
         n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_' + tx), args, labelNumerosity, False, whichTrialType, saveFig)
 
@@ -242,7 +247,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
     """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
-     - rotate the angle of the data on the 2d component axes by angle theta (degrees)
+     - rotate the angle of the data on the 2d component axes by angle theta (degrees). Note that this has no great meaning for MDS so its fine to do.
     """
 
     if whichTrialType=='filler':
@@ -304,6 +309,7 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
 
             # Rotate the components on the 2d plot since global orientation doesnt matter (axes are arbitrary)
             rotated_act = copy.deepcopy(MDS_act)
+
             rotated_act[contextA, dimA], rotated_act[contextA, dimB] = rotate_axes(MDS_act[contextA, dimA], MDS_act[contextA, dimB], theta)
             rotated_act[contextB, dimA], rotated_act[contextB, dimB] = rotate_axes(MDS_act[contextB, dimA], MDS_act[contextB, dimB], theta)
             rotated_act[contextC, dimA], rotated_act[contextC, dimB] = rotate_axes(MDS_act[contextC, dimA], MDS_act[contextC, dimB], theta)
@@ -843,5 +849,118 @@ def visualise_recurrent_state(MDS_dict):
             ax[j].scatter(MDS[i, dimA], MDS[i, dimB], color=const.CONTEXT_COLOURS[int(mini_context[i])-1], edgecolor=const.CONTEXT_COLOURS[int(mini_context[i])-1], s=8, linewidths=1)
         ax[j].axis('equal')
     plt.savefig('figures/drift_state.pdf',bbox_inches='tight')
+
+# ---------------------------------------------------------------------------- #
+
+def view_postlesion(args, device):
+    """View the MDS of activations immediately post lesion for a particular model.
+    - model id should be mentioned in args for this functions
+    - these look essentially identical to when not lesioning at test."""
+
+    overall_lesioned_tests = []
+
+    # file naming
+    blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
+    contexttxt = '_contextcued' if args.label_context=='true' else '_nocontextcued'
+    range_txt = ''
+    if args.which_context==0:
+        range_txt = ''
+    elif args.which_context==1:
+        range_txt = '_fullrangeonly'
+    elif args.which_context==2:
+        range_txt = '_lowrangeonly'
+    elif args.which_context==3:
+        range_txt = '_highrangeonly'
+
+    print('Retrieving lesion data for each model meeting criteria...')
+    allmodels = anh.getModelNames(args)
+    m = [model for model in allmodels if 'id'+str(args.model_id) in model]
+    # allocate some space
+    data = [[] for i in range(len(allmodels))]
+    global_meanperf = []
+    global_uniquediffs = []
+    full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
+    full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
+
+    testParams = mnet.setupTestParameters(args, device)
+    basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[0][:-4]
+    filename = basefilename+'.npy'
+
+    # perform or load the lesion tests
+    lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+    data = lesiondata["bigdict_lesionperf"]
+    count = 0
+
+    sorted_activations = [[] for i in range(const.HIGHR_SPAN + const.LOWR_SPAN + const.FULLR_SPAN)]
+    allnumbers = [range(const.FULLR_LLIM, const.FULLR_ULIM+1), range(const.LOWR_LLIM, const.LOWR_ULIM+1), range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)]
+    allnumbers = [item for sublist in allnumbers for item in sublist]
+    contextlabel = [[1 for i in range(const.FULLR_SPAN)], [2 for i in range(const.LOWR_SPAN)], [3 for i in range(const.HIGHR_SPAN)]]
+    contextlabel = [item for sublist in contextlabel for item in sublist]
+    keys = [str(contextlabel[i])+'-'+str(allnumbers[i]) for i in range(len(allnumbers)) ]
+
+    # get the post-lesion activations ready for averaging over for each number and context
+    for batch_idx in range(data.shape[0]):
+        for trial in range(data[batch_idx].shape[0]):
+            activations = data[batch_idx][trial]["post_lesion_activations"].numpy()
+            number = data[batch_idx][trial]["assess_number"].numpy()
+            context = data[batch_idx][trial]["underlying_context"].numpy()
+
+            # find where to save these activations
+            key = str(context)+'-'+str(number)
+            index = keys.index(key)
+            sorted_activations[index].append(activations)
+
+    # take the mean activations over trials
+    mean_activations = np.zeros((const.HIGHR_SPAN + const.LOWR_SPAN + const.FULLR_SPAN,200))
+    for i in range(len(sorted_activations)):
+        tmp = np.asarray((sorted_activations[i]))
+        mean_activations[i] = np.mean(tmp, axis=0)
+
+    # Perform MDS on averaged activations for the post-lesion trial data
+    pairwise_data = pairwise_distances(mean_activations, metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    plt.figure()
+    plt.imshow(pairwise_data)
+    plt.savefig('figures/RMD_postlesion.pdf', bbox_inches='tight')
+    MDS_act, evals = anh.cmdscale(pairwise_data)
+
+    numberlabel = allnumbers
+    fig, ax = plt.subplots(1,3,figsize=(15,3.5))
+
+    for j in range(3):  # 3 MDS dimensions
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        ax[j].set_title('context')
+        contextA = range(const.FULLR_SPAN)
+        contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+        contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+
+        ax[j].plot(MDS_act[contextA, dimA], MDS_act[contextA, dimB], color=const.CONTEXT_COLOURS[0])
+        ax[j].plot(MDS_act[contextB, dimA], MDS_act[contextB, dimB], color=const.CONTEXT_COLOURS[1])
+        ax[j].plot(MDS_act[contextC, dimA], MDS_act[contextC, dimB], color=const.CONTEXT_COLOURS[2])
+
+        for i in range((MDS_act.shape[0])):
+            ax[j].scatter(MDS_act[i, dimA], MDS_act[i, dimB], color=const.CONTEXT_COLOURS[int(contextlabel[i])-1], edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])-1], s=80, linewidths=2)
+            ax[j].text(MDS_act[i, dimA], MDS_act[i, dimB], str(24+int(numberlabel[i])), color='white', size=6.5, horizontalalignment='center', verticalalignment='center')
+
+        ax[j].axis('equal')
+        axislimits = (-0.8, 0.8)
+        ax[j].set(xlim=axislimits, ylim=axislimits)
+
+    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'MDS_postlesion_'), args, True, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
