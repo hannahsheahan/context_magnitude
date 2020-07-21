@@ -3,7 +3,7 @@
 This repo contains simulations published in the following paper:
 
 _Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2020) Neural state space alignment for relational generalisation in humans and recurrent networks. _ArXiv_
-* authors contributed equally
+\*authors contributed equally
 ---
 
 This project trains a simple RNN model to perform a basic relative magnitude reasoning task. The network is trained to classify a given input number (one-hot) as either 'more' or 'less' than the previous number it sees of the same type. The ranges of numbers presented are blocked in time (optional) and their ranges indicated by an explicit context cue (also optional), to see whether the network learns to use the range (context) of the neighbouring numbers to guide its choice.
