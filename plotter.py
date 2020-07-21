@@ -237,7 +237,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
                     ax[j].set_title('outcome labels')
                     tx = 'outcomelabel_'
 
-                ax[j].set(xlim=(-4, 4), ylim=(-4, 4))  # set axes equal and the same for comparison
+                ax[j].set(xlim=(-1, 1), ylim=(-1, 1))  # set axes equal and the same for comparison
 
         n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_' + tx), args, labelNumerosity, False, whichTrialType, saveFig)
 

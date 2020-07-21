@@ -1,6 +1,11 @@
 """
- This is a set of simulations for training a simple RNN on a relative magnitude problem.
- The network will be trained to answer the question: is input N > input N-t?
+Code published in the following paper:
+ Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2020). Neural normalisation supports generalisation
+   of abstract knowledge in humans and recurrent networks. ArXiv
+* authors contributed equally
+
+ This is a set of simulations for training a simple RNN on a relative magnitude judgement problem.
+ The network is trained to answer the question: is input N > input N-t?
  Where t is between 3-5, i.e. the inputs to be compared in each sequence are separated by several 'filler' inputs.
 
  Author: Hannah Sheahan, sheahan.hannah@gmail.com
@@ -82,7 +87,7 @@ def analyseNetwork(args):
         - the above for both a regular test set and the cross validation set (in case we need it later)
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args) # HRS this needs modifying to choose the right training iter.
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
 
     # load an existing dataset
     try:
@@ -102,7 +107,7 @@ def analyseNetwork(args):
         if args.block_int_ttsplit:
             paired_modelid = anh.getPairedTestModelID(args)
 
-            # test on a different (interleaved) dataset  (HRS for now hack to check something)
+            # test on a different (interleaved) dataset
             train_modelid = args.model_id
             args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
             args.model_id = paired_modelid
@@ -191,7 +196,7 @@ def generatePlots(MDS_dict, args):
         axislimits = (-0.8, 0.8)
         mplt.plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
 
-        #mplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
+        mplt.plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
         #plot_diff_code = True
@@ -220,12 +225,14 @@ def averageActivationsAcrossModels(args):
     allmodels = anh.getModelNames(args)
     MDS_meandict = {}
     MDS_meandict["filler_dict"] = {}
+
+    # acitvations and related labels collapsed over previous target
     sl_activations = [[] for i in range(len(allmodels))]
-    contextlabel = [[] for i in range(len(allmodels))]
-    numberlabel = [[] for i in range(len(allmodels))]
+    sl_contextlabel = [[] for i in range(len(allmodels))]
+    sl_numberlabel = [[] for i in range(len(allmodels))]
     filler_sl_activations = [[] for i in range(len(allmodels))]
-    filler_contextlabel = [[] for i in range(len(allmodels))]
-    filler_numberlabel = [[] for i in range(len(allmodels))]
+    filler_sl_contextlabel = [[] for i in range(len(allmodels))]
+    filler_sl_numberlabel = [[] for i in range(len(allmodels))]
 
     if args.block_int_ttsplit:
         print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
@@ -238,18 +245,18 @@ def averageActivationsAcrossModels(args):
         # Analyse the trained network (extract and save network activations)
         mdict = analyseNetwork(args)
         sl_activations[ind] = mdict["sl_activations"]
-        contextlabel[ind] = mdict["sl_contexts"]
-        numberlabel[ind] = mdict["sl_judgeValues"]
+        sl_contextlabel[ind] = mdict["sl_contexts"]
+        sl_numberlabel[ind] = mdict["sl_judgeValues"]
         filler_sl_activations[ind] = mdict["filler_dict"]["sl_activations"]
-        filler_contextlabel[ind] = mdict["filler_dict"]["sl_contexts"]
-        filler_numberlabel[ind] = mdict["filler_dict"]["sl_judgeValues"]
+        filler_sl_contextlabel[ind] = mdict["filler_dict"]["sl_contexts"]
+        filler_sl_numberlabel[ind] = mdict["filler_dict"]["sl_judgeValues"]
 
     MDS_meandict["sl_activations"] = np.mean(sl_activations, axis=0)
-    MDS_meandict["sl_contexts"] = np.mean(contextlabel, axis=0)
-    MDS_meandict["sl_judgeValues"] = np.mean(numberlabel, axis=0)
+    MDS_meandict["sl_contexts"] = np.mean(sl_contextlabel, axis=0)
+    MDS_meandict["sl_judgeValues"] = np.mean(sl_numberlabel, axis=0)
     MDS_meandict["filler_dict"]["sl_activations"] = np.mean(filler_sl_activations, axis=0)
-    MDS_meandict["filler_dict"]["sl_contexts"] = np.mean(filler_contextlabel, axis=0)
-    MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_numberlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_contexts"] = np.mean(filler_sl_contextlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_sl_numberlabel, axis=0)
 
     # Perform MDS on averaged activations for the compare trial data
     pairwise_data = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
@@ -274,21 +281,22 @@ if __name__ == '__main__':
     # set up dataset and network hyperparams via command line
     args, device, multiparams = mnet.defineHyperparams()
     args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
-    args.all_fullrange = True    # False = blocked; True = interleaved
+    args.all_fullrange = False    # False = blocked; True = interleaved
     args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
     args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
+    # args.model_id = 646          # for visualising a particular trained model
 
     # Train a network from scratch and save it
     #trainAndSaveANetwork(args)
 
     # Analyse the trained network (extract and save network activations)
-    #MDS_dict = analyseNetwork(args)
+    MDS_dict = analyseNetwork(args)
 
     # Check the average final performance for trained models matching args
     #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    MDS_dict, args = averageActivationsAcrossModels(args)
+    #MDS_dict, args = averageActivationsAcrossModels(args)
     generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
