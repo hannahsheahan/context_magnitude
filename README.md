@@ -3,6 +3,7 @@
 This repo contains simulations published in the following paper:
 
 _Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2020) Neural state space alignment for relational generalisation in humans and recurrent networks. _ArXiv_
+
 \*authors contributed equally
 ---
 
