@@ -854,7 +854,7 @@ def getDatasetName(args):
         ttsplit = ''
     else:
         ttsplit = '_traintestblockintsplit'
-    
+
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq) + '_id'+ str(args.model_id)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
@@ -964,5 +964,33 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
 
     writer.close()
     return model
+
+# ---------------------------------------------------------------------------- #
+
+def trainAndSaveANetwork(args, device, multiparams):
+    """This function will:
+    - create a new train/test dataset,
+    - train a new RNN according to the hyperparameters in args on that dataset,
+    - save the model (and training record) with an auto-generated name based on those args.
+    """
+
+    # define the network parameters
+    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
+
+    if args.create_new_dataset:
+        trainset, testset = dset.createSeparateInputData(datasetname, args)
+    else:
+        trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+
+    # define and train a neural network model, log performance and output trained model
+    if args.network_style == 'recurrent':
+        model = trainRecurrentNetwork(args, device, multiparams, trainset, testset)
+    else:
+        model = trainMLPNetwork(args, device, multiparams, trainset, testset)
+
+    # save the trained weights so we can easily look at them
+    print('Saving trained model...')
+    print(trained_modelname)
+    torch.save(model, trained_modelname)
 
 # ---------------------------------------------------------------------------- #

@@ -13,7 +13,11 @@ import scipy
 import os
 import json
 import matplotlib.pyplot as plt
+from sklearn.metrics import pairwise_distances
+from sklearn.manifold import MDS
 import copy
+import torch
+from sklearn.linear_model import LogisticRegression
 
 # ---------------------------------------------------------------------------- #
 
@@ -461,4 +465,279 @@ def getPairedTestModelID(args):
 
     return test_id
 
+
 # ---------------------------------------------------------------------------- #
+
+def analyseNetwork(args):
+    """Perform MDS on:
+        - the hidden unit activations for each unique input in each context.
+        - the averaged hidden unit activations, averaged across the unique judgement values in each context.
+        - the above for both a regular test set and the cross validation set (in case we need it later)
+    """
+    # load the MDS analysis if we already have it and move on
+    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
+
+    # load an existing dataset
+    try:
+        data = np.load(analysis_name+'.npy', allow_pickle=True)
+        MDS_dict = data.item()
+        preanalysed = True
+        print('Loading existing network analysis...')
+    except:
+        preanalysed = False
+        print('Analysing trained network...')
+
+    if not preanalysed:
+        # load the trained model and the datasets it was trained/tested on
+        trained_model = torch.load(trained_modelname)
+        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+
+        if args.block_int_ttsplit:
+            paired_modelid = anh.getPairedTestModelID(args)
+
+            # test on a different (interleaved) dataset
+            train_modelid = args.model_id
+            args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
+            args.model_id = paired_modelid
+            datasetname, _, _, _ = mnet.getDatasetName(args)
+            _, testset, crossvalset, _, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+
+            # revert the original model parameters for naming the analyses based on the training conditions
+            args.model_id = train_modelid
+            args.all_fullrange = not args.all_fullrange   # flip to return to original train block/interleaving
+
+
+        # pass each input through the model and determine the hidden unit activations
+        setnames = ['test', 'crossval']
+        for set in setnames:
+
+            # Assess the network activations on either the regular test set or the cross-validation set
+            if set=='test':
+                test_loader = DataLoader(testset, batch_size=1, shuffle=False)
+            elif set =='crossval':
+                test_loader = DataLoader(crossvalset, batch_size=1, shuffle=False)
+
+            for whichTrialType in ['compare', 'filler']:
+                activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
+
+                dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
+                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+
+                # do MDS on the activations for the test set
+                print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
+                tic = time.time()
+
+                D = pairwise_distances(activations, metric='correlation') # using correlation distance
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_activations, _ = cmdscale(D)
+
+                D = pairwise_distances(sl_activations, metric='correlation') # using correlation distance
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_slactivations, _ = cmdscale(D)
+
+                D = pairwise_distances(diff_sl_activations, metric='correlation') # using correlation distance
+                np.fill_diagonal(np.asarray(D), 0)
+                MDS_diff_slactivations, _ = cmdscale(D)
+
+                toc = time.time()
+                print('MDS fitting on trial types {} completed, took (s): {:.2f}'.format(whichTrialType, toc-tic))
+
+                dict = {"MDS_activations":MDS_activations, "activations":activations, "MDSlabels":MDSlabels, "temporal_trialtypes":temporal_trialtypes,\
+                            "labels_refValues":labels_refValues, "labels_judgeValues":labels_judgeValues, "drift":drift,\
+                            "labels_contexts":labels_contexts, "MDS_slactivations":MDS_slactivations, "sl_activations":sl_activations,\
+                            "sl_contexts":sl_contexts, "sl_MDSlabels":sl_MDSlabels, "sl_refValues":sl_refValues, "sl_judgeValues":sl_judgeValues, "sl_counter":sl_counter,\
+                            "MDS_diff_slactivations":MDS_diff_slactivations,"diff_sl_activations":diff_sl_activations, "diff_sl_contexts":diff_sl_contexts, "sl_diffValues":sl_diffValues}
+
+                if whichTrialType=='compare':
+                    MDS_dict = dict
+                else:
+                    MDS_dict["filler_dict"] = dict
+
+            # save our activation RDMs for easy access
+            np.save(const.RDM_DIRECTORY + 'RDM_'+set+'_compare_'+analysis_name[29:]+'.npy', MDS_dict["sl_activations"])  # the RDM matrix only
+            np.save(const.RDM_DIRECTORY + 'RDM_'+set+'_fillers_'+analysis_name[29:]+'.npy', MDS_dict["filler_dict"]["sl_activations"])  # the RDM matrix only
+            if set=='test':
+                MDS_dict['testset_assessment'] = MDS_dict
+            elif set=='crossval':
+                MDS_dict['crossval_assessment'] = MDS_dict
+
+        # save the analysis for next time
+        print('Saving network analysis...')
+        np.save(analysis_name+'.npy', MDS_dict)                    # the full MDS analysis
+
+    return MDS_dict
+
+
+# ---------------------------------------------------------------------------- #
+def averageActivationsAcrossModels(args):
+    """ This function takes all models trained under the conditions in args, and averages
+    the resulting test activations before MDS is performed, and then do MDS on the average activations.
+     - Note:  messy but functional.
+    """
+
+    allmodels = getModelNames(args)
+    MDS_meandict = {}
+    MDS_meandict["filler_dict"] = {}
+
+    # acitvations and related labels collapsed over previous target
+    sl_activations = [[] for i in range(len(allmodels))]
+    sl_contextlabel = [[] for i in range(len(allmodels))]
+    sl_numberlabel = [[] for i in range(len(allmodels))]
+    filler_sl_activations = [[] for i in range(len(allmodels))]
+    filler_sl_contextlabel = [[] for i in range(len(allmodels))]
+    filler_sl_numberlabel = [[] for i in range(len(allmodels))]
+
+    if args.block_int_ttsplit:
+        print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
+    else:
+        print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
+
+    for ind, m in enumerate(allmodels):
+        args.model_id = getIdfromName(m)
+        print('Loading model: {}'.format(args.model_id))
+        # Analyse the trained network (extract and save network activations)
+        mdict = analyseNetwork(args)
+        sl_activations[ind] = mdict["sl_activations"]
+        sl_contextlabel[ind] = mdict["sl_contexts"]
+        sl_numberlabel[ind] = mdict["sl_judgeValues"]
+        filler_sl_activations[ind] = mdict["filler_dict"]["sl_activations"]
+        filler_sl_contextlabel[ind] = mdict["filler_dict"]["sl_contexts"]
+        filler_sl_numberlabel[ind] = mdict["filler_dict"]["sl_judgeValues"]
+
+    MDS_meandict["sl_activations"] = np.mean(sl_activations, axis=0)
+    MDS_meandict["sl_contexts"] = np.mean(sl_contextlabel, axis=0)
+    MDS_meandict["sl_judgeValues"] = np.mean(sl_numberlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_activations"] = np.mean(filler_sl_activations, axis=0)
+    MDS_meandict["filler_dict"]["sl_contexts"] = np.mean(filler_sl_contextlabel, axis=0)
+    MDS_meandict["filler_dict"]["sl_judgeValues"] = np.mean(filler_sl_numberlabel, axis=0)
+
+    # Perform MDS on averaged activations for the compare trial data
+    pairwise_data = pairwise_distances(MDS_meandict["sl_activations"], metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    MDS_act, evals = cmdscale(pairwise_data)
+
+    # Perform MDS on averaged activations for the filler trial data
+    pairwise_data = pairwise_distances(MDS_meandict["filler_dict"]["sl_activations"], metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(pairwise_data), 0)
+    MDS_act_filler, evals = cmdscale(pairwise_data)
+
+    MDS_meandict["MDS_slactivations"] = MDS_act
+    MDS_meandict["filler_dict"]["MDS_slactivations"] = MDS_act_filler
+    args.model_id = 0
+
+    return MDS_meandict, args
+
+# ---------------------------------------------------------------------------- #
+
+def assessRDMGeneralisation(args):
+    """Load all RDMs for models specified by args, then train a linear classifier
+    for one of the lines (with input being the hidden unit representation, and
+    output a binary big/small classification). Then test on the other two lines."""
+
+    for dim in ['high_dim','low_dim']:
+        # whether to train/test on full high-D activations, or MDS activations
+        if dim == 'high_dim':
+            which_activations = 'sl_activations'
+            act_string = 'highD_rep'
+        else:
+            which_activations = 'MDS_slactivations'
+            act_string = 'MDS_rep'
+
+        models_trainscores = []
+        models_testscores = []
+        fig,ax = plt.subplots(1,2, figsize=(10,4))
+        for bin_blocking, blocking in enumerate([False, True]):
+            args.all_fullrange = blocking # False = blocked; True = interleaved
+
+            allmodels = getModelNames(args)
+
+            if args.block_int_ttsplit:
+                print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
+            else:
+                print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
+
+            # specify context indices for each line
+            contextA = range(const.FULLR_SPAN)
+            contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+            contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+            contexts = [contextA, contextB, contextC]
+
+            # median split labels for each line
+            y_lineA = [-1 if i<const.CONTEXT_FULL_MEAN else 1 for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)]
+            y_lineB = [-1 if i<const.CONTEXT_LOW_MEAN else 1 for i in range(const.LOWR_LLIM, const.LOWR_ULIM+1)]
+            y_lineC = [-1 if i<const.CONTEXT_HIGH_MEAN else 1 for i in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)]
+            y_labels = [y_lineA, y_lineB, y_lineC]
+
+            # Repeat classifier generalisation analysis for each trained RNN model
+            dist_test_scores = []
+            dist_train_scores = []
+            for ind, m in enumerate(allmodels):
+
+                args.model_id = getIdfromName(m)
+                #print('Loading model: {}'.format(args.model_id))
+
+                # Analyse the trained network (extract and save network activations)
+                mdict = analyseNetwork(args)
+
+                # train with MDS low-D representation as input
+                activations = mdict[which_activations]
+                #print(activations.shape)
+
+                generalisation = []
+                train_scores = []
+
+                # train logistic regression classifier on one line, test on the other two
+                for train_index in range(const.NCONTEXTS):
+                    X_train = activations[contexts[train_index],:]
+                    y_train = y_labels[train_index]
+
+                    # train a binary (big/small) linear classifier
+                    clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+                    train_score = clf.score(X_train, y_train)
+
+                    # test on the other two lines
+                    test_sets = [j for j in range(const.NCONTEXTS) if j != train_index]
+                    test_perf = []
+                    for test_set in test_sets:
+                        X_test = activations[contexts[test_set],:]
+                        y_test = y_labels[test_set]
+                        test_perf.append(clf.score(X_test, y_test))
+
+                    # how well did this classifier predict big/small for the other lines?
+                    generalisation.append(np.mean(test_perf))
+                    train_scores.append(train_score)
+
+                #print('mean train score: {}'.format(np.mean(train_scores)))
+                #print('mean test score: {}'.format(np.mean(generalisation)))
+                dist_test_scores.append(generalisation)
+                dist_train_scores.append(train_scores)
+
+            dist_train_scores = np.asarray(dist_train_scores).flatten()
+            dist_test_scores = np.asarray(dist_test_scores).flatten()
+            models_trainscores.append(dist_train_scores)
+            models_testscores.append(dist_test_scores)
+
+            ax[0].hist(dist_train_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[0].set_xlabel('Classifier training score')
+            ax[0].set_xlim((0,1))
+            ax[1].hist(dist_test_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[1].set_xlabel('Classifier test score')
+            ax[1].set_xlim((0,1))
+
+
+        ax[1].legend(['Context-blocked RNN\n(normalised code)','Context-interleaved RNN\n(absolute code)'])
+        #ax[0].set_ylabel('Context-blocked RNN\n(normalised code)')
+        #ax[0].set_ylabel('Context-interleaved RNN\n(absolute code)')
+        fig.suptitle('Logistic regression binary classifier (big/small) trained on '+ act_string)
+
+        plt.savefig(os.path.join(const.FIGURE_DIRECTORY,'gen_classifier_'+act_string+'.pdf'), bbox_inches='tight')
+        models_trainscores = np.asarray(models_trainscores)
+        models_testscores = np.asarray(models_testscores)
+
+        # Do the blocked (normalised) vs interleaved (absolute) codes yield sig. diff.
+        # generalisation performance? Do an unpaired t-test (because different trained models)
+        print('context-blocked, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[0,:])))
+        print('context-interleaved, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[1,:])))
+        tstat, p = scipy.stats.ttest_ind(models_testscores[0,:], models_testscores[1,:])
+        print('t-stat: {:.3f};  p-value: {:.3e}'.format(tstat, p))
