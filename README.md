@@ -2,7 +2,9 @@
 
 This repo contains simulations published in the following paper:
 
-_Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2020) Neural normalisation supports generalisation of abstract knowledge in humans and recurrent networks. _ArXiv_
+_Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2020) Neural state space alignment for relational generalisation in humans and recurrent networks. _biorXiv_
+
+\*authors contributed equally
 
 ---
 
