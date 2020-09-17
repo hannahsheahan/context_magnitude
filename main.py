@@ -70,8 +70,8 @@ if __name__ == '__main__':
     #anh.averagePerformanceAcrossModels(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    MDS_dict, args = anh.averageActivationsAcrossModels(args)
-    mplt.generatePlots(MDS_dict, args)  # (Figure 3 + extras)
+    #MDS_dict, args = anh.averageActivationsAcrossModels(args)
+    #mplt.generatePlots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
     #mplt.perfVContextDistance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
@@ -79,5 +79,8 @@ if __name__ == '__main__':
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.getSSEForContextModels(args, device)
+
+    # Load RDMs and check generalisation
+    anh.assessRDMGeneralisation(args)
 
 # ---------------------------------------------------------------------------- #

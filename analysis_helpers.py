@@ -17,6 +17,7 @@ from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
 import copy
 import torch
+from sklearn.linear_model import LogisticRegression
 
 # ---------------------------------------------------------------------------- #
 
@@ -626,3 +627,67 @@ def averageActivationsAcrossModels(args):
     return MDS_meandict, args
 
 # ---------------------------------------------------------------------------- #
+
+def assessRDMGeneralisation(args):
+    """Load all RDMs for models specified by args, then train a linear classifier
+    for one of the lines (with input being the hidden unit representation, and
+    output a binary big/small classification). Then test on the other two lines."""
+
+    allmodels = getModelNames(args)
+
+    if args.block_int_ttsplit:
+        print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
+    else:
+        print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
+
+    # Repeat classifier generlisation analysis for each trained RNN model
+    for ind, m in enumerate(allmodels):
+
+        # start with just one...
+        if ind==0:
+            args.model_id = getIdfromName(m)
+            print('Loading model: {}'.format(args.model_id))
+            # Analyse the trained network (extract and save network activations)
+            mdict = analyseNetwork(args)
+
+            # train with MDS low-D representation as input
+            activations = mdict['MDS_slactivations']
+            print(activations.shape)
+
+            # train on one line, test on the other two
+            contextA = range(const.FULLR_SPAN)
+            contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+            contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+            contexts = [contextA, contextB, contextC]
+
+            # median split labels
+            y_lineA = [-1 if i<const.CONTEXT_FULL_MEAN else 1 for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)]
+            y_lineB = [-1 if i<const.CONTEXT_LOW_MEAN else 1 for i in range(const.LOWR_LLIM, const.LOWR_ULIM+1)]
+            y_lineC = [-1 if i<const.CONTEXT_HIGH_MEAN else 1 for i in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)]
+            y_labels = [y_lineA, y_lineB, y_lineC]
+
+            cycle = list(range(const.NCONTEXTS))
+            generalisation = []
+            train_scores = []
+            for train_set in range(const.NCONTEXTS):
+                X_train = activations[contexts[train_set],:]
+                y_train = y_labels[train_set]
+
+                # train a binary (big/small) linear classifier
+                clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+                train_score = clf.score(X_train, y_train)
+                
+                # test on the other two lines
+                test_sets = [j for j in range(const.NCONTEXTS) if j != train_set]
+                test_perf = []
+                for test_set in test_sets:
+                    X_test = activations[contexts[test_set],:]
+                    y_test = y_labels[test_set]
+                    test_perf.append(clf.score(X_test, y_test))
+
+                # how well did this classifier predict big/small for the other lines?
+                generalisation.append(test_perf[:])
+                train_scores.append(train_score)
+
+            print('mean train score: {}'.format(np.mean(train_scores)))
+            print('mean test score: {}'.format(np.mean(generalisation)))
