@@ -644,8 +644,7 @@ def assessRDMGeneralisation(args):
 
         models_trainscores = []
         models_testscores = []
-        fig,ax = plt.subplots(2,2, figsize=(8,6))
-
+        fig,ax = plt.subplots(1,2, figsize=(10,4))
         for bin_blocking, blocking in enumerate([False, True]):
             args.all_fullrange = blocking # False = blocked; True = interleaved
 
@@ -717,15 +716,17 @@ def assessRDMGeneralisation(args):
             models_trainscores.append(dist_train_scores)
             models_testscores.append(dist_test_scores)
 
-            ax[bin_blocking,0].hist(dist_train_scores, bins=np.linspace(0,1,40))
-            ax[bin_blocking,0].set_xlabel('Classifier training score')
-            ax[bin_blocking,0].set_xlim((0,1))
-            ax[bin_blocking,1].hist(dist_test_scores, bins=np.linspace(0,1,40))
-            ax[bin_blocking,1].set_xlabel('Classifier test score')
-            ax[bin_blocking,1].set_xlim((0,1))
+            ax[0].hist(dist_train_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[0].set_xlabel('Classifier training score')
+            ax[0].set_xlim((0,1))
+            ax[1].hist(dist_test_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[1].set_xlabel('Classifier test score')
+            ax[1].set_xlim((0,1))
 
-        ax[0,0].set_ylabel('Context-blocked RNN\n(normalised code)')
-        ax[1,0].set_ylabel('Context-interleaved RNN\n(absolute code)')
+
+        ax[1].legend(['Context-blocked RNN\n(normalised code)','Context-interleaved RNN\n(absolute code)'])
+        #ax[0].set_ylabel('Context-blocked RNN\n(normalised code)')
+        #ax[0].set_ylabel('Context-interleaved RNN\n(absolute code)')
         fig.suptitle('Logistic regression binary classifier (big/small) trained on '+ act_string)
 
         plt.savefig(os.path.join(const.FIGURE_DIRECTORY,'gen_classifier_'+act_string+'.pdf'), bbox_inches='tight')
