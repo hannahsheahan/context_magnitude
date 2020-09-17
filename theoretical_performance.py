@@ -95,5 +95,5 @@ def plot_theoretical_predictions(ax, numberdiffs, globalnumberdiffs, perf, which
 
 # ---------------------------------------------------------------------------- #
 
-if __name__ is '__main__':
+if __name__ == '__main__':
     simulate_theoretical_policies()

@@ -162,6 +162,7 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
     norm = mplcol.Normalize(vmin=const.FULLR_LLIM, vmax=const.FULLR_ULIM)
     dnorm = mplcol.Normalize(vmin=-const.FULLR_ULIM+1, vmax=const.FULLR_ULIM-1)
 
+    print(MDS_dict.keys())
     if not args.label_context:
         labels_contexts = np.full_like(MDS_dict["labels_contexts"], 1)
     else:
@@ -962,5 +963,40 @@ def view_postlesion(args, device):
         ax[j].set(xlim=axislimits, ylim=axislimits)
 
     n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'MDS_postlesion_'), args, True, False, 'compare', True)
+
+# ---------------------------------------------------------------------------- #
+
+def generatePlots(MDS_dict, args):
+    """ This function just plots stuff and saves the generated figures."""
+    saveFig = True
+    plot_diff_code = False    # do we want to plot the difference code or the average A activations
+    labelNumerosity = True    # numerosity vs outcome labels
+    trialTypes = ['compare']  # ['compare', 'filler'] if you want to also see the activations for filler numbers
+
+    for whichTrialType in trialTypes:
+
+        # Label activations by mean number A numerosity
+        activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        axislimits = (-0.8, 0.8)
+        plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
+
+        #plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
+
+        # Label activations by the difference code numerosity
+        #plot_diff_code = True
+        #activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        #plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
+
+        # Plot checks on the training data sequencing
+        #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
+        #viewTrainingSequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
+        #instanceCounter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
+
+        # MDS with output labels (true/false labels)
+        #labelNumerosity = False
+        #plot3MDS(MDS_dict, args, labelNumerosity, plot_diff_code)
+
+        # 3D Animations
+        #animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
 
 # ---------------------------------------------------------------------------- #
