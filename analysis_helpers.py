@@ -633,61 +633,108 @@ def assessRDMGeneralisation(args):
     for one of the lines (with input being the hidden unit representation, and
     output a binary big/small classification). Then test on the other two lines."""
 
-    allmodels = getModelNames(args)
+    for dim in ['high_dim','low_dim']:
+        # whether to train/test on full high-D activations, or MDS activations
+        if dim == 'high_dim':
+            which_activations = 'sl_activations'
+            act_string = 'highD_rep'
+        else:
+            which_activations = 'MDS_slactivations'
+            act_string = 'MDS_rep'
 
-    if args.block_int_ttsplit:
-        print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
-    else:
-        print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
+        models_trainscores = []
+        models_testscores = []
+        fig,ax = plt.subplots(2,2, figsize=(8,6))
 
-    # Repeat classifier generlisation analysis for each trained RNN model
-    for ind, m in enumerate(allmodels):
+        for bin_blocking, blocking in enumerate([False, True]):
+            args.all_fullrange = blocking # False = blocked; True = interleaved
 
-        # start with just one...
-        if ind==0:
-            args.model_id = getIdfromName(m)
-            print('Loading model: {}'.format(args.model_id))
-            # Analyse the trained network (extract and save network activations)
-            mdict = analyseNetwork(args)
+            allmodels = getModelNames(args)
 
-            # train with MDS low-D representation as input
-            activations = mdict['MDS_slactivations']
-            print(activations.shape)
+            if args.block_int_ttsplit:
+                print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
+            else:
+                print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
 
-            # train on one line, test on the other two
+            # specify context indices for each line
             contextA = range(const.FULLR_SPAN)
             contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
             contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
             contexts = [contextA, contextB, contextC]
 
-            # median split labels
+            # median split labels for each line
             y_lineA = [-1 if i<const.CONTEXT_FULL_MEAN else 1 for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)]
             y_lineB = [-1 if i<const.CONTEXT_LOW_MEAN else 1 for i in range(const.LOWR_LLIM, const.LOWR_ULIM+1)]
             y_lineC = [-1 if i<const.CONTEXT_HIGH_MEAN else 1 for i in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)]
             y_labels = [y_lineA, y_lineB, y_lineC]
 
-            cycle = list(range(const.NCONTEXTS))
-            generalisation = []
-            train_scores = []
-            for train_set in range(const.NCONTEXTS):
-                X_train = activations[contexts[train_set],:]
-                y_train = y_labels[train_set]
+            # Repeat classifier generalisation analysis for each trained RNN model
+            dist_test_scores = []
+            dist_train_scores = []
+            for ind, m in enumerate(allmodels):
 
-                # train a binary (big/small) linear classifier
-                clf = LogisticRegression(random_state=0).fit(X_train, y_train)
-                train_score = clf.score(X_train, y_train)
-                
-                # test on the other two lines
-                test_sets = [j for j in range(const.NCONTEXTS) if j != train_set]
-                test_perf = []
-                for test_set in test_sets:
-                    X_test = activations[contexts[test_set],:]
-                    y_test = y_labels[test_set]
-                    test_perf.append(clf.score(X_test, y_test))
+                args.model_id = getIdfromName(m)
+                #print('Loading model: {}'.format(args.model_id))
 
-                # how well did this classifier predict big/small for the other lines?
-                generalisation.append(test_perf[:])
-                train_scores.append(train_score)
+                # Analyse the trained network (extract and save network activations)
+                mdict = analyseNetwork(args)
 
-            print('mean train score: {}'.format(np.mean(train_scores)))
-            print('mean test score: {}'.format(np.mean(generalisation)))
+                # train with MDS low-D representation as input
+                activations = mdict[which_activations]
+                #print(activations.shape)
+
+                generalisation = []
+                train_scores = []
+
+                # train logistic regression classifier on one line, test on the other two
+                for train_index in range(const.NCONTEXTS):
+                    X_train = activations[contexts[train_index],:]
+                    y_train = y_labels[train_index]
+
+                    # train a binary (big/small) linear classifier
+                    clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+                    train_score = clf.score(X_train, y_train)
+
+                    # test on the other two lines
+                    test_sets = [j for j in range(const.NCONTEXTS) if j != train_index]
+                    test_perf = []
+                    for test_set in test_sets:
+                        X_test = activations[contexts[test_set],:]
+                        y_test = y_labels[test_set]
+                        test_perf.append(clf.score(X_test, y_test))
+
+                    # how well did this classifier predict big/small for the other lines?
+                    generalisation.append(np.mean(test_perf))
+                    train_scores.append(train_score)
+
+                #print('mean train score: {}'.format(np.mean(train_scores)))
+                #print('mean test score: {}'.format(np.mean(generalisation)))
+                dist_test_scores.append(generalisation)
+                dist_train_scores.append(train_scores)
+
+            dist_train_scores = np.asarray(dist_train_scores).flatten()
+            dist_test_scores = np.asarray(dist_test_scores).flatten()
+            models_trainscores.append(dist_train_scores)
+            models_testscores.append(dist_test_scores)
+
+            ax[bin_blocking,0].hist(dist_train_scores, bins=np.linspace(0,1,40))
+            ax[bin_blocking,0].set_xlabel('Classifier training score')
+            ax[bin_blocking,0].set_xlim((0,1))
+            ax[bin_blocking,1].hist(dist_test_scores, bins=np.linspace(0,1,40))
+            ax[bin_blocking,1].set_xlabel('Classifier test score')
+            ax[bin_blocking,1].set_xlim((0,1))
+
+        ax[0,0].set_ylabel('Context-blocked RNN\n(normalised code)')
+        ax[1,0].set_ylabel('Context-interleaved RNN\n(absolute code)')
+        fig.suptitle('Logistic regression binary classifier (big/small) trained on '+ act_string)
+
+        plt.savefig(os.path.join(const.FIGURE_DIRECTORY,'gen_classifier_'+act_string+'.pdf'), bbox_inches='tight')
+        models_trainscores = np.asarray(models_trainscores)
+        models_testscores = np.asarray(models_testscores)
+
+        # Do the blocked (normalised) vs interleaved (absolute) codes yield sig. diff.
+        # generalisation performance? Do an unpaired t-test (because different trained models)
+        print('context-blocked, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[0,:])))
+        print('context-interleaved, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[1,:])))
+        tstat, p = scipy.stats.ttest_ind(models_testscores[0,:], models_testscores[1,:])
+        print('t-stat: {:.3f};  p-value: {:.3e}'.format(tstat, p))
