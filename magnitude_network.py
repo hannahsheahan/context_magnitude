@@ -90,7 +90,7 @@ def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     plt.title("Gradient flow, update #{}".format(batch_number))
 
     # save figure of gradient flow (this will take ages if you do it every loop)
-    #mplt.autoSaveFigure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
+    #mplt.save_figure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
 # ---------------------------------------------------------------------------- #
 
