@@ -288,7 +288,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
             # consider each number in the sequence
             for assess_idx in range(sequenceLength):
                 lesionRecord = np.zeros((sequenceLength,))  # reset out lesion record
-                context = dset.turnOneHotToInteger(contextsequence[:,assess_idx][0])[0]  # the true underlying context for this input
+                context = dset.turn_one_hot_to_integer(contextsequence[:,assess_idx][0])[0]  # the true underlying context for this input
 
                 # each time we repeat this exercise we need to use the original hidden state from previous sequence
                 if not args.retain_hidden_state:  # only if you want to reset hidden state between trials
@@ -313,7 +313,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                                     lesionRecord[item_idx] = 1
 
                     # now that we have performed our lesions up to our assessment trial, pass this sequence through the network and assess performance
-                    assess_number = dset.turnOneHotToInteger(inputs[:,assess_idx][0])[0]
+                    assess_number = dset.turn_one_hot_to_integer(inputs[:,assess_idx][0])[0]
                     tmpinputs = copy.deepcopy(recurrentinputs)
                     overallperf = 0
                     ncomparetrials = 0
@@ -322,7 +322,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
 
                         # if trial designated for lesioning, apply the lesion
                         if lesionRecord[trial]==1:
-                            lesion_number = dset.turnOneHotToInteger(tmpinputs[trial][0][0:const.TOTALMAXNUM])
+                            lesion_number = dset.turn_one_hot_to_integer(tmpinputs[trial][0][0:const.TOTALMAXNUM])
                             if whichLesion=='number':
                                 tmpinputs[trial][0][0:const.TOTALMAXNUM] = torch.full_like(tmpinputs[trial][0][0:const.TOTALMAXNUM], 0)
                             else:
@@ -422,7 +422,7 @@ def format_input_sequence(TRIAL_TYPE, testset):
                     inputA = testset["input"][seq, item_idx]
                     if inputB is not None:
                         if np.all(inputA==inputB):
-                            print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
+                            print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turn_one_hot_to_integer(inputA)[:], item_idx,seq))
                         context = testset["context"][seq, item_idx]  # the actual underlying range context, not the label
                         testset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                         seq_record.append([seq, item_idx])
@@ -482,7 +482,7 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                     inputA = trainset["input"][seq, item_idx]
                     if inputB is not None:
                         if np.all(inputA==inputB):
-                            print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turnOneHotToInteger(inputA)[:], item_idx,seq))
+                            print('Warning: adjacent trial types are same number {}, both of type compare at item {} in sequence {}'.format(dset.turn_one_hot_to_integer(inputA)[:], item_idx,seq))
                         context = trainset["context"][seq, item_idx]  # the actual underlying range context, not the label
                         trainset_input_n_context.append(np.append(np.append(inputA, inputB), context))
                         seq_record.append([seq, item_idx])
@@ -533,10 +533,10 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
         for sample in range(len(uniqueind)):
             sample_input = batch_to_torch(torch.from_numpy(unique_inputs[sample]))
             sample_label = unique_labels[sample]
-            labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
-            labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
+            labels_refValues[sample] = dset.turn_one_hot_to_integer(unique_refValue[sample])
+            labels_judgeValues[sample] = dset.turn_one_hot_to_integer(unique_judgementValue[sample])
             MDSlabels[sample] = sample_label
-            contexts[sample] = dset.turnOneHotToInteger(unique_context[sample])
+            contexts[sample] = dset.turn_one_hot_to_integer(unique_context[sample])
             time_index[sample] = 0  # doesnt mean anything for these not-sequential cases
             counter[sample] = 0     # we dont care how many instances of each unique input for these non-sequential cases
 
@@ -569,14 +569,14 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
         for batch_idx, data in enumerate(train_loader):
             #inputs, labels, context, contextinput = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batch_to_torch(data['contextinput'])
             inputs, labels, contextsequence, contextinputsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['context']), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
-            #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
+            #print('context {}'.format(np.squeeze(dset.turn_one_hot_to_integer(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
 
-                temporal_context[batch_idx, i] = dset.turnOneHotToInteger(contextinputsequence[:,i][0])
+                temporal_context[batch_idx, i] = dset.turn_one_hot_to_integer(contextinputsequence[:,i][0])
                 contextin = contextinputsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
                     contextinput = torch.full_like(contextin, 0)
@@ -607,15 +607,15 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                             input_n_context = np.append(np.append(inputA, inputB), context)  # actual underlying range context
                             for i in range(N_unique):
                                 if np.all(unique_inputs_n_context[i,:]==input_n_context):
-                                    #print('{}, {}, context {}'.format(dset.turnOneHotToInteger(inputA)[0],  dset.turnOneHotToInteger(inputB)[0] , np.squeeze(dset.turnOneHotToInteger(context))[0]  ))
+                                    #print('{}, {}, context {}'.format(dset.turn_one_hot_to_integer(inputA)[0],  dset.turn_one_hot_to_integer(inputB)[0] , np.squeeze(dset.turn_one_hot_to_integer(context))[0]  ))
                                     index = i
                                     break
 
                             activations[index] = h1activations.detach()
-                            labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
-                            labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+                            labels_refValues[index] = dset.turn_one_hot_to_integer(unique_refValue[index])
+                            labels_judgeValues[index] = dset.turn_one_hot_to_integer(unique_judgementValue[index])
                             MDSlabels[index] = unique_labels[index]
-                            contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+                            contexts[index] = dset.turn_one_hot_to_integer(unique_context[index])
                             time_index[index] = batch_idx
                         inputB = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]  # previous state <= current state
 
@@ -628,10 +628,10 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                                 index = i
                                 break
                         activations[index] = h1activations.detach()
-                        labels_refValues[index] = dset.turnOneHotToInteger(unique_refValue[index])
-                        labels_judgeValues[index] = dset.turnOneHotToInteger(unique_judgementValue[index])
+                        labels_refValues[index] = dset.turn_one_hot_to_integer(unique_refValue[index])
+                        labels_judgeValues[index] = dset.turn_one_hot_to_integer(unique_judgementValue[index])
                         MDSlabels[index] = unique_labels[index]
-                        contexts[index] = dset.turnOneHotToInteger(unique_context[index])
+                        contexts[index] = dset.turn_one_hot_to_integer(unique_context[index])
                         time_index[index] = batch_idx
 
 
@@ -810,7 +810,7 @@ def setup_test_parameters(args, device):
     datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
 
     # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+    trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
     # load our trained model
@@ -951,9 +951,9 @@ def train_and_save_network(args, device, multiparams):
     datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
 
     if args.create_new_dataset:
-        trainset, testset = dset.createSeparateInputData(datasetname, args)
+        trainset, testset = dset.create_separate_input_data(datasetname, args)
     else:
-        trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+        trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
     # define and train a neural network model, log performance and output trained model
     if args.network_style == 'recurrent':

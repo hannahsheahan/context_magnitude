@@ -96,7 +96,7 @@ def average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeV
                 flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
 
     # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
-    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
+    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flatten_first_dim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
     sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter = [[] for i in range(6)]
 
     for i in range(flat_activations.shape[0]):
@@ -161,7 +161,7 @@ def diff_average_ref_numerosity(dimKeep, activations, labels_refValues, labels_j
                 flat_activations[context, value-1] = np.divide(flat_activations[context, value-1, :], divisor[context,value-1])
 
     # now cast out all the null instances e.g 1-5, 10-15 in certain contexts
-    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flattenFirstDim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
+    flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter = [dset.flatten_first_dim(i) for i in [flat_activations, flat_contexts, flat_values, flat_outcomes, flat_counter]]
     sl_activations, sl_refValues, sl_judgeValues, sl_contexts, sl_MDSlabels, sl_counter, sl_diffValues = [[] for i in range(7)]
 
     for i in range(flat_activations.shape[0]):
@@ -283,9 +283,9 @@ def lesion_perf_by_numerosity(lesiondata):
             context_globalnumberdiff[context-1].append(globalnumberdiffs[seq][compare_idx])
 
     # flatten across sequences and the trials in those sequences
-    globalnumberdiffs = dset.flattenFirstDim(globalnumberdiffs)
-    numberdiffs = dset.flattenFirstDim(numberdiffs)
-    perf = dset.flattenFirstDim(perf)
+    globalnumberdiffs = dset.flatten_first_dim(globalnumberdiffs)
+    numberdiffs = dset.flatten_first_dim(numberdiffs)
+    perf = dset.flatten_first_dim(perf)
     meanperf, uniquediffs = performance_mean(numberdiffs, perf)
     global_meanperf, global_uniquediffs = performance_mean(globalnumberdiffs, perf)
 
@@ -471,7 +471,7 @@ def analyse_network(args):
     if not preanalysed:
         # load the trained model and the datasets it was trained/tested on
         trained_model = torch.load(trained_modelname)
-        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+        trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
         if args.block_int_ttsplit:
             paired_modelid = anh.get_paired_test_model_id(args)
@@ -481,7 +481,7 @@ def analyse_network(args):
             args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
             args.model_id = paired_modelid
             datasetname, _, _, _ = mnet.get_dataset_name(args)
-            _, testset, crossvalset, _, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
+            _, testset, crossvalset, _, np_testset, np_crossvalset = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
             # revert the original model parameters for naming the analyses based on the training conditions
             args.model_id = train_modelid
