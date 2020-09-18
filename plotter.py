@@ -30,14 +30,12 @@ from sklearn.metrics import pairwise_distances
 from sklearn.manifold import MDS
 from sklearn.utils import shuffle
 
-# ---------------------------------------------------------------------------- #
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
 
-# ---------------------------------------------------------------------------- #
 
 def rotate_axes(x,y,theta):
     # theta is in degrees
@@ -46,9 +44,8 @@ def rotate_axes(x,y,theta):
     y_new =  -x * math.sin(theta_rad) + y * math.cos(theta_rad)
     return x_new, y_new
 
-# ---------------------------------------------------------------------------- #
 
-def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig):
+def save_figure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig):
     """This function will save the currently open figure with a base title and some details pertaining to how the activations were generated."""
 
     # conver the hyperparameter settings into a string ID
@@ -87,15 +84,13 @@ def autoSaveFigure(basetitle, args, labelNumerosity, plot_diff_code, whichTrialT
     plt.close()
     return basetitle+networkTxt+whichcontexttext+numberrangetxt+diffcodetext+trialtypetxt+contextlabelledtext+labeltext+retainstatetext+'_n'+str(args.noise_std)+str_args
 
-# ---------------------------------------------------------------------------- #
 
 def shadeplot(ax, x_values, means, sems, colour='black'):
     """Plot mean+-sem shaded"""
     ax.fill_between(x_values, means-sems, means+sems, color=colour, alpha=0.25, linewidth=0.0)
 
-# ---------------------------------------------------------------------------- #
 
-def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', saveFig=True):
+def activation_rdms(MDS_dict, args, plot_diff_code, whichTrialType='compare', saveFig=True):
     """Plot the representational disimilarity structure of the hidden unit activations, sorted by context, and within that magnitude.
     Reorient the context order to match Fabrice's:  i.e. from (1-16, 1-11, 5-16) to (low, high, full)
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
@@ -144,11 +139,10 @@ def activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType='compare', sav
     ax.set_yticks(ticks)
     ax.set_yticklabels(labelticks)
 
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'RDM_'+differenceCodeText), args, False, plot_diff_code, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'RDM_'+differenceCodeText), args, False, plot_diff_code, whichTrialType, saveFig)
 
-# ---------------------------------------------------------------------------- #
 
-def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', saveFig=True):
+def plot_3mds(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', saveFig=True):
     """This is a function to plot the MDS of activations and label according to numerosity and context"""
 
     if whichTrialType=='filler':
@@ -240,12 +234,11 @@ def plot3MDS(MDS_dict, args, labelNumerosity=True, whichTrialType='compare', sav
 
                 ax[j].set(xlim=(-1, 1), ylim=(-1, 1))  # set axes equal and the same for comparison
 
-        n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_' + tx), args, labelNumerosity, False, whichTrialType, saveFig)
+        n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_' + tx), args, labelNumerosity, False, whichTrialType, saveFig)
 
-# ---------------------------------------------------------------------------- #
 
-def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8), gradedcolour=False):
-    """This function is just like plot3MDS and plot3MDSContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
+def plot_3mds_mean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whichTrialType='compare', saveFig=True, theta=0, axislimits = (-0.8,0.8), gradedcolour=False):
+    """This function is just like plot_3mds and plot_3mdsContexts but for the formatting of the data which has been averaged across one of the two numerosity values.
     Because there are fewer datapoints I also label the numerosity inside each context, like Fabrice does.
      - use the flag 'plot_diff_code' to plot the difference signal (A-B) rather than the A activations
      - rotate the angle of the data on the 2d component axes by angle theta (degrees). Note that this has no great meaning for MDS so its fine to do.
@@ -353,11 +346,10 @@ def plot3MDSMean(MDS_dict, args, labelNumerosity=True, plot_diff_code=False, whi
         else:
             ax[j].set(xlim=axislimits, ylim=axislimits)
 
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_'+differenceCodeText+'meanJudgement_'), args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'3MDS60_'+differenceCodeText+'meanJudgement_'), args, labelNumerosity, plot_diff_code, whichTrialType, saveFig)
 
-# ---------------------------------------------------------------------------- #
 
-def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare', saveFig=True):
+def animate_3d_mds(MDS_dict, args, plot_diff_code=False, whichTrialType='compare', saveFig=True):
     """ This function will plot the numerosity labeled, context-marked MDS projections
      of the hidden unit activations on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -421,12 +413,11 @@ def animate3DMDS(MDS_dict, args, plot_diff_code=False, whichTrialType='compare',
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure(const.ANIMATION_DIRECTORY + 'MDS_3Danimation_'+ differenceCodeText, args, True,  plot_diff_code, whichTrialType, False)
+        strng = save_figure(const.ANIMATION_DIRECTORY + 'MDS_3Danimation_'+ differenceCodeText, args, True,  plot_diff_code, whichTrialType, False)
         anim.save(strng+'.mp4', writer=writer)
 
-# ---------------------------------------------------------------------------- #
 
-def instanceCounter(MDS_dict, args, whichTrialType='compare'):
+def instance_counter(MDS_dict, args, whichTrialType='compare'):
     """ Plot a histogram showing the number of times each unique input (reference averaged) and context was in the generated training set."""
 
     plt.figure()
@@ -441,11 +432,10 @@ def instanceCounter(MDS_dict, args, whichTrialType='compare'):
     plt.xlabel('Numbers and contexts')
     plt.ylabel('Instances in training set')
 
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'InstanceCounter_meanJudgement'), args, True, False, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'instance_counter_meanJudgement'), args, True, False, whichTrialType, saveFig)
 
-# ---------------------------------------------------------------------------- #
 
-def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True):
+def view_training_sequence(MDS_dict, args, whichTrialType='compare', saveFig=True):
     """Take the data loader and view how the contexts and latent states evolved in time in the training set.
     Also plots the sequence of compare vs filler trials.
     """
@@ -459,14 +449,14 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True)
     plt.plot(temporal_context.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Context (0: 1-16; 1: 1-11; 2: 6-16)')
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'temporalcontext_'), args, True, False, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'temporalcontext_'), args, True, False, whichTrialType, saveFig)
 
     # trial types changing with time in training set
     plt.figure()
     plt.plot(temporal_trialtypes.flatten())
     plt.xlabel('Trials in training set')
     plt.ylabel('Trial type: 0-filler; 1-compare')
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'temporaltrialtype_'), True, False, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'temporaltrialtype_'), True, False, whichTrialType, saveFig)
 
     # latent state drift in time/trials in training set
     fig,ax = plt.subplots(1,3, figsize=(18,5))
@@ -502,11 +492,10 @@ def viewTrainingSequence(MDS_dict, args, whichTrialType='compare', saveFig=True)
         ax[j].axis('equal')
         #ax[j].set(xlim=(-4, 4), ylim=(-4, 4))
 
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'latentstatedrift_'), True, False, whichTrialType, saveFig)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'latentstatedrift_'), True, False, whichTrialType, saveFig)
 
-# ---------------------------------------------------------------------------- #
 
-def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
+def animate_3d_drift_mds(MDS_dict, args, whichTrialType='compare', saveFig=True):
     """ This function will plot the latent state drift MDS projections
      on a 3D plot, animate/rotate that plot to view it
      from different angles and optionally save it as a mp4 file.
@@ -541,12 +530,11 @@ def animate3DdriftMDS(MDS_dict, args, whichTrialType='compare', saveFig=True):
     if saveFig:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        strng = autoSaveFigure(const.ANIMATION_DIRECTORY + 'latentdrift_MDS_3Danimation_', True, False, whichTrialType, False)
+        strng = save_figure(const.ANIMATION_DIRECTORY + 'latentdrift_MDS_3Danimation_', True, False, whichTrialType, False)
         anim.save(strng+'.mp4', writer=writer)
 
-# ---------------------------------------------------------------------------- #
 
-def plotOptimalReferencePerformance(ax, args):
+def plot_optimal_perf(ax, args):
     """This function plots the performance in each context of theoretical agents
      making decisions using only the current number and knowledge of the local or global context median. """
 
@@ -575,11 +563,10 @@ def plotOptimalReferencePerformance(ax, args):
 
     return handles
 
-# ---------------------------------------------------------------------------- #
 
-def compareLesionTests(args, device):
+def compare_lesion_tests(args, device):
     """
-    This function compareLesionTests() compares the post-lesion test set performance of networks
+    This function compare_lesion_tests() compares the post-lesion test set performance of networks
      which were trained with different frequencies of lesions in the training set.
      - this will now search for the lesion assessments for all the model instances that match the args
      - this should now plot a dot +- SEM over model instances at each dot to see how variable it is.
@@ -591,8 +578,7 @@ def compareLesionTests(args, device):
 
     plt.figure()
     fig, ax = plt.subplots(1,len(frequencylist), figsize=(14,3.5))
-    handles = plotOptimalReferencePerformance(ax, args)
-
+    handles = plot_optimal_perf(ax, args)
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
@@ -610,7 +596,7 @@ def compareLesionTests(args, device):
     for whichfreq, train_lesion_frequency in enumerate(frequencylist):
 
         args.train_lesion_freq = train_lesion_frequency
-        allmodels = anh.getModelNames(args)
+        allmodels = anh.get_model_names(args)
         data = [[] for i in range(len(allmodels))]
         context_tests = np.zeros((const.NCONTEXTS, len(allmodels)))
         perf = np.zeros((const.NCONTEXTS, len(allmodels)))
@@ -620,14 +606,14 @@ def compareLesionTests(args, device):
 
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
-            args.model_id = anh.getIdfromName(m)
+            args.model_id = anh.get_id_from_name(m)
             print('modelid: ' + str(args.model_id))
-            testParams = mnet.setupTestParameters(args, device)
+            testParams = mnet.setup_test_parameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
-            lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+            lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
             data[ind] = lesiondata["bigdict_lesionperf"]
             lesioned_test[ind] = lesiondata["lesioned_testaccuracy"]
             unlesioned_test[ind] = regulartestdata["normal_testaccuracy"]
@@ -674,9 +660,8 @@ def compareLesionTests(args, device):
         ax[i].set_xticklabels(['low','high','full'])
     plt.legend(handles[0:1],['prediction', 'RNN'])
     whichTrialType = 'compare'
-    autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'lesionfreq_trainedlesions_new_'+contexttxt), args, True, False, whichTrialType, True)
+    save_figure(os.path.join(const.FIGURE_DIRECTORY,'lesionfreq_trainedlesions_new_'+contexttxt), args, True, False, whichTrialType, True)
 
-# ---------------------------------------------------------------------------- #
 
 def get_summarystats(data, axis, method='std'):
     """Calculate mean and std (or sem) along specified axis"""
@@ -687,9 +672,8 @@ def get_summarystats(data, axis, method='std'):
         err = np.std(data, axis=axis) / np.sqrt(data.shape[axis])
     return mean, err
 
-# ---------------------------------------------------------------------------- #
 
-def perfVContextDistance(args, device):
+def perf_vs_context_distance(args, device):
     """This function plots post-lesion performance as a function of context distance (distance between input and context median).
     - ugly but functional. This ugly list (rather than np matrix) method is because the number of context distance elements in each context is different."""
 
@@ -719,7 +703,7 @@ def perfVContextDistance(args, device):
 
         ax[j].set_ylabel(r'p(correct | $\epsilon_{train}$ =' + str(train_lesion_frequency)+')')
         args.train_lesion_freq = train_lesion_frequency
-        allmodels = anh.getModelNames(args)
+        allmodels = anh.get_model_names(args)
 
         # allocate some space
         data = [[] for i in range(len(allmodels))]
@@ -730,15 +714,15 @@ def perfVContextDistance(args, device):
 
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
-            args.model_id = anh.getIdfromName(m)
-            testParams = mnet.setupTestParameters(args, device)
+            args.model_id = anh.get_id_from_name(m)
+            testParams = mnet.setup_test_parameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
-            lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+            lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
             data[ind] = lesiondata["bigdict_lesionperf"]
-            gp, cp, gd, cd = anh.lesionperfbyNumerosity(data[ind])
+            gp, cp, gd, cd = anh.lesion_perf_by_numerosity(data[ind])
             global_meanperf.append(gp)
             global_uniquediffs.append(gd)
             full_context_perf.append(cp[0])
@@ -790,7 +774,6 @@ def perfVContextDistance(args, device):
     whichTrialType = 'compare'
     plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
 
-# ---------------------------------------------------------------------------- #
 
 def visualise_recurrent_state(MDS_dict):
     """This function does MDS on a subset of test trials to see if the latext recurrent state in the network separates by context.
@@ -851,7 +834,6 @@ def visualise_recurrent_state(MDS_dict):
         ax[j].axis('equal')
     plt.savefig('figures/drift_state.pdf',bbox_inches='tight')
 
-# ---------------------------------------------------------------------------- #
 
 def view_postlesion(args, device):
     """View the MDS of activations immediately post lesion for a particular model.
@@ -874,7 +856,7 @@ def view_postlesion(args, device):
         range_txt = '_highrangeonly'
 
     print('Retrieving lesion data for each model meeting criteria...')
-    allmodels = anh.getModelNames(args)
+    allmodels = anh.get_model_names(args)
     m = [model for model in allmodels if 'id'+str(args.model_id) in model]
     # allocate some space
     data = [[] for i in range(len(allmodels))]
@@ -883,12 +865,12 @@ def view_postlesion(args, device):
     full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
     full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
 
-    testParams = mnet.setupTestParameters(args, device)
+    testParams = mnet.setup_test_parameters(args, device)
     basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[0][:-4]
     filename = basefilename+'.npy'
 
     # perform or load the lesion tests
-    lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+    lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
     data = lesiondata["bigdict_lesionperf"]
     count = 0
 
@@ -962,11 +944,10 @@ def view_postlesion(args, device):
         axislimits = (-0.8, 0.8)
         ax[j].set(xlim=axislimits, ylim=axislimits)
 
-    n = autoSaveFigure(os.path.join(const.FIGURE_DIRECTORY,'MDS_postlesion_'), args, True, False, 'compare', True)
+    n = save_figure(os.path.join(const.FIGURE_DIRECTORY,'MDS_postlesion_'), args, True, False, 'compare', True)
 
-# ---------------------------------------------------------------------------- #
 
-def generatePlots(MDS_dict, args):
+def generate_plots(MDS_dict, args):
     """ This function just plots stuff and saves the generated figures."""
     saveFig = True
     plot_diff_code = False    # do we want to plot the difference code or the average A activations
@@ -976,27 +957,25 @@ def generatePlots(MDS_dict, args):
     for whichTrialType in trialTypes:
 
         # Label activations by mean number A numerosity
-        activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        activation_rdms(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
         axislimits = (-0.8, 0.8)
-        plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
+        plot_3mds_mean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType, saveFig, 80, axislimits) # mean MDS of our hidden activations (averaged across number B)
 
-        #plot3MDS(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
+        #plot_3mds(MDS_dict, args, whichTrialType)      # the full MDS cloud, coloured by different labels
 
         # Label activations by the difference code numerosity
         #plot_diff_code = True
-        #activationRDMs(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
-        #plot3MDSMean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
+        #activation_rdms(MDS_dict, args, plot_diff_code, whichTrialType)  # activations RSA
+        #plot_3mds_mean(MDS_dict, args, labelNumerosity, plot_diff_code, whichTrialType)
 
         # Plot checks on the training data sequencing
         #n = plt.hist(activations)   # They are quite sparse activations (but we dont really care that much)
-        #viewTrainingSequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
-        #instanceCounter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
+        #view_training_sequence(MDS_dict, args)  # Plot the context sequencing in the training set through time
+        #instance_counter(MDS_dict, args)  # Check how many samples we have of each unique input (should be context-ordered)
 
         # MDS with output labels (true/false labels)
         #labelNumerosity = False
-        #plot3MDS(MDS_dict, args, labelNumerosity, plot_diff_code)
+        #plot_3mds(MDS_dict, args, labelNumerosity, plot_diff_code)
 
         # 3D Animations
-        #animate3DMDS(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions
-
-# ---------------------------------------------------------------------------- #
+        #animate_3d_mds(MDS_dict, args, plot_diff_code)  # plot a 3D version of the MDS constructions

@@ -27,34 +27,30 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
-# ---------------------------------------------------------------------------- #
 
-def turnOneHot(integer, maxSize):
+def turn_one_hot(integer, maxSize):
     """This function will take as input an interger and output a one hot representation of that integer up to a max of maxSize."""
     oneHot = np.zeros((maxSize,1))
     oneHot[integer-1] = 1
     return oneHot
 
-# ---------------------------------------------------------------------------- #
 
-def turnOneHotToInteger(onehot):
+def turn_one_hot_to_integer(onehot):
     """This function will take as input a one hot representation and determine the integer interpretation"""
     integer = np.nonzero(onehot)[0]
     return integer+1  # because we are starting counting from 1 not 0
 
-# ---------------------------------------------------------------------------- #
 
-def flattenAllFirstDimArrays(*allarrays):
+def flatten_all_first_dim_arrays(*allarrays):
     """This function will flatten the first dimension of a series of input numpy arrays"""
     flatarrays = []
     for array in allarrays:
-        array = flattenFirstDim(array)
+        array = flatten_first_dim(array)
         flatarrays.append(array)
     return  flatarrays
 
-# ---------------------------------------------------------------------------- #
 
-def flattenFirstDim(array):
+def flatten_first_dim(array):
     """This function with return a numpy array which flattens the first two dimensions together. Only works for 2d-4d np arrays."""
     if len(array.shape) == 2:
         return array.reshape(array.shape[0]*array.shape[1], )
@@ -65,9 +61,8 @@ def flattenFirstDim(array):
     else:
         print('Error: the array you are trying to partially flatten is not the correct shape.')
 
-# ---------------------------------------------------------------------------- #
 
-class createDataset(Dataset):
+class CreateDataset(Dataset):
     """A class to hold a dataset.
     - judgementValue i.e. input2
     - refValue i.e. input1
@@ -81,7 +76,6 @@ class createDataset(Dataset):
             datafile (string): name of numpy datafile
             transform (callable, optional): Optional transform to be applied on a sample.
         """
-
         # load all original images too - yes memory intensive but useful. Note that this also removes the efficiency point of using dataloaders
         self.index = dataset['index']
         self.label = dataset['label']
@@ -100,17 +94,14 @@ class createDataset(Dataset):
 
     def __getitem__(self, idx):
         # for retrieving either a single sample of data, or a subset of data
-
         # lets us retrieve several items at once (HRS: may not be actually used)
         if torch.is_tensor(idx):
             idx = idx.tolist()
-
         sample = {'index':self.index[idx], 'label':self.label[idx], 'refValue':self.refValue[idx], 'judgementValue':self.judgementValue[idx], 'input':self.input[idx], 'context':self.context[idx], 'contextinput':self.contextinput[idx], 'trialtypeinput':self.trialtypeinput[idx] }
         return sample
 
-# ---------------------------------------------------------------------------- #
 
-def loadInputData(fileloc,datasetname):
+def load_input_data(fileloc,datasetname):
     # load an existing dataset
     print('Loading dataset: ' + datasetname + '.npy')
     data = np.load(fileloc+datasetname+'.npy', allow_pickle=True)
@@ -119,18 +110,17 @@ def loadInputData(fileloc,datasetname):
     numpy_crossvalset = data.item().get("crossval_testset")
 
     # turn out datasets into pytorch Datasets
-    trainset = createDataset(numpy_trainset)
-    testset = createDataset(numpy_testset)
-    crossvalset = createDataset(numpy_crossvalset)
+    trainset = CreateDataset(numpy_trainset)
+    testset = CreateDataset(numpy_testset)
+    crossvalset = CreateDataset(numpy_crossvalset)
 
     return trainset, testset, crossvalset, numpy_trainset, numpy_testset, numpy_crossvalset
 
-# ---------------------------------------------------------------------------- #
 
-def generateTrialSequence(include_fillers=True):
+def generate_trial_sequence(include_fillers=True):
     """
     For generating a sequence of trials combining both the filler task and the compare task, as in Fabrice's experiment
-    This will be used in createSeparateInputData()
+    This will be used in create_separate_input_data()
      - this sequence will always be 120 trials long
      - compare trials are separated by between 2 and 4 filler trials (same as Fabrice's trial scheduling)
      - include_fillers flag determines whether our dataset will contain some filler
@@ -161,9 +151,8 @@ def generateTrialSequence(include_fillers=True):
 
     return type_sequence
 
-# ---------------------------------------------------------------------------- #
 
-def turnIndexToContext(randind):
+def turn_index_to_context(randind):
     """Get the context from the randomly sampled index for when contexts are intermingled"""
     if randind < const.FULLR_ULIM:  # 16
         context = 1
@@ -173,15 +162,13 @@ def turnIndexToContext(randind):
         context = 3
     return context
 
-# ---------------------------------------------------------------------------- #
 
-def createSeparateInputData(filename, args):
+def create_separate_input_data(filename, args):
     """This function will create a dataset of inputs for training/testing a network on a relational magnitude task.
     - There are 3 contexts if whichContext==0 (default), or just one range for any other value of whichContext (1-3).
     - the inputs to this function determine the structure in the training and test sets e.g. are they blocked by context.
     - BPTT_len specifies how long to back the sequences we backprop through. So far only works for BPTT_len <= block length
     - messy but functional. To be modularised.
-
     """
     print('Generating dataset...')
     if args.which_context==0:
@@ -204,7 +191,6 @@ def createSeparateInputData(filename, args):
         print('- compare numbers are drawn from temporally structured ranges')
     print('- training is blocked by context')
     print('- training orders A and B relative to each other in trial sequence (B @ trial t+1 == A @ trial t)')
-
 
     Mtestsets = 2                          # have multiple test sets for cross-validation of activations
     print('- {} test sets generated for cross-validation'.format(Mtestsets))
@@ -281,7 +267,7 @@ def createSeparateInputData(filename, args):
             firstTrialInContext = True              # reset the sequentialAB structure for each new context
             for sample in range(int(N/Mblocks)):    # each sequence
                 input_sequence = []
-                type_sequence  = generateTrialSequence(args.include_fillers) # the order of filler trial and compare trials
+                type_sequence  = generate_trial_sequence(args.include_fillers) # the order of filler trial and compare trials
                 trialtypeinput = [0 for i in range(len(type_sequence))]
                 contextsequence = []
                 contextinputsequence = []
@@ -309,16 +295,16 @@ def createSeparateInputData(filename, args):
                             randind = random.choice(indexDistribution)
                             judgementValue = randNumDistribution[randind]
 
-                        input2 = turnOneHot(judgementValue, const.TOTALMAXNUM)
+                        input2 = turn_one_hot(judgementValue, const.TOTALMAXNUM)
                         if args.all_fullrange:  # if intermingling contexts, then we need to know which context this number was sampled from
-                            context = turnIndexToContext(randind)
+                            context = turn_index_to_context(randind)
 
                     else:  # filler trial (note fillers are always from uniform 1:15 range)
-                        input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM)
+                        input2 = turn_one_hot(random.randint(*fillerRange), const.TOTALMAXNUM)
                         # make sure (like Fabrice) that after a compare trial the subsequent filler isnt the same as the previous filler
                         if previousFillerNum is not None and previousTrialtype=='compare':
                             while all(input2 == previousFillerNum):
-                                input2 = turnOneHot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
+                                input2 = turn_one_hot(random.randint(*fillerRange), const.TOTALMAXNUM) # leave the filler numbers unconstrained just spanning the full range
 
                         previousFillerNum = copy.copy(input2)
                         # when the trials are interleaved, set filler trials to have random contets
@@ -330,13 +316,13 @@ def createSeparateInputData(filename, args):
 
                     # Define the context input to the network
                     if args.label_context=='true':
-                        contextinput = turnOneHot(context, const.NCONTEXTS)  # there are 3 different contexts
+                        contextinput = turn_one_hot(context, const.NCONTEXTS)  # there are 3 different contexts
                     elif args.label_context=='random':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                        contextinput = turnOneHot(random.randint(1,3), const.NCONTEXTS)  # randomly assign each example to a context, (shuffling examples across context markers in training)
+                        contextinput = turn_one_hot(random.randint(1,3), const.NCONTEXTS)  # randomly assign each example to a context, (shuffling examples across context markers in training)
                     elif args.label_context=='constant':
                         # Note that NOT changing 'context' means that we should be able to see the correct range label in the RDM
-                        contextinput = turnOneHot(1, const.NCONTEXTS) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
+                        contextinput = turn_one_hot(1, const.NCONTEXTS) # just keep this constant across all contexts, so the input doesnt contain an explicit context indicator
 
                     # add our new inputs to our sequence
                     input_sequence.append(input2)
@@ -344,7 +330,7 @@ def createSeparateInputData(filename, args):
                     contextinputsequence.append(contextinput)
 
                 if firstTrialInContext:
-                    judgementValue = turnOneHotToInteger(input_sequence[-1])  # and then make sure that the next sequence starts where this one left off (bit of a hack)
+                    judgementValue = turn_one_hot_to_integer(input_sequence[-1])  # and then make sure that the next sequence starts where this one left off (bit of a hack)
                     firstTrialInContext = False
 
                 # determine the correct rel. magnitude judgement for each pair of adjacent numbers in the sequence
@@ -355,7 +341,7 @@ def createSeparateInputData(filename, args):
                 for i in range(args.BPTT_len):
                     trialtype = trialtypeinput[i]
                     if trialtype==1:  # compare
-                        judgeValue = turnOneHotToInteger(input_sequence[i])
+                        judgeValue = turn_one_hot_to_integer(input_sequence[i])
                         if rValue is not None:
                             if judgeValue==rValue:
                                 print('Warning: something gone wrong at index {}.'.format(i))
@@ -367,14 +353,14 @@ def createSeparateInputData(filename, args):
                         else:
                             target[block, sample, i] = None  # default dont do anything
 
-                    allJValues[i] = np.squeeze(turnOneHot(turnOneHotToInteger(input_sequence[i]), const.TOTALMAXNUM))
+                    allJValues[i] = np.squeeze(turn_one_hot(turn_one_hot_to_integer(input_sequence[i]), const.TOTALMAXNUM))
                     if rValue is None:
                         allRValues[i] = np.zeros((const.TOTALMAXNUM,))
                     else:
-                        allRValues[i] = np.squeeze(turnOneHot(rValue, const.TOTALMAXNUM))
+                        allRValues[i] = np.squeeze(turn_one_hot(rValue, const.TOTALMAXNUM))
 
                     if trialtype==1:
-                        rValue = turnOneHotToInteger(input_sequence[i])  # set the previous state to be the current state
+                        rValue = turn_one_hot_to_integer(input_sequence[i])  # set the previous state to be the current state
 
                 if firstTrialInContext:
                     judgementValue = copy.deepcopy(judgeValue)    # and then make sure that the next sequence starts with judgement where this one left off
@@ -382,7 +368,7 @@ def createSeparateInputData(filename, args):
                 contextdigits[block, sample] = contextsequence
                 judgementValues[block, sample] = np.squeeze(np.asarray(allJValues))
                 refValues[block, sample] = np.squeeze(np.asarray(allRValues))
-                contexts[block, sample] = np.squeeze([turnOneHot(contextsequence[i], const.NCONTEXTS) for i in range(len(contextsequence))])  # still captures context here even if we dont feed context label into network
+                contexts[block, sample] = np.squeeze([turn_one_hot(contextsequence[i], const.NCONTEXTS) for i in range(len(contextsequence))])  # still captures context here even if we dont feed context label into network
                 contextinputs[block, sample] = np.squeeze(contextinputsequence)
                 #input[block, sample] = np.squeeze(np.concatenate((input2,input1,contextinput)))  # for the MLP
                 input[block, sample] = np.squeeze(np.asarray(input_sequence))             # for the RNN with BPTT
@@ -396,16 +382,16 @@ def createSeparateInputData(filename, args):
             input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, trainindices, blocks, contextinputs, trialTypeInputs, random_state=0)
 
             # now flatten across the first dim of the structure
-            input = flattenFirstDim(input)
-            refValues = flattenFirstDim(refValues)
-            judgementValues = flattenFirstDim(judgementValues)
-            target = flattenFirstDim(target)
-            contexts = flattenFirstDim(contexts)
-            contextdigits = flattenFirstDim(contextdigits)
-            trainindices = flattenFirstDim(trainindices)
-            blocks = flattenFirstDim(blocks)
-            contextinputs = flattenFirstDim(contextinputs)
-            trialTypeInputs  = flattenFirstDim(trialTypeInputs)
+            input = flatten_first_dim(input)
+            refValues = flatten_first_dim(refValues)
+            judgementValues = flatten_first_dim(judgementValues)
+            target = flatten_first_dim(target)
+            contexts = flatten_first_dim(contexts)
+            contextdigits = flatten_first_dim(contextdigits)
+            trainindices = flatten_first_dim(trainindices)
+            blocks = flatten_first_dim(blocks)
+            contextinputs = flatten_first_dim(contextinputs)
+            trialTypeInputs  = flatten_first_dim(trialTypeInputs)
 
             trainset = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':trainindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
         else:
@@ -414,16 +400,16 @@ def createSeparateInputData(filename, args):
             input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypeInputs = shuffle(input, refValues, judgementValues, target, contexts, contextdigits, testindices, blocks, contextinputs, trialTypeInputs,  random_state=0)
 
             # now flatten across the first dim of the structure
-            input = flattenFirstDim(input)
-            refValues = flattenFirstDim(refValues)
-            judgementValues = flattenFirstDim(judgementValues)
-            target = flattenFirstDim(target)
-            contexts = flattenFirstDim(contexts)
-            contextdigits = flattenFirstDim(contextdigits)
-            testindices = flattenFirstDim(testindices)
-            blocks = flattenFirstDim(blocks)
-            contextinputs = flattenFirstDim(contextinputs)
-            trialTypeInputs  = flattenFirstDim(trialTypeInputs)
+            input = flatten_first_dim(input)
+            refValues = flatten_first_dim(refValues)
+            judgementValues = flatten_first_dim(judgementValues)
+            target = flatten_first_dim(target)
+            contexts = flatten_first_dim(contexts)
+            contextdigits = flatten_first_dim(contextdigits)
+            testindices = flatten_first_dim(testindices)
+            blocks = flatten_first_dim(blocks)
+            contextinputs = flatten_first_dim(contextinputs)
+            trialTypeInputs  = flatten_first_dim(trialTypeInputs)
 
             testsets[whichtestset] = { 'refValue':refValues, 'judgementValue':judgementValues, 'input':input, 'label':target, 'index':testindices, 'context':contexts, 'contextdigits':contextdigits, 'contextinputs':contextinputs, "trialtypeinputs":trialTypeInputs }
             whichtestset += 1
@@ -435,9 +421,7 @@ def createSeparateInputData(filename, args):
     np.save(const.DATASET_DIRECTORY+filename+'.npy', dat)
 
     # turn out datasets into pytorch Datasets
-    trainset = createDataset(trainset)
-    testset = createDataset(testset)
+    trainset = CreateDataset(trainset)
+    testset = CreateDataset(testset)
 
     return trainset, testset
-
-# ---------------------------------------------------------------------------- #
