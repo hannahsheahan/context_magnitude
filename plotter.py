@@ -577,9 +577,9 @@ def plotOptimalReferencePerformance(ax, args):
 
 # ---------------------------------------------------------------------------- #
 
-def compareLesionTests(args, device):
+def compare_lesion_tests(args, device):
     """
-    This function compareLesionTests() compares the post-lesion test set performance of networks
+    This function compare_lesion_tests() compares the post-lesion test set performance of networks
      which were trained with different frequencies of lesions in the training set.
      - this will now search for the lesion assessments for all the model instances that match the args
      - this should now plot a dot +- SEM over model instances at each dot to see how variable it is.
@@ -689,7 +689,7 @@ def get_summarystats(data, axis, method='std'):
 
 # ---------------------------------------------------------------------------- #
 
-def perfVContextDistance(args, device):
+def perf_vs_context_distance(args, device):
     """This function plots post-lesion performance as a function of context distance (distance between input and context median).
     - ugly but functional. This ugly list (rather than np matrix) method is because the number of context distance elements in each context is different."""
 
@@ -966,7 +966,7 @@ def view_postlesion(args, device):
 
 # ---------------------------------------------------------------------------- #
 
-def generatePlots(MDS_dict, args):
+def generate_plots(MDS_dict, args):
     """ This function just plots stuff and saves the generated figures."""
     saveFig = True
     plot_diff_code = False    # do we want to plot the difference code or the average A activations

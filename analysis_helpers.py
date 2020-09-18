@@ -311,7 +311,7 @@ def lesionperfbyNumerosity(lesiondata):
 
 # ---------------------------------------------------------------------------- #
 
-def getSSEForContextModels(args, device):
+def model_behaviour_vs_theory(args, device):
     """This function determines the sum squared error between the rnn responses and the local vs global context models, for each RNN instance."""
 
     allmodels = getModelNames(args)
@@ -343,7 +343,7 @@ def getSSEForContextModels(args, device):
 
 # ---------------------------------------------------------------------------- #
 
-def averagePerformanceAcrossModels(args):
+def average_perf_across_models(args):
     """Take the training records and determine the average train and test performance
      across all trained models that meet the conditions specified in args."""
 
@@ -466,7 +466,7 @@ def getPairedTestModelID(args):
 
 # ---------------------------------------------------------------------------- #
 
-def analyseNetwork(args):
+def analyse_network(args):
     """Perform MDS on:
         - the hidden unit activations for each unique input in each context.
         - the averaged hidden unit activations, averaged across the unique judgement values in each context.
@@ -568,7 +568,7 @@ def analyseNetwork(args):
 
 
 # ---------------------------------------------------------------------------- #
-def averageActivationsAcrossModels(args):
+def average_activations_across_models(args):
     """ This function takes all models trained under the conditions in args, and averages
     the resulting test activations before MDS is performed, and then do MDS on the average activations.
      - Note:  messy but functional.
@@ -595,7 +595,7 @@ def averageActivationsAcrossModels(args):
         args.model_id = getIdfromName(m)
         print('Loading model: {}'.format(args.model_id))
         # Analyse the trained network (extract and save network activations)
-        mdict = analyseNetwork(args)
+        mdict = analyse_network(args)
         sl_activations[ind] = mdict["sl_activations"]
         sl_contextlabel[ind] = mdict["sl_contexts"]
         sl_numberlabel[ind] = mdict["sl_judgeValues"]
@@ -628,10 +628,12 @@ def averageActivationsAcrossModels(args):
 
 # ---------------------------------------------------------------------------- #
 
-def assessRDMGeneralisation(args):
-    """Load all RDMs for models specified by args, then train a linear classifier
+def cross_line_rep_generalisation(args):
+    """Load activations for all models specified by args, then train a linear classifier
     for one of the lines (with input being the hidden unit representation, and
-    output a binary big/small classification). Then test on the other two lines."""
+    output a binary big/small classification). Then test on the other two lines.
+    Compare generalisation performance across normalised (blocked) vs absolute
+    (interleaved) codes. """
 
     for dim in ['high_dim','low_dim']:
         # whether to train/test on full high-D activations, or MDS activations
@@ -676,7 +678,7 @@ def assessRDMGeneralisation(args):
                 #print('Loading model: {}'.format(args.model_id))
 
                 # Analyse the trained network (extract and save network activations)
-                mdict = analyseNetwork(args)
+                mdict = analyse_network(args)
 
                 # train with MDS low-D representation as input
                 activations = mdict[which_activations]

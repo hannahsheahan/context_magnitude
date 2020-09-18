@@ -725,7 +725,7 @@ class OneStepRNN(nn.Module):
 
 #------------------------------------------------------------
 
-def defineHyperparams():
+def define_hyperparams():
     """
     This will enable us to take different network training settings/hyperparameters in when we call main.py from the command line.
     e.g. python3 main.py --batch-size=12 --epochs=20 --save-model
@@ -967,7 +967,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
 
 # ---------------------------------------------------------------------------- #
 
-def trainAndSaveANetwork(args, device, multiparams):
+def train_and_save_network(args, device, multiparams):
     """This function will:
     - create a new train/test dataset,
     - train a new RNN according to the hyperparameters in args on that dataset,
