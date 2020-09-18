@@ -19,12 +19,11 @@ import copy
 import torch
 from sklearn.linear_model import LogisticRegression
 
-# ---------------------------------------------------------------------------- #
 
-def getModelNames(args):
+def get_model_names(args):
     """This function finds and return all the trained model file names that meet the criteria in args
-    (ignoring model id)."""
-
+    (ignoring model id).
+    """
     # included factors in name from getDatasetName()  (excluding random id for model instance)
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
@@ -41,22 +40,20 @@ def getModelNames(args):
         if ((rangetxt in file) and (contextlabelledtext in file)) and ((hiddenstate in file) and (networkTxt in file)):
             if str_args in file:
                 files.append(file)
-
     return files
 
-# ---------------------------------------------------------------------------- #
 
-def getIdfromName(modelname):
+def get_id_from_name(modelname):
     """Take the model name and extract the model id number from the string.
     This is useful when looping through all saved models, you can assign the args.model_id param
-    to this number so that subsequent analysis and figure generation naming includes the appropriate the model-id #."""
+    to this number so that subsequent analysis and figure generation naming includes the appropriate the model-id #.
+    """
     id_ind = modelname.find('_id')+3
     pth_ind = modelname.find('.pth')
     return  modelname[id_ind:pth_ind]
 
-# ---------------------------------------------------------------------------- #
 
-def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
+def average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
     """This function will average the hidden unit activations over one of the two numbers involved in the representation:
     either the reference or the judgement number. This is so that we can then compare to Fabrice's plots
      which are averaged over the previously presented number (input B).
@@ -64,7 +61,6 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
     i.e. if plotting for reference value, flatten over the judgement value and vice versa.
      - dimKeep = 'reference' or 'judgement'
     """
-
     # initializing
     uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
     flat_activations = np.zeros((const.NCONTEXTS,len(uniqueValues),activations.shape[1]))
@@ -129,13 +125,10 @@ def averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_ju
 
     return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter
 
-# ---------------------------------------------------------------------------- #
 
-def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
-    """  This is a messy variant of averageReferenceNumerosity(), which averages over numbers which have the same difference (A-B).
+def diff_average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
+    """  This is a messy variant of average_ref_numerosity(), which averages over numbers which have the same difference (A-B).
     """
-
-    # initializing
     uniqueValues = [i for i in range(-const.FULLR_SPAN+1,const.FULLR_SPAN-1)] # hacked for now
     #uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
     flat_activations = np.zeros((const.NCONTEXTS,len(uniqueValues),activations.shape[1]))
@@ -144,7 +137,6 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
     flat_contexts = np.empty((const.NCONTEXTS,len(uniqueValues),1))
     flat_counter = np.zeros((const.NCONTEXTS,len(uniqueValues),1))
     divisor = np.zeros((const.NCONTEXTS,len(uniqueValues)))
-
 
     # which label to flatten over (we keep whichever dimension is dimKeep, and average over the other)
     flattenValues = [labels_judgeValues[i] - labels_refValues[i] for i in range(len(labels_refValues))]
@@ -194,9 +186,8 @@ def diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labe
 
     return sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter, sl_diffValues
 
-# ---------------------------------------------------------------------------- #
 
-def performanceMean(number_differences, performance):
+def performance_mean(number_differences, performance):
     """
     This function calculates the mean network performance as a function of the distance between the current number and some mean context signal
     - the absolute difference |(current - mean)| signal is already in number_differences
@@ -213,11 +204,10 @@ def performanceMean(number_differences, performance):
     mean_performance = np.divide(aggregate_perf, tally)
     return mean_performance, unique_diffs
 
-# ---------------------------------------------------------------------------- #
 
-def performLesionTests(args, testParams, basefilename):
+def perform_lesion_tests(args, testParams, basefilename):
     """
-    This function performLesionTests() performs lesion tests on a single network
+    This function perform_lesion_tests() performs lesion tests on a single network
     We will only consider performance after a single lesion, because the other metrics are boring sanity checks.
     """
     # lesion settings
@@ -257,11 +247,10 @@ def performLesionTests(args, testParams, basefilename):
 
     return lesiondata, regulartestdata
 
-# ---------------------------------------------------------------------------- #
 
-def lesionperfbyNumerosity(lesiondata):
-    """This function determines how a given model performs post lesion on different numbers and contexts"""
-
+def lesion_perf_by_numerosity(lesiondata):
+    """This function determines how a given model performs post lesion on different numbers and contexts.
+    """
     context_perf = [[] for i in range(const.NCONTEXTS)]
     context_numberdiffs = [[] for i in range(const.NCONTEXTS)]
     context_globalnumberdiff = [[] for i in range(const.NCONTEXTS)]
@@ -297,34 +286,33 @@ def lesionperfbyNumerosity(lesiondata):
     globalnumberdiffs = dset.flattenFirstDim(globalnumberdiffs)
     numberdiffs = dset.flattenFirstDim(numberdiffs)
     perf = dset.flattenFirstDim(perf)
-    meanperf, uniquediffs = performanceMean(numberdiffs, perf)
-    global_meanperf, global_uniquediffs = performanceMean(globalnumberdiffs, perf)
+    meanperf, uniquediffs = performance_mean(numberdiffs, perf)
+    global_meanperf, global_uniquediffs = performance_mean(globalnumberdiffs, perf)
 
     # assess mean performance under each context
-    context1_meanperf, context1_uniquediffs = performanceMean(context_numberdiffs[0], context_perf[0])
-    context2_meanperf, context2_uniquediffs = performanceMean(context_numberdiffs[1], context_perf[1])
-    context3_meanperf, context3_uniquediffs = performanceMean(context_numberdiffs[2], context_perf[2])
+    context1_meanperf, context1_uniquediffs = performance_mean(context_numberdiffs[0], context_perf[0])
+    context2_meanperf, context2_uniquediffs = performance_mean(context_numberdiffs[1], context_perf[1])
+    context3_meanperf, context3_uniquediffs = performance_mean(context_numberdiffs[2], context_perf[2])
     context_perf = [context1_meanperf, context2_meanperf, context3_meanperf]
     context_numberdiffs = [context1_uniquediffs, context2_uniquediffs, context3_uniquediffs]
 
     return global_meanperf, context_perf, global_uniquediffs, context_numberdiffs
 
-# ---------------------------------------------------------------------------- #
 
 def model_behaviour_vs_theory(args, device):
-    """This function determines the sum squared error between the rnn responses and the local vs global context models, for each RNN instance."""
-
-    allmodels = getModelNames(args)
+    """This function determines the sum squared error between the rnn responses and the local vs global context models, for each RNN instance.
+    """
+    allmodels = get_model_names(args)
     SSE_local = [0 for i in range(len(allmodels))]
     SSE_global = [0 for i in range(len(allmodels))]
 
     for ind, m in enumerate(allmodels):
-        args.model_id = getIdfromName(m)
+        args.model_id = get_id_from_name(m)
         testParams = mnet.setupTestParameters(args, device)
         basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
 
         # perform or load the lesion tests
-        lesiondata, regulartestdata = performLesionTests(args, testParams, basefilename)
+        lesiondata, regulartestdata = perform_lesion_tests(args, testParams, basefilename)
         n_sequences, n_lesions = lesiondata["bigdict_lesionperf"].shape
 
         for seq in range(n_sequences):
@@ -341,19 +329,18 @@ def model_behaviour_vs_theory(args, device):
     print('global model, SSE: {}'.format(SSE_global))
     print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))
 
-# ---------------------------------------------------------------------------- #
 
 def average_perf_across_models(args):
     """Take the training records and determine the average train and test performance
-     across all trained models that meet the conditions specified in args."""
-
-    matched_models = getModelNames(args)
+    across all trained models that meet the conditions specified in args.
+    """
+    matched_models = get_model_names(args)
     all_training_records = os.listdir(const.TRAININGRECORDS_DIRECTORY)
     record_name = ''
     train_performance = []
     test_performance = []
     for ind, m in enumerate(matched_models):
-        args.model_id = getIdfromName(m)
+        args.model_id = get_id_from_name(m)
 
         for training_record in all_training_records:
             if ('_id'+str(args.model_id)+'.' in training_record):
@@ -385,7 +372,6 @@ def average_perf_across_models(args):
 
     plt.savefig(os.path.join(const.FIGURE_DIRECTORY, record_name + '.pdf'), bbox_inches='tight')
 
-# ---------------------------------------------------------------------------- #
 
 def cmdscale(D):
     """
@@ -431,9 +417,8 @@ def cmdscale(D):
 
     return Y, evals
 
-# ---------------------------------------------------------------------------- #
 
-def getPairedTestModelID(args):
+def get_paired_test_model_id(args):
     """Construct a bipartite graph linking train/test sets between the true cue,
     blocked v interleaved conditions. So that we can take the models trained under one condition
     (e.g. blocked) and test it under the dataset from the other (e.g. interleaved).
@@ -441,10 +426,10 @@ def getPairedTestModelID(args):
     """
     original_blocking = copy.deepcopy(args.all_fullrange)
     args.all_fullrange = False # blocked
-    all_blocked_datasets = getModelNames(args)
+    all_blocked_datasets = get_model_names(args)
 
     args.all_fullrange = True # interleaved
-    all_interleaved_datasets = getModelNames(args)
+    all_interleaved_datasets = get_model_names(args)
 
     args.all_fullrange = original_blocking
     bipartite_graph = [[] for i in range(len(all_blocked_datasets))]
@@ -454,17 +439,15 @@ def getPairedTestModelID(args):
         for i in range(len(all_blocked_datasets)):
             if args.all_fullrange:  # interleaved training
                 if ('id'+str(args.model_id)) in all_interleaved_datasets[i]:
-                    test_id = getIdfromName(all_blocked_datasets[i])
+                    test_id = get_id_from_name(all_blocked_datasets[i])
             else:                   # blocked training
                 if ('id'+str(args.model_id)) in all_blocked_datasets[i]:
-                    test_id = getIdfromName(all_interleaved_datasets[i])
+                    test_id = get_id_from_name(all_interleaved_datasets[i])
     else:
         print('Warning: blocked and interleaved datasets under args not the same size')
 
     return test_id
 
-
-# ---------------------------------------------------------------------------- #
 
 def analyse_network(args):
     """Perform MDS on:
@@ -491,7 +474,7 @@ def analyse_network(args):
         trainset, testset, crossvalset, np_trainset, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
 
         if args.block_int_ttsplit:
-            paired_modelid = anh.getPairedTestModelID(args)
+            paired_modelid = anh.get_paired_test_model_id(args)
 
             # test on a different (interleaved) dataset
             train_modelid = args.model_id
@@ -519,8 +502,8 @@ def analyse_network(args):
                 activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
 
                 dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
-                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
-                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = diff_averageReferenceNumerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
+                diff_sl_activations, diff_sl_contexts, diff_sl_MDSlabels, diff_sl_refValues, diff_sl_judgeValues, diff_sl_counter, sl_diffValues = diff_average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
 
                 # do MDS on the activations for the test set
                 print('Performing MDS on trials of type: {} in {} set...'.format(whichTrialType, set))
@@ -567,14 +550,12 @@ def analyse_network(args):
     return MDS_dict
 
 
-# ---------------------------------------------------------------------------- #
 def average_activations_across_models(args):
     """ This function takes all models trained under the conditions in args, and averages
     the resulting test activations before MDS is performed, and then do MDS on the average activations.
      - Note:  messy but functional.
     """
-
-    allmodels = getModelNames(args)
+    allmodels = get_model_names(args)
     MDS_meandict = {}
     MDS_meandict["filler_dict"] = {}
 
@@ -592,7 +573,7 @@ def average_activations_across_models(args):
         print('Retrieving networks analysed at test under the same blocking/interleaving as training...')
 
     for ind, m in enumerate(allmodels):
-        args.model_id = getIdfromName(m)
+        args.model_id = get_id_from_name(m)
         print('Loading model: {}'.format(args.model_id))
         # Analyse the trained network (extract and save network activations)
         mdict = analyse_network(args)
@@ -626,15 +607,14 @@ def average_activations_across_models(args):
 
     return MDS_meandict, args
 
-# ---------------------------------------------------------------------------- #
 
 def cross_line_rep_generalisation(args):
     """Load activations for all models specified by args, then train a linear classifier
     for one of the lines (with input being the hidden unit representation, and
     output a binary big/small classification). Then test on the other two lines.
     Compare generalisation performance across normalised (blocked) vs absolute
-    (interleaved) codes. """
-
+    (interleaved) codes.
+    """
     for dim in ['high_dim','low_dim']:
         # whether to train/test on full high-D activations, or MDS activations
         if dim == 'high_dim':
@@ -650,7 +630,7 @@ def cross_line_rep_generalisation(args):
         for bin_blocking, blocking in enumerate([False, True]):
             args.all_fullrange = blocking # False = blocked; True = interleaved
 
-            allmodels = getModelNames(args)
+            allmodels = get_model_names(args)
 
             if args.block_int_ttsplit:
                 print('Retrieving networks analysed at test under opposite blocking/interleaving to training...')
@@ -674,7 +654,7 @@ def cross_line_rep_generalisation(args):
             dist_train_scores = []
             for ind, m in enumerate(allmodels):
 
-                args.model_id = getIdfromName(m)
+                args.model_id = get_id_from_name(m)
                 #print('Loading model: {}'.format(args.model_id))
 
                 # Analyse the trained network (extract and save network activations)
@@ -724,7 +704,6 @@ def cross_line_rep_generalisation(args):
             ax[1].hist(dist_test_scores, bins=np.linspace(0,1,30), alpha=0.5)
             ax[1].set_xlabel('Classifier test score')
             ax[1].set_xlim((0,1))
-
 
         ax[1].legend(['Context-blocked RNN\n(normalised code)','Context-interleaved RNN\n(absolute code)'])
         #ax[0].set_ylabel('Context-blocked RNN\n(normalised code)')

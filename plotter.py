@@ -596,7 +596,7 @@ def compare_lesion_tests(args, device):
     for whichfreq, train_lesion_frequency in enumerate(frequencylist):
 
         args.train_lesion_freq = train_lesion_frequency
-        allmodels = anh.getModelNames(args)
+        allmodels = anh.get_model_names(args)
         data = [[] for i in range(len(allmodels))]
         context_tests = np.zeros((const.NCONTEXTS, len(allmodels)))
         perf = np.zeros((const.NCONTEXTS, len(allmodels)))
@@ -606,14 +606,14 @@ def compare_lesion_tests(args, device):
 
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
-            args.model_id = anh.getIdfromName(m)
+            args.model_id = anh.get_id_from_name(m)
             print('modelid: ' + str(args.model_id))
             testParams = mnet.setupTestParameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
-            lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+            lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
             data[ind] = lesiondata["bigdict_lesionperf"]
             lesioned_test[ind] = lesiondata["lesioned_testaccuracy"]
             unlesioned_test[ind] = regulartestdata["normal_testaccuracy"]
@@ -703,7 +703,7 @@ def perf_vs_context_distance(args, device):
 
         ax[j].set_ylabel(r'p(correct | $\epsilon_{train}$ =' + str(train_lesion_frequency)+')')
         args.train_lesion_freq = train_lesion_frequency
-        allmodels = anh.getModelNames(args)
+        allmodels = anh.get_model_names(args)
 
         # allocate some space
         data = [[] for i in range(len(allmodels))]
@@ -714,15 +714,15 @@ def perf_vs_context_distance(args, device):
 
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
-            args.model_id = anh.getIdfromName(m)
+            args.model_id = anh.get_id_from_name(m)
             testParams = mnet.setupTestParameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
-            lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+            lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
             data[ind] = lesiondata["bigdict_lesionperf"]
-            gp, cp, gd, cd = anh.lesionperfbyNumerosity(data[ind])
+            gp, cp, gd, cd = anh.lesion_perf_by_numerosity(data[ind])
             global_meanperf.append(gp)
             global_uniquediffs.append(gd)
             full_context_perf.append(cp[0])
@@ -856,7 +856,7 @@ def view_postlesion(args, device):
         range_txt = '_highrangeonly'
 
     print('Retrieving lesion data for each model meeting criteria...')
-    allmodels = anh.getModelNames(args)
+    allmodels = anh.get_model_names(args)
     m = [model for model in allmodels if 'id'+str(args.model_id) in model]
     # allocate some space
     data = [[] for i in range(len(allmodels))]
@@ -870,7 +870,7 @@ def view_postlesion(args, device):
     filename = basefilename+'.npy'
 
     # perform or load the lesion tests
-    lesiondata, regulartestdata = anh.performLesionTests(args, testParams, basefilename)
+    lesiondata, regulartestdata = anh.perform_lesion_tests(args, testParams, basefilename)
     data = lesiondata["bigdict_lesionperf"]
     count = 0
 
