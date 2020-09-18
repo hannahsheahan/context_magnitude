@@ -35,26 +35,23 @@ from datetime import datetime
 from itertools import product
 import argparse
 
-# ---------------------------------------------------------------------------- #
 
-def printProgress(i, numiter):
+def print_progress(i, numiter):
     """This function prints to the screen the optimisation progress (at each iteration i, out of a total of numiter iterations)."""
     j = i/numiter
     sys.stdout.write('\r')
     sys.stdout.write("[%-20s] %d%% " % ('-'*int(20*j), 100*j))
     sys.stdout.flush()
 
-# ---------------------------------------------------------------------------- #
 
-def batchToTorch(originalimages):
+def batch_to_torch(originalimages):
     """Convert the input batch to a torch tensor"""
     #originalimages = originalimages.unsqueeze(1)   # change dim for the convnet
     originalimages = originalimages.type(torch.FloatTensor)  # convert torch tensor data type
     return originalimages
 
-# ---------------------------------------------------------------------------- #
 
-def answerCorrect(output, label):
+def answer_correct(output, label):
     """
     This function compares the output to the label on that trial (or batch) and
     determines whether it (or how many) match the target label.
@@ -69,7 +66,6 @@ def answerCorrect(output, label):
     tmp = np.squeeze(np.asarray(label))
     return (pred==tmp).sum().item()
 
-# ---------------------------------------------------------------------------- #
 
 def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     """
@@ -92,7 +88,6 @@ def plot_grad_flow(args, layers, ave_grads, max_grads, batch_number):
     # save figure of gradient flow (this will take ages if you do it every loop)
     #mplt.save_figure('figures/gradients/gradflow_{}_'.format(batch_number), args, 'recurrent', blockTrain, seqTrain, True, givenContext, False, noise_std, retainHiddenState, False, 'compare', True)
 
-# ---------------------------------------------------------------------------- #
 
 def recurrent_train(args, model, device, train_loader, optimizer, criterion, epoch, printOutput=True):
     """ Train a recurrent neural network on the training set.
@@ -102,7 +97,6 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     - we will include in our total cost function the performance when assessed on a trial that is lesioned
        AND on the compare trial after a lesion
      """
-
     model.train()
     train_loss = 0
     correct = 0
@@ -113,7 +107,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
 
     for batch_idx, data in enumerate(train_loader):
         optimizer.zero_grad()   # zero the parameter gradients
-        inputs, labels, contextsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+        inputs, labels, contextsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
 
         # initialise everything for our recurrent model
         recurrentinputs = []
@@ -154,7 +148,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
             # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
             if item_idx>0 and (trialtype[0,item_idx]==1):
                 loss += criterion(output, labels[item_idx])   # accumulate the loss (autograd should sort this out for us: https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
-                correct += answerCorrect(output, labels[item_idx])
+                correct += answer_correct(output, labels[item_idx])
 
         loss.backward()
 
@@ -182,7 +176,6 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
     accuracy = 100. * correct / (len(train_loader.dataset)*(n_comparetrials-1))
     return train_loss, accuracy
 
-# ---------------------------------------------------------------------------- #
 
 def recurrent_test(args, model, device, test_loader, criterion, printOutput=True):
     """Test a recurrent neural network on the test set (without lesions)."""
@@ -196,8 +189,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
     with torch.no_grad():  # dont track the gradients
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, contextsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
-
+            inputs, labels, contextsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
 
             # reformat the input sequences for our recurrent model
             recurrentinputs = []
@@ -212,7 +204,6 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
                     context_in = copy.deepcopy(context)
                 inputX = torch.cat((inputs[:, i], context_in, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
-
 
             if not args.retain_hidden_state:  # only if you want to reset hidden state between trials
                 hidden = torch.zeros(args.batch_size, model.recurrent_size)
@@ -231,7 +222,7 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
 
                 if item_idx>0 and (trialtype[0,item_idx]==1):
                     test_loss += criterion(output, labels[item_idx]).item()
-                    correct += answerCorrect(output, labels[item_idx])
+                    correct += answer_correct(output, labels[item_idx])
 
     test_loss /= len(test_loader.dataset)*(n_comparetrials-1)  # there are n_comparetrials-1 instances of feedback per sequence
     accuracy = 100. * correct / (len(test_loader.dataset)*(n_comparetrials-1))
@@ -239,25 +230,22 @@ def recurrent_test(args, model, device, test_loader, criterion, printOutput=True
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(test_loader.dataset)*(n_comparetrials-1), accuracy))
     return test_loss, accuracy
 
-# ---------------------------------------------------------------------------- #
 
-def getLocalModelResponse(number, context, label):
+def get_local_model_response(number, context, label):
     # evaluate whether a simulated local context policy would have got this trial correct
     localmedians = [const.CONTEXT_FULL_MEAN, const.CONTEXT_LOW_MEAN, const.CONTEXT_HIGH_MEAN]
     response = 1 if number > localmedians[context-1] else 0
     iscorrect = 1 if response == label else 0
     return iscorrect
 
-# ---------------------------------------------------------------------------- #
 
-def getGlobalModelResponse(number, context, label):
+def get_global_model_response(number, context, label):
     # evaluate whether a simulated local context policy would have got this trial correct
     globalmedian = const.GLOBAL_MEAN
     response = 1 if number > globalmedian else 0
     iscorrect = 1 if response == label else 0
     return iscorrect
 
-# ---------------------------------------------------------------------------- #
 
 def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutput=True, whichLesion='number', lesionFrequency=1):
     """
@@ -280,7 +268,7 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
     with torch.no_grad():  # dont track the gradients
         # for each sequence
         for batch_idx, data in enumerate(test_loader):
-            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['context']), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
             # setup
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
@@ -349,16 +337,16 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                         # assess aggregate performance on whole sequence (including all lesions)
                         if trialtype[:,trial]==1:
                             ncomparetrials += 1
-                            overallperf += answerCorrect(output, labels[trial])
+                            overallperf += answer_correct(output, labels[trial])
                             overallcomparisons += 1
                             # once we get to the assessment trial, assess performance
                             if trial==assess_idx:
-                                lesionperf = answerCorrect(output, labels[trial])
+                                lesionperf = answer_correct(output, labels[trial])
                                 post_lesion_activations = h1activations
                                 print('this happens')
 
-                    localmodel_perf = getLocalModelResponse(assess_number, context, labels[trial])   # correct or incorrect
-                    globalmodel_perf = getGlobalModelResponse(assess_number, context, labels[trial]) # correct or incorrect
+                    localmodel_perf = get_local_model_response(assess_number, context, labels[trial])   # correct or incorrect
+                    globalmodel_perf = get_global_model_response(assess_number, context, labels[trial]) # correct or incorrect
 
                     mydict = {"assess_number":assess_number, "lesion_number":lesion_number, "lesion_perf":lesionperf, "overall_perf":overallperf,\
                      "desired_lesionF":lesionFrequency, "underlying_context":context,  "assess_idx":assess_idx, "compare_idx":ncomparetrials,\
@@ -388,42 +376,39 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
 
     return allLesionAssessments, summarylesionperf, summaryperf
 
-# ---------------------------------------------------------------------------- #
 
-def sortAllVarsbyX(allvars, sortind):
-    """This function sortAllVarsbyX() will sort all variables input in allvars according to the indices of sortind."""
+def sort_all_vars_by_x(allvars, sortind):
+    """This function sort_all_vars_by_x() will sort all variables input in allvars according to the indices of sortind."""
     sortedvars = []
     for thisvar in allvars:
         thisvar = np.take_along_axis(thisvar, sortind, axis=0)
         sortedvars.append(thisvar)
     return sortedvars
 
-# ---------------------------------------------------------------------------- #
 
-def sortActivations(allvars):
-    """This function sortActivations() just sorts all the activation- and label-related variables we care about,
-     first into context order and then input number order within each context"""
-
+def sort_activations(allvars):
+    """This function sort_activations() just sorts all the activation- and label-related variables we care about,
+     first into context order and then input number order within each context.
+    """
     contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = allvars
 
     # sort all variables first by context order
     context_ind = np.argsort(contexts, axis=0)
-    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sortAllVarsbyX(allvars, context_ind)
+    contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter = sort_all_vars_by_x(allvars, context_ind)
 
     # within each context, sort according to numerosity of the judgement value
     for context in range(1,const.NCONTEXTS+1):
         ind = [i for i in range(contexts.shape[0]) if contexts[i]==context]
         numerosity_ind = np.argsort(labels_judgeValues[ind], axis=0) + ind[0]
         allvars = [contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter] # important that this is updated in loop
-        contexts[ind], activations[ind], MDSlabels[ind], labels_refValues[ind], labels_judgeValues[ind], time_index[ind], counter[ind] = sortAllVarsbyX(allvars, numerosity_ind)
+        contexts[ind], activations[ind], MDSlabels[ind], labels_refValues[ind], labels_judgeValues[ind], time_index[ind], counter[ind] = sort_all_vars_by_x(allvars, numerosity_ind)
 
     return contexts, activations, MDSlabels, labels_refValues, labels_judgeValues, time_index, counter
 
-# ---------------------------------------------------------------------------- #
 
-def formatInputSequence(TRIAL_TYPE, testset):
+def format_input_sequence(TRIAL_TYPE, testset):
     """ *This function is obsolete*
-    This function formatInputSequence() is for tidying up getActivations(),
+    This function format_input_sequence() is for tidying up get_activations(),
     and will determine the unique inputs in the test set (there will be repeats in the original test set).
     """
     testset_input_n_context, seq_record = [[] for i in range(2)]
@@ -453,13 +438,12 @@ def formatInputSequence(TRIAL_TYPE, testset):
 
     return seq_record, testset_input_n_context
 
-# ---------------------------------------------------------------------------- #
 
-def flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys):
+def flatten_lists_to_arrays(testset, sequence_id, seqitem_id, allvarkeys):
     """
-    This function flattenListsToArrays() takes a list of dictionary keys and a test set,
+    This function flatten_lists_to_arrays() takes a list of dictionary keys and a test set,
      and creates a list of squashed arrays from the elements accessed by those keys at particular
-     indices we care about (sequence_id, seqitem_id). For tidying up getActivations()
+     indices we care about (sequence_id, seqitem_id). For tidying up get_activations()
     """
     arrayvars = []
     for key in allvarkeys:
@@ -468,9 +452,8 @@ def flattenListsToArrays(testset, sequence_id, seqitem_id, allvarkeys):
 
     return arrayvars
 
-# ---------------------------------------------------------------------------- #
 
-def getActivations(args, trainset,trained_model, train_loader, whichType='compare'):
+def get_activations(args, trainset,trained_model, train_loader, whichType='compare'):
     """ This will determine the hidden unit activations for each input pair in the train/test set.
      There are many repeats of each input pair in the train/test set. If retainHiddenState is set to True,
      then we will evaluate the activations while considering the hidden state retained across all trials and blocks.
@@ -478,7 +461,6 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
      We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
       - messy but functional. To be tidied.
     """
-
     # reformat the input sequences for our recurrent model
     recurrentinputs = []
     sequenceLength = trainset["input"].shape[1]
@@ -549,7 +531,7 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
     #  pass each input through the network and see what happens to the hidden layer activations
     if not ((args.network_style=='recurrent') and args.retain_hidden_state):
         for sample in range(len(uniqueind)):
-            sample_input = batchToTorch(torch.from_numpy(unique_inputs[sample]))
+            sample_input = batch_to_torch(torch.from_numpy(unique_inputs[sample]))
             sample_label = unique_labels[sample]
             labels_refValues[sample] = dset.turnOneHotToInteger(unique_refValue[sample])
             labels_judgeValues[sample] = dset.turnOneHotToInteger(unique_judgementValue[sample])
@@ -585,8 +567,8 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
         latentstate = torch.zeros(1, trained_model.recurrent_size)
 
         for batch_idx, data in enumerate(train_loader):
-            #inputs, labels, context, contextinput = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batchToTorch(data['contextinput'])
-            inputs, labels, contextsequence, contextinputsequence, trialtype = batchToTorch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batchToTorch(data['context']), batchToTorch(data['contextinput']), batchToTorch(data['trialtypeinput']).unsqueeze(2)
+            #inputs, labels, context, contextinput = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batch_to_torch(data['contextinput'])
+            inputs, labels, contextsequence, contextinputsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['context']), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
             #print('context {}'.format(np.squeeze(dset.turnOneHotToInteger(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
@@ -696,7 +678,6 @@ def getActivations(args, trainset,trained_model, train_loader, whichType='compar
 
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
 
-# ---------------------------------------------------------------------------- #
 
 class OneStepRNN(nn.Module):
 
@@ -723,7 +704,6 @@ class OneStepRNN(nn.Module):
     def get_noise(self):
         return self.hidden_noise
 
-#------------------------------------------------------------
 
 def define_hyperparams():
     """
@@ -784,9 +764,8 @@ def define_hyperparams():
     multiparams = [args.batch_size_multi, args.lr_multi]
     return args, device, multiparams
 
-# ---------------------------------------------------------------------------- #
 
-def logPerformance(writer, epoch, train_perf, test_perf):
+def log_performance(writer, epoch, train_perf, test_perf):
     """ Write out the training and testing performance for this epoch to tensorboard.
           - 'writer' is a SummaryWriter instance
     Note: -  '_standard' means its the typical way people assess training performance vs test, which I think is not a fair comparison,
@@ -804,7 +783,6 @@ def logPerformance(writer, epoch, train_perf, test_perf):
     writer.add_scalar('Accuracy/training_fair', fair_train_accuracy, epoch)
     writer.add_scalar('Accuracy/testing', test_accuracy, epoch)
 
-# ---------------------------------------------------------------------------- #
 
 class argsparser():
     """For holding network training arguments, usually entered via command line"""
@@ -824,13 +802,12 @@ class argsparser():
         self.BPTT_len = 120
         self.train_lesion_freq = 0.0
 
-# ---------------------------------------------------------------------------- #
 
-def setupTestParameters(args, device):
+def setup_test_parameters(args, device):
     """
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
     """
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
+    datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
 
     # load the test set appropriate for the dataset our model was trained on
     trainset, testset, _, _, _, _ = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
@@ -841,14 +818,12 @@ def setupTestParameters(args, device):
     criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
     printOutput = True
     testParams = [args, trained_model, device, testloader, criterion, printOutput]
-
     return testParams
 
-# ---------------------------------------------------------------------------- #
 
-def getDatasetName(args):
-    """Return the (unique) name of the dataset, trained model, analysis and training record, based on args."""
-
+def get_dataset_name(args):
+    """Return the (unique) name of the dataset, trained model, analysis and training record, based on args.
+    """
     # convert the hyperparameter settings into a string ID
     if args.block_int_ttsplit == False:
         ttsplit = ''
@@ -880,9 +855,8 @@ def getDatasetName(args):
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
-# ---------------------------------------------------------------------------- #
 
-def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
+def train_recurrent_network(args, device, multiparams, trainset, testset):
     """
     This function performs the train/test loop for different parameter settings
      input by the user in multiparams.
@@ -890,7 +864,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
      - the trained recurrent model is returned
      - note that the train and test set must be divisible by args.batch_size, do to the shaping of the recurrent input
      """
-    _, _, _, trainingrecord_name = getDatasetName(args)
+    _, _, _, trainingrecord_name = get_dataset_name(args)
 
     # Repeat the train/test model assessment for different sets of hyperparameters
     for batch_size, lr in product(*multiparams):
@@ -933,7 +907,7 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
         print('Baseline train: {:.2f}%, Baseline test: {:.2f}%'.format(base_train_accuracy, base_test_accuracy))
         trainingPerformance.append(base_train_accuracy)
         testPerformance.append(base_test_accuracy)
-        printProgress(0, n_epochs)
+        print_progress(0, n_epochs)
 
         for epoch in range(1, n_epochs + 1):  # loop through the whole dataset this many times
 
@@ -950,8 +924,8 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
             trainingPerformance.append(standard_train_accuracy)
             testPerformance.append(test_accuracy)
             print('Train: {:.2f}%, Test: {:.2f}%'.format(standard_train_accuracy, test_accuracy))
-            logPerformance(writer, epoch, train_perf, test_perf)
-            printProgress(epoch, n_epochs)
+            log_performance(writer, epoch, train_perf, test_perf)
+            print_progress(epoch, n_epochs)
 
         print("Training complete.")
         # save this training curve
@@ -965,7 +939,6 @@ def trainRecurrentNetwork(args, device, multiparams, trainset, testset):
     writer.close()
     return model
 
-# ---------------------------------------------------------------------------- #
 
 def train_and_save_network(args, device, multiparams):
     """This function will:
@@ -975,7 +948,7 @@ def train_and_save_network(args, device, multiparams):
     """
 
     # define the network parameters
-    datasetname, trained_modelname, analysis_name, _ = getDatasetName(args)
+    datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
 
     if args.create_new_dataset:
         trainset, testset = dset.createSeparateInputData(datasetname, args)
@@ -984,7 +957,7 @@ def train_and_save_network(args, device, multiparams):
 
     # define and train a neural network model, log performance and output trained model
     if args.network_style == 'recurrent':
-        model = trainRecurrentNetwork(args, device, multiparams, trainset, testset)
+        model = train_recurrent_network(args, device, multiparams, trainset, testset)
     else:
         model = trainMLPNetwork(args, device, multiparams, trainset, testset)
 
@@ -992,5 +965,3 @@ def train_and_save_network(args, device, multiparams):
     print('Saving trained model...')
     print(trained_modelname)
     torch.save(model, trained_modelname)
-
-# ---------------------------------------------------------------------------- #

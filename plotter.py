@@ -608,7 +608,7 @@ def compare_lesion_tests(args, device):
         for ind, m in enumerate(allmodels):
             args.model_id = anh.get_id_from_name(m)
             print('modelid: ' + str(args.model_id))
-            testParams = mnet.setupTestParameters(args, device)
+            testParams = mnet.setup_test_parameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
@@ -715,7 +715,7 @@ def perf_vs_context_distance(args, device):
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
             args.model_id = anh.get_id_from_name(m)
-            testParams = mnet.setupTestParameters(args, device)
+            testParams = mnet.setup_test_parameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
@@ -865,7 +865,7 @@ def view_postlesion(args, device):
     full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
     full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
 
-    testParams = mnet.setupTestParameters(args, device)
+    testParams = mnet.setup_test_parameters(args, device)
     basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[0][:-4]
     filename = basefilename+'.npy'
 

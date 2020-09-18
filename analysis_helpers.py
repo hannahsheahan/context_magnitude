@@ -24,7 +24,7 @@ def get_model_names(args):
     """This function finds and return all the trained model file names that meet the criteria in args
     (ignoring model id).
     """
-    # included factors in name from getDatasetName()  (excluding random id for model instance)
+    # included factors in name from get_dataset_name()  (excluding random id for model instance)
     str_args = '_bs'+ str(args.batch_size_multi[0]) + '_lr' + str(args.lr_multi[0]) + '_ep' + str(args.epochs) + '_r' + str(args.recurrent_size) + '_h' + str(args.hidden_size) + '_bpl' + str(args.BPTT_len) + '_trlf' + str(args.train_lesion_freq)
     networkTxt = 'RNN' if args.network_style == 'recurrent' else 'MLP'
     contextlabelledtext = '_'+args.label_context+'contextlabel'
@@ -308,7 +308,7 @@ def model_behaviour_vs_theory(args, device):
 
     for ind, m in enumerate(allmodels):
         args.model_id = get_id_from_name(m)
-        testParams = mnet.setupTestParameters(args, device)
+        testParams = mnet.setup_test_parameters(args, device)
         basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
 
         # perform or load the lesion tests
@@ -456,7 +456,7 @@ def analyse_network(args):
         - the above for both a regular test set and the cross validation set (in case we need it later)
     """
     # load the MDS analysis if we already have it and move on
-    datasetname, trained_modelname, analysis_name, _ = mnet.getDatasetName(args)
+    datasetname, trained_modelname, analysis_name, _ = mnet.get_dataset_name(args)
 
     # load an existing dataset
     try:
@@ -480,7 +480,7 @@ def analyse_network(args):
             train_modelid = args.model_id
             args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
             args.model_id = paired_modelid
-            datasetname, _, _, _ = mnet.getDatasetName(args)
+            datasetname, _, _, _ = mnet.get_dataset_name(args)
             _, testset, crossvalset, _, np_testset, np_crossvalset = dset.loadInputData(const.DATASET_DIRECTORY, datasetname)
 
             # revert the original model parameters for naming the analyses based on the training conditions
@@ -499,7 +499,7 @@ def analyse_network(args):
                 test_loader = DataLoader(crossvalset, batch_size=1, shuffle=False)
 
             for whichTrialType in ['compare', 'filler']:
-                activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.getActivations(args, np_testset, trained_model, test_loader, whichTrialType)
+                activations, MDSlabels, labels_refValues, labels_judgeValues, labels_contexts, time_index, counter, drift, temporal_trialtypes = mnet.get_activations(args, np_testset, trained_model, test_loader, whichTrialType)
 
                 dimKeep = 'judgement'                      # representation of the currently presented number, averaging over previous number
                 sl_activations, sl_contexts, sl_MDSlabels, sl_refValues, sl_judgeValues, sl_counter = average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, args.label_context, counter)
