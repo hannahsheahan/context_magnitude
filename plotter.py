@@ -677,8 +677,8 @@ def perf_vs_context_distance(args, device):
     """This function plots post-lesion performance as a function of context distance (distance between input and context median).
     - ugly but functional. This ugly list (rather than np matrix) method is because the number of context distance elements in each context is different."""
 
-    #frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
-    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
+    frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
+    #frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     overall_lesioned_tests = []
 
     # file naming

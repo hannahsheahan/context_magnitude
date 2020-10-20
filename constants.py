@@ -15,6 +15,7 @@ NETANALYIS_DIRECTORY = 'network_analysis/'
 LESIONS_DIRECTORY = 'network_analysis/lesion_tests/'
 RDM_DIRECTORY = 'network_analysis/RDMs/'
 PARAMETER_DIRECTORY = 'linesmodel_parameters/'
+EEG_DIRECTORY = 'datasets/'
 
 # Total maximum numbers for one-hot coding
 TOTALMAXNUM = 16    # max numerosity

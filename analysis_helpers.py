@@ -11,6 +11,7 @@ import constants as const
 import numpy as np
 import scipy
 import os
+import math
 import json
 import matplotlib.pyplot as plt
 from sklearn.metrics import pairwise_distances
@@ -18,7 +19,23 @@ from sklearn.manifold import MDS
 import copy
 import torch
 from sklearn.linear_model import LogisticRegression
+from scipy.io import loadmat
 
+import matplotlib.colors as mplcol
+
+
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return plt.cm.get_cmap(name, n)
+
+
+def rotate_axes(x,y,theta):
+    # theta is in degrees
+    theta_rad = theta * (math.pi/180)  # convert to radians
+    x_new = x * math.cos(theta_rad) + y * math.sin(theta_rad)
+    y_new =  -x * math.sin(theta_rad) + y * math.cos(theta_rad)
+    return x_new, y_new
 
 def get_model_names(args):
     """This function finds and return all the trained model file names that meet the criteria in args
@@ -720,3 +737,260 @@ def cross_line_rep_generalisation(args):
         print('context-interleaved, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[1,:])))
         tstat, p = scipy.stats.ttest_ind(models_testscores[0,:], models_testscores[1,:])
         print('t-stat: {:.3f};  p-value: {:.3e}'.format(tstat, p))
+
+
+
+
+
+
+def _cross_line_rep_generalisation_human(args):
+    """Load activations for all subjects specified by args, then train a linear classifier
+    for one of the lines (with input being the hidden unit representation, and
+    output a binary big/small classification). Then test on the other two lines.
+    Compare generalisation performance across normalised (late epochs) vs absolute
+    (early epochs) codes.
+
+    HRS this is a hacky mess which doesnt work yet.. TBC
+    """
+
+    # load the human data
+    eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'alleeg.mat'))['alleeg'] # timepoints x stimulus ID x electrodes x subjects
+    print(eeg_data.shape)
+
+    eeg_data = np.mean(eeg_data[:,:,:,:],axis=0)
+    print(eeg_data.shape)
+    eeg_data = np.mean(eeg_data,axis=2)
+    print(eeg_data.shape)
+
+    D = pairwise_distances(eeg_data, metric='correlation')
+    im = plt.imshow(D, zorder=2, cmap='viridis', interpolation='nearest')
+    plt.show()
+
+    # HRS EVEN THE BASIC RDM DOESNT LOOK RIGHT SO SOMETHING IS GOING WRONG IN THE DATASET (OR MY MOST SIMPLE ANALYSIS)
+
+    # change it so that order of stimuli is: full->low->high
+    low_indices = range(const.LOWR_SPAN)
+    high_indices = range(const.LOWR_SPAN, const.LOWR_SPAN+const.HIGHR_SPAN)
+    full_indices = range(const.LOWR_SPAN+const.HIGHR_SPAN, const.LOWR_SPAN+const.HIGHR_SPAN+const.FULLR_SPAN)
+
+    low = eeg_data[:,low_indices, :,:]
+    high = eeg_data[:,high_indices, :,:]
+    full = eeg_data[:,full_indices, :,:]
+    eeg_data = np.concatenate((full, low, high), axis=1)
+    print(eeg_data.shape)
+
+    # try on mean data across subjects first
+    sub_data = np.mean(eeg_data,axis=3)
+    print(sub_data.shape)
+
+    # timepoints
+    timepoints = list(range(-104,897,20))
+    early_epoch_indices = [i for i,x in enumerate(timepoints) if ((x>200) and (x<500)) ] # 200->500 ms
+    late_epoch_indices = [i for i,x in enumerate(timepoints) if ((x>500) and (x<800)) ] # 200->500 ms
+    print(late_epoch_indices)
+
+    # mean over early  (absolute) vs late (normalised) epochs
+    early_data = np.mean(sub_data[early_epoch_indices,:,:],axis=0)
+    late_data = np.mean(sub_data[late_epoch_indices,:,:],axis=0)
+    print(early_data.shape)
+
+    D = pairwise_distances(late_data, metric='correlation')
+    im = plt.imshow(D, zorder=2, cmap='viridis', interpolation='nearest')
+    plt.show()
+
+    # low D versions
+    D = pairwise_distances(early_data, metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(D), 0)
+    early_data, _ = cmdscale(D)
+    early_data = early_data[:,:3]
+
+    D = pairwise_distances(late_data, metric='correlation') # using correlation distance
+    np.fill_diagonal(np.asarray(D), 0)
+    late_data, _ = cmdscale(D)
+    late_data = late_data[:,:3]
+
+    print(early_data.shape)
+    print(late_data.shape)
+
+    theta = 0
+    gradedcolour=False
+    Ns = [16,11,11]
+
+    fig,ax = plt.subplots(1,3, figsize=(18,5))
+    rbg_contextcolours = [mplcol.to_rgba(i) for i in const.CONTEXT_COLOURS]
+    white = (1.0, 1.0, 1.0, 1.0)
+
+    diffcolours = get_cmap(20, 'magma')
+    MDS_act = late_data
+    contextlabel = [[0 for i in range(16)], [1 for i in range(11)], [2 for i in range(11)]]
+    contextlabel = [element for sublist in contextlabel for element in sublist]
+    numberlabel = [list(range(16)), list(range(11)), list(range(6,17))]
+    numberlabel = [i for sublist in numberlabel for i in sublist]
+    differenceCodeText = ''
+
+    for j in range(3):  # 3 MDS dimensions
+
+        if j==0:
+            dimA = 0
+            dimB = 1
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 2')
+        elif j==1:
+            dimA = 0
+            dimB = 2
+            ax[j].set_xlabel('dim 1')
+            ax[j].set_ylabel('dim 3')
+        elif j==2:
+            dimA = 1
+            dimB = 2
+            ax[j].set_xlabel('dim 2')
+            ax[j].set_ylabel('dim 3')
+
+        ax[j].set_title('context')
+
+        contextA = range(const.FULLR_SPAN)
+        contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+        contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+
+        # Rotate the components on the 2d plot since global orientation doesnt matter (axes are arbitrary)
+        rotated_act = copy.deepcopy(MDS_act)
+
+        rotated_act[contextA, dimA], rotated_act[contextA, dimB] = rotate_axes(MDS_act[contextA, dimA], MDS_act[contextA, dimB], theta)
+        rotated_act[contextB, dimA], rotated_act[contextB, dimB] = rotate_axes(MDS_act[contextB, dimA], MDS_act[contextB, dimB], theta)
+        rotated_act[contextC, dimA], rotated_act[contextC, dimB] = rotate_axes(MDS_act[contextC, dimA], MDS_act[contextC, dimB], theta)
+
+        ax[j].plot(rotated_act[contextA, dimA], rotated_act[contextA, dimB], color=const.CONTEXT_COLOURS[0])
+        ax[j].plot(rotated_act[contextB, dimA], rotated_act[contextB, dimB], color=const.CONTEXT_COLOURS[1])
+        ax[j].plot(rotated_act[contextC, dimA], rotated_act[contextC, dimB], color=const.CONTEXT_COLOURS[2])
+
+        if gradedcolour:
+            markercount=0
+            lastc = -1
+            for i in range((MDS_act.shape[0])):
+
+                # create colour gradient within each context to signal numerosity
+                c = int(contextlabel[i])
+                if c!=lastc:
+                    markercount=0
+                lastc = int(contextlabel[i])
+                graded_contextcolours = np.zeros((4, Ns[c]))
+                for p in range(4):
+                    graded_contextcolours[p] = np.linspace(white[p],rbg_contextcolours[c][p],Ns[c])
+                gradedcolour = np.asarray([graded_contextcolours[p][markercount] for p in range(len(graded_contextcolours))])
+
+                # colour by context
+                ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=gradedcolour, edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
+                markercount +=1
+                # label numerosity in white inside the marker
+                firstincontext = [0,15,16,16+10,16+11, 16+21]
+                if i in firstincontext:
+                    ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color=const.CONTEXT_COLOURS[int(contextlabel[i])], size=15, horizontalalignment='center', verticalalignment='center')
+        else:
+            for i in range((MDS_act.shape[0])):
+
+                ax[j].scatter(rotated_act[i, dimA], rotated_act[i, dimB], color=const.CONTEXT_COLOURS[int(contextlabel[i])], edgecolor=const.CONTEXT_COLOURS[int(contextlabel[i])], s=80, linewidths=2)
+                ax[j].text(rotated_act[i, dimA], rotated_act[i, dimB], str(24+int(numberlabel[i])), color='white', size=6.5, horizontalalignment='center', verticalalignment='center')
+
+        ax[j].axis('equal')
+
+
+    plt.show()
+
+    # specify context indices for each line
+    contextA = range(const.FULLR_SPAN)
+    contextB = range(const.FULLR_SPAN,const.FULLR_SPAN+const.LOWR_SPAN)
+    contextC = range(const.FULLR_SPAN+const.LOWR_SPAN, const.FULLR_SPAN+const.LOWR_SPAN+const.HIGHR_SPAN)
+    contexts = [contextA, contextB, contextC]
+
+    # median split labels for each line
+    y_lineA = [-1 if i<const.CONTEXT_FULL_MEAN else 1 for i in range(const.FULLR_LLIM, const.FULLR_ULIM+1)]
+    y_lineB = [-1 if i<const.CONTEXT_LOW_MEAN else 1 for i in range(const.LOWR_LLIM, const.LOWR_ULIM+1)]
+    y_lineC = [-1 if i<const.CONTEXT_HIGH_MEAN else 1 for i in range(const.HIGHR_LLIM, const.HIGHR_ULIM+1)]
+    y_labels = [y_lineA, y_lineB, y_lineC]
+
+    # train with MDS high-D representation as input
+    activations = late_data #late_data
+    generalisation = []
+    train_scores = []
+
+    # train logistic regression classifier on one line, test on the other two
+    for train_index in range(const.NCONTEXTS):
+        X_train = activations[contexts[train_index],:]
+        y_train = y_labels[train_index]
+
+        # train a binary (big/small) linear classifier
+        clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+        train_score = clf.score(X_train, y_train)
+
+        # test on the other two lines
+        test_sets = [j for j in range(const.NCONTEXTS) if j != train_index]
+        test_perf = []
+        for test_set in test_sets:
+            X_test = activations[contexts[test_set],:]
+            y_test = y_labels[test_set]
+            test_perf.append(clf.score(X_test, y_test))
+
+        # how well did this classifier predict big/small for the other lines?
+        generalisation.append(np.mean(test_perf))
+        train_scores.append(train_score)
+
+    print('mean train score: {}'.format(np.mean(train_scores)))
+    print('mean test score: {}'.format(np.mean(generalisation)))
+    #dist_test_scores.append(generalisation)
+    #dist_train_scores.append(train_scores)
+
+    """
+    # moving average over timepoints
+    window = 3
+    moving_mean = []
+    cumsum = np.zeros(sub_data.shape[1],sub_data.shape[2])
+    print(cumsum.shape)
+    for i in range(sub_data.shape[0],1):
+        cumsum.append()
+    """
+
+
+
+
+
+def retrain_decoder(args, device, multiparams):
+    """This function will load trained models specified in args, before retraining
+     the decoder (final layer weights) of the network with virtual inactivation (lesioning).
+     The prediction is that networks which had normalised hidden reps will retrain
+     to use local context behaviourally, because the normalised reps support that
+     function. Whereas networks that had absolute reps will not be able to use
+     local context even after final layer retraining.
+
+     - only intended for use with recurrent networks that were originally trained with no VI
+      (train_lesion_freq = 0.0)
+     """
+
+    # find trained models (no VI during training)
+    args.train_lesion_freq = 0.0
+    matching_models = get_model_names(args)
+    all_models = os.listdir(const.MODEL_DIRECTORY)
+    all_models = [os.path.join(const.MODEL_DIRECTORY,m) for m in all_models]
+
+    # define the dataset to use for retraining (will be same as training, as VI is not dataset-dependent)
+    args.train_lesion_freq = 0.1  # apply VI but keep all other training conditions the same as original conditions
+    datasetname, _, _, _ = mnet.get_dataset_name(args)
+    trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
+
+    # retrain model with all weights/biases frozen except decoder layer
+    args.retrain_decoder = True
+    for trained_model_name in matching_models:
+
+        # choose which trained model to retrain
+        print('Retraining model: {}'.format(trained_model_name))
+        args.original_model_name = os.path.join(const.MODEL_DIRECTORY, trained_model_name)
+        args.model_id = get_id_from_name(trained_model_name)
+        _, retrained_modelname, _, _ = mnet.get_dataset_name(args)
+
+        if retrained_modelname not in all_models:
+            # retrain the model
+            model = mnet.train_recurrent_network(args, device, multiparams, trainset, testset)
+
+            # save the retrained model under a modified name
+            print('Saving trained model...')
+            print(retrained_modelname)
+            torch.save(model, retrained_modelname)

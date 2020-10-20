@@ -29,7 +29,7 @@ if __name__ == '__main__':
     args, device, multiparams = mnet.define_hyperparams()
     args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
     args.all_fullrange = False    # False = blocked; True = interleaved
-    args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
+    args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
     args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
     # args.model_id = 646          # for visualising a particular trained model
 
@@ -54,4 +54,10 @@ if __name__ == '__main__':
     #anh.model_behaviour_vs_theory(args, device)
 
     # Load representations and check cross-line big/small generalisation
-    anh.cross_line_rep_generalisation(args)
+    #anh.cross_line_rep_generalisation(args)
+
+    #anh.cross_line_rep_generalisation_human(args)
+
+    # Load a trained network (no VI), freeze the first layer (recurrent) weights and then retrain the decoder with VI and save it
+    anh.retrain_decoder(args, device, multiparams)
+    #mplt.perf_vs_context_distance(args, device)     # Assess performance after a lesion vs context distance after retraining with VI
