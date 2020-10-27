@@ -37,6 +37,10 @@ def rotate_axes(x,y,theta):
     y_new =  -x * math.sin(theta_rad) + y * math.cos(theta_rad)
     return x_new, y_new
 
+def shadeplot(ax, x_values, means, sems, colour='black'):
+    """Plot mean+-sem shaded"""
+    ax.fill_between(x_values, means-sems, means+sems, color=colour, alpha=0.25, linewidth=0.0)
+
 def get_model_names(args):
     """This function finds and return all the trained model file names that meet the criteria in args
     (ignoring model id).
@@ -953,7 +957,7 @@ def _cross_line_rep_generalisation_human(args):
 
 
 
-def retrain_decoder(args, device, multiparams):
+def retrain_decoder(args, retrain_args, device, multiparams):
     """This function will load trained models specified in args, before retraining
      the decoder (final layer weights) of the network with virtual inactivation (lesioning).
      The prediction is that networks which had normalised hidden reps will retrain
@@ -971,13 +975,18 @@ def retrain_decoder(args, device, multiparams):
     all_models = os.listdir(const.MODEL_DIRECTORY)
     all_models = [os.path.join(const.MODEL_DIRECTORY,m) for m in all_models]
 
+    # set the conditions we want to retrain under
+    args.retrain_decoder = retrain_args.retrain_decoder
+    args.epochs = retrain_args.epochs
+    args.lr_multi = retrain_args.lr_multi
+    args.train_lesion_freq = retrain_args.train_lesion_freq
+
     # define the dataset to use for retraining (will be same as training, as VI is not dataset-dependent)
-    args.train_lesion_freq = 0.1  # apply VI but keep all other training conditions the same as original conditions
-    datasetname, _, _, _ = mnet.get_dataset_name(args)
+    # HRS for now just keep the retraining dataset the same for all models and make it blocked (otherwise context not useful) and context labeled
+    datasetname = const.RETRAINING_DATASET
     trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
     # retrain model with all weights/biases frozen except decoder layer
-    args.retrain_decoder = True
     for trained_model_name in matching_models:
 
         # choose which trained model to retrain

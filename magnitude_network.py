@@ -343,7 +343,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                             if trial==assess_idx:
                                 lesionperf = answer_correct(output, labels[trial])
                                 post_lesion_activations = h1activations
-                                print('this happens')
 
                     localmodel_perf = get_local_model_response(assess_number, context, labels[trial])   # correct or incorrect
                     globalmodel_perf = get_global_model_response(assess_number, context, labels[trial]) # correct or incorrect
@@ -758,7 +757,7 @@ def define_hyperparams():
         parser.add_argument('--noise_std', type=float, default=0.0, metavar='N', help='standard deviation of iid noise injected into the recurrent hiden state between numerical inputs (default: 0.0).')
         parser.add_argument('--model-id', type=int, default=0, metavar='N', help='for distinguishing many iterations of training same model (default: 0).')
 
-        parser.set_defaults(create_new_dataset=True, all_fullrange=False, retain_hidden_state=True)
+        parser.set_defaults(create_new_dataset=True, all_fullrange=False, retain_hidden_state=True, retrain_decoder=False)
         args = parser.parse_args()
 
     if args.which_context>0:
@@ -810,7 +809,7 @@ def setup_test_parameters(args, device):
     Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
     """
     datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
-
+    print(trained_modelname)
     # load the test set appropriate for the dataset our model was trained on
     trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
@@ -885,6 +884,14 @@ def train_recurrent_network(args, device, multiparams, trainset, testset):
             for name, param in model.named_parameters():
                 if 'fc1tooutput' not in name:
                     param.requires_grad = False  # (if retraining model) freeze all weights/biases except for decoder
+                    print('freeze these params: {}, {}'.format(name, param.shape))
+                else:
+                    print('re-initialise and keep training these params: {}, {}'.format(name, param.shape))
+                    # reinitialize these weights
+                    stdv = 1. / math.sqrt(model.fc1tooutput.weight.size(1))
+                    param.data.uniform_(-stdv, stdv)
+
+
         else:
             model = OneStepRNN(const.TOTALMAXNUM + const.NCONTEXTS + const.NTYPEBITS, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
 

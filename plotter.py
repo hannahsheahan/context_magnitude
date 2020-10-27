@@ -534,7 +534,7 @@ def animate_3d_drift_mds(MDS_dict, args, whichTrialType='compare', saveFig=True)
         anim.save(strng+'.mp4', writer=writer)
 
 
-def plot_optimal_perf(ax, args):
+def plot_optimal_perf(ax):
     """This function plots the performance in each context of theoretical agents
      making decisions using only the current number and knowledge of the local or global context median. """
 
@@ -578,7 +578,7 @@ def compare_lesion_tests(args, device):
 
     plt.figure()
     fig, ax = plt.subplots(1,len(frequencylist), figsize=(14,3.5))
-    handles = plot_optimal_perf(ax, args)
+    handles = plot_optimal_perf(ax)
 
     # file naming
     blcktxt = '_interleaved' if args.all_fullrange else '_temporalblocked'
