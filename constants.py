@@ -55,4 +55,4 @@ CONTEXT_COLOURS = [[253/256, 176/256, 4/256], 'dodgerblue', 'orangered', 'black'
 MODEL_COLOURS = ['darkkhaki', 'olivedrab','darkolivegreen']  # change to show both local and global on same plot easily and keep main colours for data
 
 # Single dataset for retraining decoders under blocked, VI conditions
-RETRAINING_DATASET = 'dataset_truecontextlabel_numrangeblocked_bpl120_id9999'
+RETRAINING_DATASET = 'dataset_truecontextlabel_numrangeblocked_bpl120_id8599'#'dataset_truecontextlabel_numrangeblocked_bpl120_id9999'

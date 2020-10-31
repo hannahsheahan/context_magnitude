@@ -212,6 +212,7 @@ if __name__ == '__main__':
     args.all_fullrange = False    # False = blocked; True = interleaved
     args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
     args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
+    args.retrain_decoder = False
     #args.model_id = 9999          # for visualising a particular trained model
 
     # Train a network from scratch and save it
@@ -236,22 +237,21 @@ if __name__ == '__main__':
 
     # Load representations and check cross-line big/small generalisation
     #anh.cross_line_rep_generalisation(args)
-
     #anh.cross_line_rep_generalisation_human(args)
 
     # Load a trained network (no VI), freeze the first layer (recurrent) weights and then retrain the decoder with VI and save it
-    retrain_args, _, _ = mnet.define_hyperparams()
-    retrain_args.train_lesion_freq = 0.4
-    retrain_args.epochs = 20
-    retrain_args.lr_multi = [0.001]
-    retrain_args.retrain_decoder = True
+    #retrain_args, _, _ = mnet.define_hyperparams()
+    #retrain_args.train_lesion_freq = 0.4
+    #retrain_args.epochs = 20
+    #retrain_args.lr_multi = [0.001]
+    #retrain_args.retrain_decoder = True
     #anh.retrain_decoder(args, retrain_args, device, multiparams)
 
-    SSE_local = [[] for i in range(2)]
+    #SSE_local = [[] for i in range(2)]
     #for ind, args.all_fullrange in enumerate([False, True]):
     #    if args.all_fullrange:
     #        , 2922, 1347, 6213, 8594, 1600, 5219]  # interleaved initial training
     #    else:
     #        model_list = [1033, 2498, 3791, 2289, 832, 9, 8120, 1259, 6196, 7388] # blocked initial training
-    model_list = [1033] #,2498, 3791]
-    SSE_local[0] = plot_postlesion(args, retrain_args, model_list)
+    #model_list = [7388] #,2498, 3791]
+    #SSE_local[0] = plot_postlesion(args, retrain_args, model_list)
