@@ -570,6 +570,9 @@ def compare_lesion_tests(args, device):
      which were trained with different frequencies of lesions in the training set.
      - this will now search for the lesion assessments for all the model instances that match the args
      - this should now plot a dot +- SEM over model instances at each dot to see how variable it is.
+     - Note that this uses the test set associated with the training set. So if we want to assess context
+       use in context-interleaved networks, we really need to apply a different test set to assess properly.
+        That doesnt happen in this function so beware: should only be used for context-blocked networks.
     """
     frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
     #frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
@@ -608,7 +611,7 @@ def compare_lesion_tests(args, device):
         for ind, m in enumerate(allmodels):
             args.model_id = anh.get_id_from_name(m)
             print('modelid: ' + str(args.model_id))
-            testParams = mnet.setup_test_parameters(args, device)
+            testParams = anh.setup_test_parameters(args, device)
             basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
             filename = basefilename+'.npy'
 
@@ -660,7 +663,13 @@ def compare_lesion_tests(args, device):
         ax[i].set_xticklabels(['low','high','full'])
     plt.legend(handles[0:1],['prediction', 'RNN'])
     whichTrialType = 'compare'
-    save_figure(os.path.join(const.FIGURE_DIRECTORY,'lesionfreq_trainedlesions_new_'+contexttxt), args, True, False, whichTrialType, True)
+    blocking_train_txt = 'interleavedtrain_' if args.all_fullrange else 'blockedtrain_'
+    if args.block_int_ttsplit:
+        blocking_test_txt = 'blockedtest_' if args.all_fullrange else 'interleavedtest_'
+    else:
+        blocking_test_txt = 'interleavedtest_' if args.all_fullrange else 'blockedtest_'
+
+    save_figure(os.path.join(const.FIGURE_DIRECTORY,'lesionfreq_trainedlesions_new_'+blocking_train_txt+blocking_test_txt+str(args.train_lesion_freq)), args, True, False, whichTrialType, True)
 
 
 def get_summarystats(data, axis, method='std'):
@@ -715,8 +724,9 @@ def perf_vs_context_distance(args, device):
         # find all model ids that fit our requirements
         for ind, m in enumerate(allmodels):
             args.model_id = anh.get_id_from_name(m)
-            testParams = mnet.setup_test_parameters(args, device)
-            basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
+            testParams = anh.setup_test_parameters(args, device)
+            block_ttsplit_text = '_blockttsplit' if args.block_int_ttsplit else ''
+            basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4] + block_ttsplit_text
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
@@ -771,8 +781,12 @@ def perf_vs_context_distance(args, device):
         ax[j].set_xticks([0,2,4,6,8])
 
     ax[j].legend((handles[0], handles[-1]),('prediction','RNN'))
-    whichTrialType = 'compare'
-    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion.pdf'), bbox_inches='tight')
+    blocking_train_txt = 'interleavedtrain_' if args.all_fullrange else 'blockedtrain_'
+    if args.block_int_ttsplit:
+        blocking_test_txt = 'blockedtest_' if args.all_fullrange else 'interleavedtest_'
+    else:
+        blocking_test_txt = 'interleavedtest_' if args.all_fullrange else 'blockedtest_'
+    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'perf_v_distToContextMean_postlesion_'+blocking_train_txt + blocking_test_txt + str(args.train_lesion_freq)+'.pdf'), bbox_inches='tight')
 
 
 def visualise_recurrent_state(MDS_dict):
@@ -865,7 +879,7 @@ def view_postlesion(args, device):
     full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
     full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
 
-    testParams = mnet.setup_test_parameters(args, device)
+    testParams = anh.setup_test_parameters(args, device)
     basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[0][:-4]
     filename = basefilename+'.npy'
 

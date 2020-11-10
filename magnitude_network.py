@@ -116,6 +116,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         layers, ave_grads, max_grads = [[] for i in range(3)]
         lesionRecord = np.zeros((sequenceLength,))
         loss = 0
+        alternate_lesion_trial = True  # for retraining decoder, lesion alternate trials
 
         for i in range(sequenceLength):
             context = contextsequence[:,i]
@@ -124,10 +125,16 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                 context_in = torch.full_like(context, 0)
             else:
                 context_in = copy.deepcopy(context)
-                if (random.random() < args.train_lesion_freq): # occasionally lesion the number input on compare trials
-                    lesionRecord[i] = 1
-                    lesionedinput = torch.full_like(inputs[:,i],0)
+                if args.retrain_decoder:
+                    if alternate_lesion_trial: # alternately lesion the number input on compare trials
+                        lesionRecord[i] = 1
+                        lesionedinput = torch.full_like(inputs[:,i],0)
+                else:
+                    if (random.random() < args.train_lesion_freq): # occasionally lesion the number input on compare trials
+                        lesionRecord[i] = 1
+                        lesionedinput = torch.full_like(inputs[:,i],0)
 
+            alternate_lesion_trial = False if alternate_lesion_trial else True
             inputX = torch.cat((lesionedinput, context_in, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
@@ -802,24 +809,6 @@ class argsparser():
         self.hidden_size = 60
         self.BPTT_len = 120
         self.train_lesion_freq = 0.0
-
-
-def setup_test_parameters(args, device):
-    """
-    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    """
-    datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
-    print(trained_modelname)
-    # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
-    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-    # load our trained model
-    trained_model = torch.load(trained_modelname)
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-    printOutput = True
-    testParams = [args, trained_model, device, testloader, criterion, printOutput]
-    return testParams
 
 
 def get_dataset_name(args):

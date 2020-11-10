@@ -22,6 +22,9 @@ from sklearn.linear_model import LogisticRegression
 from scipy.io import loadmat
 import random
 
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 import matplotlib.colors as mplcol
 
 
@@ -336,8 +339,9 @@ def model_behaviour_vs_theory(args, device):
 
     for ind, m in enumerate(allmodels):
         args.model_id = get_id_from_name(m)
-        testParams = mnet.setup_test_parameters(args, device)
-        basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
+        testParams = setup_test_parameters(args, device)
+        ttsplit_text = '_blockingttsplit' if args.block_int_ttsplit else ''
+        basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4] + ttsplit_text
 
         # perform or load the lesion tests
         lesiondata, regulartestdata = perform_lesion_tests(args, testParams, basefilename)
@@ -475,6 +479,43 @@ def get_paired_test_model_id(args):
         print('Warning: blocked and interleaved datasets under args not the same size')
 
     return test_id
+
+
+def setup_test_parameters(args, device):
+    """
+    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
+    Can now test on different blocking conditions to training (e.g. train blocked, test interleaved etc)
+    """
+    if args.block_int_ttsplit:
+
+        # load the paired test set with the opposite blocking structure to the dataset our model was trained on
+        _, trained_modelname, analysis_name, _ = mnet.get_dataset_name(args)
+        paired_modelid = get_paired_test_model_id(args)
+
+        # test on a different (interleaved/blocked) dataset
+        train_modelid = args.model_id
+        args.all_fullrange = not args.all_fullrange  # flip to test on opposite blocking/interleaved structure
+        args.model_id = paired_modelid
+        datasetname, _, _, _ = mnet.get_dataset_name(args)
+        _, testset, crossvalset, _, np_testset, np_crossvalset = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
+
+        # revert the original model parameters for naming the analyses based on the training conditions
+        args.model_id = train_modelid
+        args.all_fullrange = not args.all_fullrange   # flip to return to original train block/interleaving
+    else:
+        # load the test set matching the dataset our model was trained on
+        datasetname, trained_modelname, analysis_name, _ = mnet.get_dataset_name(args)
+        trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
+
+    print(trained_modelname)
+    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+    # load our trained model
+    trained_model = torch.load(trained_modelname)
+    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
+    printOutput = True
+    testParams = [args, trained_model, device, testloader, criterion, printOutput]
+    return testParams
 
 
 def analyse_network(args):
@@ -636,7 +677,7 @@ def average_activations_across_models(args):
     return MDS_meandict, args
 
 
-def train_line_classifier(activations, contexts):
+def train_line_classifier(activations, contexts, y_labels):
     """Train a logistic regression classifier to label activations according to
     whether they were big/small in that context. Then test classifier on other
     contexts."""
@@ -745,7 +786,7 @@ def cross_line_rep_generalisation(args):
 
                 # train with MDS low-D representation as input
                 activations = mdict[which_activations]
-                generalisation, train_scores = train_line_classifier(activations, contexts)
+                generalisation, train_scores = train_line_classifier(activations, contexts, y_labels)
 
                 dist_test_scores.append(generalisation)
                 dist_train_scores.append(train_scores)
@@ -755,12 +796,12 @@ def cross_line_rep_generalisation(args):
             models_trainscores.append(dist_train_scores)
             models_testscores.append(dist_test_scores)
 
-            ax[0].hist(dist_train_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[0].hist(dist_train_scores, bins=np.linspace(0.5,1,30), alpha=0.5)
             ax[0].set_xlabel('Classifier training score')
-            ax[0].set_xlim((0,1))
-            ax[1].hist(dist_test_scores, bins=np.linspace(0,1,30), alpha=0.5)
+            ax[0].set_xlim((0.5,1))
+            ax[1].hist(dist_test_scores, bins=np.linspace(0.5,1,30), alpha=0.5)
             ax[1].set_xlabel('Classifier test score')
-            ax[1].set_xlim((0,1))
+            ax[1].set_xlim((0.5,1))
 
         ax[1].legend(['Context-blocked RNN\n(normalised code)','Context-interleaved RNN\n(absolute code)'])
         fig.suptitle('Logistic regression binary classifier (big/small) trained on '+ act_string)
@@ -777,71 +818,141 @@ def cross_line_rep_generalisation(args):
         print('t-stat: {:.3f};  p-value: {:.3e}'.format(tstat, p))
 
 
-def cross_line_rep_generalisation_human(args):
+def cross_line_rep_generalisation_human(args, use_subject_mean=True, use_raw_data = False):
     """Load activations for all subjects specified by args, then train a linear classifier
     for one of the lines (with input being the hidden unit representation, and
     output a binary big/small classification). Then test on the other two lines.
     Compare generalisation performance across normalised (late epochs) vs absolute
     (early epochs) codes."""
 
-    # load the high D human raw EEG data
-    #eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'alleeg.mat'))['alleeg'] # timepoints x stimulus ID x electrodes x subjects
-    #print(eeg_data.shape)
-    #eeg_data = np.mean(eeg_data[30:45,:,:,:],axis=0)
-    #eeg_data = np.mean(eeg_data,axis=2) # mean across subjects
-    #print(eeg_data.shape)
-    #MDS_act = eeg_data
+    use_subject_mean = False
+    use_raw_data = True
 
-    # one version of high D original EEG data
-    #eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'numbers_ERPdata.mat'))['cERP'] # timepoints x stimulus ID x electrodes x subjects
-    #print(eeg_data.shape)
-    #eeg_data = np.mean(eeg_data,axis=0)
-    #MDS_act = eeg_data.T
-    #print(MDS_act.shape)
+    if use_raw_data:
+        # load the high D human raw EEG data
+        #eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'alleeg.mat'))['alleeg'] # timepoints x stimulus ID x electrodes x subjects
+        #print(eeg_data.shape)
+        #eeg_data = np.mean(eeg_data[30:45,:,:,:],axis=0)
+        #eeg_data = np.mean(eeg_data,axis=2) # mean across subjects
+        #print(eeg_data.shape)
+        #MDS_act = eeg_data
 
-    # get low D version with MDS
-    eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'chris_eeg_data.mat'))['data'] # subjects x stimulus ID x stimulus ID
-    eeg_data = np.mean(eeg_data[:,:,:],axis=0)
-    print(eeg_data.shape)
-    pairwise_data = eeg_data
-    np.fill_diagonal(np.asarray(pairwise_data), 0)
-    MDS_act, evals = cmdscale(pairwise_data)
+        # one version of high D original EEG data
+        eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'numbers_ERPdata.mat'))['cERP'] # subjects x electrodes x stimulus ID
+        indiv_sub_data = eeg_data
+        mean_data = np.mean(eeg_data,axis=0)
+        MDS_act = mean_data.T
 
-    for dim in ['high_dim','low_dim']:
-        if dim == 'low_dim':
-            MDS_act = MDS_act[:,:3]  # get a MDS version with only some components
+    else:  # use RDMs
+        eeg_data = loadmat(os.path.join(const.EEG_DIRECTORY, 'chris_eeg_data.mat'))['data'] # subjects x stimulus ID x stimulus ID
+        print(eeg_data.shape)
+        mean_data = np.mean(eeg_data[:,:,:],axis=0)
+        pairwise_data = eeg_data
+        np.fill_diagonal(np.asarray(pairwise_data), 0)
+        MDS_act, evals = cmdscale(pairwise_data)
 
-        # to create controls, permute the number labels within each line that are assocaited with each activation.
-        shuffled_data_train_scores = []
-        shuffled_data_test_scores = []
+        indiv_sub_data = np.zeros(eeg_data.shape[0], 38, 38)
+        for sub in range(eeg_data.shape[0]):
+            pairwise_data = indiv_sub_data[sub,:,:]
+            np.fill_diagonal(np.asarray(pairwise_data), 0)
+            MDS, evals = cmdscale(pairwise_data)
+            indiv_sub_data[sub] = MDS
 
-        # specify context indices for each line
-        for rep in range(10000):
-            randomise_labels = False
-            if rep!=0:    # maintain correct within-context number labelling
-                randomise_labels = True
-            reverse_context_order = True
-            contexts, y_labels = setup_classifier_labels(reverse_context_order, randomize_labels)
+    print(indiv_sub_data.shape)
 
-            # train with MDS high-D representation as input
-            activations = MDS_act
-            generalisation, train_scores = train_line_classifier(activations, contexts)
+    if use_subject_mean:
+        for dim in ['high_dim','low_dim']:
+            if dim == 'low_dim':
+                MDS_act = MDS_act[:,:3]  # get a MDS version with only some components
 
-            if rep==0:
-                correct_test_scores = np.mean(generalisation)
-                correct_train_scores = np.mean(train_scores)
-            else:
-                shuffled_data_test_scores.append(np.mean(generalisation))
-                shuffled_data_train_scores.append(np.mean(train_scores))
+            # to create controls, permute the number labels within each line that are assocaited with each activation.
+            shuffled_data_train_scores = []
+            shuffled_data_test_scores = []
 
-        plt.figure()
-        plt.hist(shuffled_data_test_scores, alpha=0.5, bins=20)
-        plt.vlines(correct_test_scores,0, 1000, color='red')
-        plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'meanhuman_lines_generalisation_test_'+dim+'.pdf'),  bbox_inches='tight')
+            # specify context indices for each line
+            for rep in range(10000):
+                randomize_labels = False
+                if rep!=0:    # maintain correct within-context number labelling
+                    randomize_labels = True
+                reverse_context_order = True
+                contexts, y_labels = setup_classifier_labels(reverse_context_order, randomize_labels)
 
-        # compute empirical p-value
-        samples_greater = len([i for i in shuffled_data_test_scores if i > correct_test_scores]) / len(shuffled_data_test_scores)
-        print('p-value: {}'.format(samples_greater))
+                # train with MDS high-D representation as input
+                activations = MDS_act
+                generalisation, train_scores = train_line_classifier(activations, contexts, y_labels)
+
+                if rep==0:
+                    correct_test_scores = np.mean(generalisation)
+                    correct_train_scores = np.mean(train_scores)
+                else:
+                    shuffled_data_test_scores.append(np.mean(generalisation))
+                    shuffled_data_train_scores.append(np.mean(train_scores))
+
+            plt.figure()
+            plt.hist(shuffled_data_test_scores, alpha=0.5, bins=20)
+            plt.vlines(correct_test_scores,0, 1000, color='red')
+            plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'meanhuman_lines_generalisation_test_'+dim+'.pdf'),  bbox_inches='tight')
+
+            # compute empirical p-value
+            samples_greater = len([i for i in shuffled_data_test_scores if i > correct_test_scores]) / len(shuffled_data_test_scores)
+            print('p-value: {}'.format(samples_greater))
+    else:
+        if use_raw_data:
+            dims = ['raw_dim']
+        else:
+            dims = ['high_dim','low_dim']
+
+        for dim in dims:
+            all_sub_shuffled_test = []
+            all_sub_shuffled_train = []
+
+            for sub in range(indiv_sub_data.shape[0]):
+                # train a classifier on each subject separately
+                MDS_act = indiv_sub_data[sub,:,:]
+                if dim == 'low_dim':
+                    MDS_act = MDS_act[:,:3]  # get a MDS version with only some components
+
+                # to create controls, permute the number labels within each line that are assocaited with each activation.
+                shuffled_data_train_scores = []
+                shuffled_data_test_scores = []
+                all_sub_correct_test = []
+
+                # specify context indices for each line
+                for rep in range(10000):
+                    randomize_labels = False
+                    if rep!=0:    # maintain correct within-context number labelling
+                        randomize_labels = True
+                    reverse_context_order = True
+                    contexts, y_labels = setup_classifier_labels(reverse_context_order, randomize_labels)
+
+                    # train with MDS high-D representation as input
+                    activations = MDS_act
+                    generalisation, train_scores = train_line_classifier(activations, contexts, y_labels)
+
+                    if rep==0:
+                        correct_test_scores = np.mean(generalisation)
+                        correct_train_scores = np.mean(train_scores)
+                    else:
+                        shuffled_data_test_scores.append(np.mean(generalisation))
+                        shuffled_data_train_scores.append(np.mean(train_scores))
+
+                all_sub_shuffled_test.append(shuffled_data_test_scores)
+                all_sub_shuffled_train.append(shuffled_data_train_scores)
+                all_sub_correct_test.append(correct_test_scores)
+
+            all_sub_shuffled_test = [i for sublist in all_sub_shuffled_test for i in sublist]
+            all_sub_shuffled_train = np.asarray([i for sublist in all_sub_shuffled_train for i in sublist])
+            all_sub_correct_test = np.mean(all_sub_correct_test)
+            print('mean decoder training performance: {}% '.format(np.mean(all_sub_shuffled_train)))
+            plt.figure()
+            plt.hist(all_sub_shuffled_test, alpha=0.5, bins=20)
+            plt.vlines(all_sub_correct_test,0, 1000, color='red')
+            plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'indivsub_human_lines_generalisation_test_'+dim+'.pdf'),  bbox_inches='tight')
+
+            # compute empirical p-value
+            samples_greater = len([i for i in all_sub_shuffled_test if i > all_sub_correct_test]) / len(all_sub_shuffled_test)
+            print('one-sided p-value: {}'.format(samples_greater))
+
 
 
 def retrain_decoder(args, retrain_args, device, multiparams):
@@ -890,3 +1001,183 @@ def retrain_decoder(args, retrain_args, device, multiparams):
             print('Saving trained model...')
             print(retrained_modelname)
             torch.save(model, retrained_modelname)
+
+
+def plot_postlesion(args, retrain_args, model_list):
+    """
+    This script is supposed to assess context use in networks that had their decoder (only) retrained with VI.
+    HRS this is an absolute mess of a hack that needs tidying up. ***HRS
+    There will be a lot of overlap with other function in plotter and analysis_helpers too."""
+
+    blockingtext = '_interleaved_orig' if args.all_fullrange else '_blocked_orig'
+
+    # allocate some space
+    global_meanperf = []
+    global_uniquediffs = []
+    full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs = [[] for i in range(3)]
+    full_context_perf, low_context_perf, high_context_perf = [[] for i in range(3)]
+
+    data = [[] for i in range(len(model_list))]
+    context_tests = np.zeros((const.NCONTEXTS, len(model_list)))
+    perf = np.zeros((const.NCONTEXTS, len(model_list)))
+    counts = np.zeros((const.NCONTEXTS, len(model_list)))
+    unlesioned_test = np.zeros((len(model_list),))
+    lesioned_test = np.zeros((len(model_list),))
+
+    allmodels = model_list
+    SSE_local = [0 for i in range(len(allmodels))]
+    SSE_global = [0 for i in range(len(allmodels))]
+
+    fig, ax = plt.subplots(1,2)
+    offsets = [0-.05,.2+0.02,.2+.25+0.04]  # for plotting
+    overall_lesioned_tests = []
+
+    for ind,id in enumerate(model_list):
+        retrain_args.model_id = id
+        args.model_id = retrain_args.model_id
+        args.train_lesion_freq = retrain_args.train_lesion_freq
+        args.epochs = retrain_args.epochs
+        args.lr_multi = retrain_args.lr_multi
+        args.retrain_decoder = True
+        _, retrained_modelname, _, _ = mnet.get_dataset_name(args)
+
+        # test model on blocked dataset
+        testParams = setup_test_parameters(args, device)
+        datasetname = const.RETRAINING_DATASET
+        trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
+        testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
+
+        testParams[3] = testloader
+        basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+retrained_modelname[7:-4]
+        filename = basefilename+'.npy'
+        print(filename)
+
+        # perform or load the lesion tests
+        lesiondata, regulartestdata = perform_lesion_tests(args, testParams, basefilename)
+        data[ind] = lesiondata["bigdict_lesionperf"]
+        gp, cp, gd, cd = lesion_perf_by_numerosity(data[ind])
+        global_meanperf.append(gp)
+        global_uniquediffs.append(gd)
+        full_context_perf.append(cp[0])
+        low_context_perf.append(cp[1])
+        high_context_perf.append(cp[2])
+        full_context_numberdiffs.append(cd[0])
+        low_context_numberdiffs.append(cd[1])
+        high_context_numberdiffs.append(cd[2])
+
+        lesioned_test[ind] = lesiondata["lesioned_testaccuracy"]
+        unlesioned_test[ind] = regulartestdata["normal_testaccuracy"]
+
+        # evaluate performance on the different contexts
+        for seq in range(data[ind].shape[0]):
+            for compare_idx in range(data[ind][seq].shape[0]):
+                context = data[ind][seq][compare_idx]["underlying_context"]-1
+                perf[context, ind] += data[ind][seq][compare_idx]["lesion_perf"]
+                counts[context, ind] += 1
+        meanperf = 100 * np.divide(perf[:, ind], counts[:, ind])
+        for context in range(const.NCONTEXTS):
+            print('context {} performance: {}/{} ({:.2f}%)'.format(context+1, perf[context, ind], counts[context, ind], meanperf[context]))
+            context_tests[context, ind] = meanperf[context]
+
+        n_sequences, n_lesions = lesiondata["bigdict_lesionperf"].shape
+        for seq in range(n_sequences):
+            for lesion in range(n_lesions):
+                localmodel_perf = lesiondata["bigdict_lesionperf"][seq][lesion]["localmodel_perf"]
+                globalmodel_perf = lesiondata["bigdict_lesionperf"][seq][lesion]["globalmodel_perf"]
+                RNN_perf = lesiondata["bigdict_lesionperf"][seq][lesion]["lesion_perf"]
+                SSE_local[ind] += (RNN_perf - localmodel_perf)**2
+                SSE_global[ind] += (RNN_perf - globalmodel_perf)**2
+
+
+    # now determine mean +-sem over models of that lesion frequency
+    mean_lesioned_test = np.nanmean(lesioned_test)
+    sem_lesioned_test = np.std(lesioned_test)
+    mean_unlesioned_test = np.nanmean(unlesioned_test)
+    sem_unlesioned_test = np.std(unlesioned_test)
+    mean_contextlesion_test = np.nanmean(context_tests,axis=1)
+    sem_contextlesion_test = np.std(context_tests,axis=1)
+
+    # plot post-lesion performance divided up by context
+
+    # theoretical performance
+    handles = mplt.plot_optimal_perf(ax)
+
+    handles = []
+    for i in range(2):
+        count =0
+        for context in range(const.NCONTEXTS):
+            colour = context+1 if context<2 else 0
+            tmp = ax[i].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=const.CONTEXT_COLOURS[colour], markersize=5, ecolor='black', markeredgecolor='black')
+            ax[i].errorbar(count, mean_contextlesion_test[colour], sem_contextlesion_test[colour], color=const.CONTEXT_COLOURS[colour], markersize=5, marker='o', ecolor='black', markeredgecolor='black')
+            count +=1
+            if context==0:
+                handles.append(tmp)
+
+        # format plotting
+        ax[i].set_xlabel('context')
+        ax[i].set_ylabel(r'p(correct | $\epsilon_{train}$')
+        ax[i].set_ylim((60,85))
+        ax[i].set_xticks([0,1,2])
+        ax[i].set_xticklabels(['low','high','full'])
+    plt.legend(handles[0:1],['prediction', 'RNN'])
+    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'retrained_lesionfreq_trainedlesions_'+blockingtext+'.pdf'), bbox_inches='tight')
+
+    # mean over models
+    global_meanperf = np.array(global_meanperf)
+    full_context_perf = np.array(full_context_perf)
+    low_context_perf = np.array(low_context_perf)
+    high_context_perf = np.array(high_context_perf)
+    global_uniquediffs = np.array(global_uniquediffs)
+    full_context_numberdiffs = np.array(full_context_numberdiffs)
+    low_context_numberdiffs = np.array(low_context_numberdiffs)
+    high_context_numberdiffs = np.array(high_context_numberdiffs)
+
+    global_meanperf_mean, global_meanperf_sem = mplt.get_summarystats(global_meanperf, 0)
+    full_context_perf_mean, full_context_perf_sem = mplt.get_summarystats(full_context_perf, 0)
+    low_context_perf_mean, low_context_perf_sem = mplt.get_summarystats(low_context_perf, 0)
+    high_context_perf_mean, high_context_perf_sem = mplt.get_summarystats(high_context_perf, 0)
+
+    global_uniquediffs = np.mean(global_uniquediffs, axis=0)
+    full_context_numberdiffs = np.mean(full_context_numberdiffs, axis=0)
+    low_context_numberdiffs = np.mean(low_context_numberdiffs, axis=0)
+    high_context_numberdiffs = np.mean(high_context_numberdiffs, axis=0)
+
+    fig, ax = plt.subplots(1,2)
+
+    # generate theoretical predictions under local and global context policies
+    numberdiffs, globalnumberdiffs, perf = theory.simulate_theoretical_policies()
+
+    # context-specific performance i.e. how did performance change with dist. to mean in each context
+    xnumbers =  [full_context_numberdiffs, low_context_numberdiffs, high_context_numberdiffs]
+    means = [full_context_perf_mean, low_context_perf_mean, high_context_perf_mean]
+    stds = [full_context_perf_sem, low_context_perf_sem, high_context_perf_sem]
+
+    for j in range(2):
+        # plot model predictions under local or global predictions
+        handles = theory.plot_theoretical_predictions(ax[j], numberdiffs, globalnumberdiffs, perf, j)
+
+        for i in range(len(xnumbers)):
+            anh.shadeplot(ax[j], xnumbers[i], means[i], stds[i], const.CONTEXT_COLOURS[i])
+            h = ax[j].errorbar(xnumbers[i], means[i], stds[i], color=const.CONTEXT_COLOURS[i], fmt='o', markersize=5, markeredgecolor='black', ecolor='black')
+            handles.append(h)
+
+        ax[j].set_xlabel('context distance')
+        ax[j].set_xlim([-0.5, 8])
+        ax[j].set_ylim([0.47, 1.03])
+        ax[j].set_xticks([0,2,4,6,8])
+
+        if j ==0:
+            ax[j].legend((handles[0], handles[-1]),('prediction global context','RNN'))
+        else:
+            ax[j].legend((handles[0], handles[-1]),('prediction local context','RNN'))
+
+    whichTrialType = 'compare'
+    plt.savefig(os.path.join(const.FIGURE_DIRECTORY, 'retrained_perf_v_distToContextMean_postlesion'+blockingtext+'.pdf'), bbox_inches='tight')
+
+    # Now compare the arrays of SSE for each deterministic model across the RNN instances
+    Tstat, pvalue = scipy.stats.ttest_rel(SSE_local, SSE_global)
+    print('local model, SSE: {}'.format(SSE_local))
+    print('global model, SSE: {}'.format(SSE_global))
+    print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))
+
+    return SSE_local
