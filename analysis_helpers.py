@@ -507,7 +507,8 @@ def setup_test_parameters(args, device):
         datasetname, trained_modelname, analysis_name, _ = mnet.get_dataset_name(args)
         trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
-    print(trained_modelname)
+    print('model: {}'.format(trained_modelname))
+    print('test set: {}'.format(datasetname))
     testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
 
     # load our trained model

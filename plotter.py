@@ -574,13 +574,13 @@ def compare_lesion_tests(args, device):
        use in context-interleaved networks, we really need to apply a different test set to assess properly.
         That doesnt happen in this function so beware: should only be used for context-blocked networks.
     """
-    frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
-    #frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
+    #frequencylist = [0.0, 0.1, 0.2, 0.3, 0.4]  # training frequencies of different networks to consider
+    frequencylist = [0.0, 0.1]  # training frequencies of different networks to consider
     offsets = [0-.05,.2+0.02,.2+.25+0.04]  # for plotting
     overall_lesioned_tests = []
 
     plt.figure()
-    fig, ax = plt.subplots(1,len(frequencylist), figsize=(14,3.5))
+    fig, ax = plt.subplots(1,len(frequencylist), figsize=(3.5 * len(frequencylist),3.5))
     handles = plot_optimal_perf(ax)
 
     # file naming
@@ -612,7 +612,8 @@ def compare_lesion_tests(args, device):
             args.model_id = anh.get_id_from_name(m)
             print('modelid: ' + str(args.model_id))
             testParams = anh.setup_test_parameters(args, device)
-            basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4]
+            block_ttsplit_text = '_blockttsplit' if args.block_int_ttsplit else ''
+            basefilename = const.LESIONS_DIRECTORY + 'lesiontests'+m[:-4] + block_ttsplit_text
             filename = basefilename+'.npy'
 
             # perform or load the lesion tests
@@ -707,7 +708,7 @@ def perf_vs_context_distance(args, device):
     numberdiffs, globalnumberdiffs, perf = theory.simulate_theoretical_policies()
 
     print('Retrieving lesion data for each model meeting criteria...')
-    fig, ax = plt.subplots(1,len(frequencylist), figsize=(14,3.5))
+    fig, ax = plt.subplots(1,len(frequencylist), figsize=(3.5*len(frequencylist),3.5))
     for j,train_lesion_frequency in enumerate(frequencylist):
 
         ax[j].set_ylabel(r'p(correct | $\epsilon_{train}$ =' + str(train_lesion_frequency)+')')
