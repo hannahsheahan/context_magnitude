@@ -33,9 +33,9 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams (optionally via command line)
     args, device, multiparams = mnet.define_hyperparams()
-    args.all_fullrange = True    # False = blocked; True = interleaved
+    args.all_fullrange = False    # False = blocked; True = interleaved
     args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
-    args.block_int_ttsplit = True # test on a different distribution (block/interleave) than training
+    args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
     args.retrain_decoder = False
     #args.model_id = 9999          # for visualising a particular trained model
 
@@ -53,14 +53,14 @@ if __name__ == '__main__':
     #mplt.generate_plots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
-    mplt.perf_vs_context_distance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
-    mplt.compare_lesion_tests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
+    #mplt.perf_vs_context_distance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
+    #mplt.compare_lesion_tests(args, device)      # compare the performance across the different lesion frequencies during training (Figure 2)
 
     # Statistical tests: is network behaviour better fit by an agent using the local-context or global-context policy
     #anh.model_behaviour_vs_theory(args, device)
 
     # Load representations and check cross-line big/small generalisation
-    #anh.cross_line_rep_generalisation(args)
+    anh.cross_line_rep_generalisation(args)
     #anh.cross_line_rep_generalisation_human(args)
 
     # Load a trained network (no VI), freeze the first layer (recurrent) weights and then retrain the decoder with VI and save it

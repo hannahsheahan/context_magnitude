@@ -789,8 +789,8 @@ def cross_line_rep_generalisation(args):
                 activations = mdict[which_activations]
                 generalisation, train_scores = train_line_classifier(activations, contexts, y_labels)
 
-                dist_test_scores.append(generalisation)
-                dist_train_scores.append(train_scores)
+                dist_test_scores.append(np.mean(generalisation))
+                dist_train_scores.append(np.mean(train_scores))
 
             dist_train_scores = np.asarray(dist_train_scores).flatten()
             dist_test_scores = np.asarray(dist_test_scores).flatten()
@@ -810,7 +810,7 @@ def cross_line_rep_generalisation(args):
         plt.savefig(os.path.join(const.FIGURE_DIRECTORY,'gen_classifier_'+act_string+'.pdf'), bbox_inches='tight')
         models_trainscores = np.asarray(models_trainscores)
         models_testscores = np.asarray(models_testscores)
-
+        
         # test blocked (normalised) vs interleaved (absolute) codes yield sig. diff.
         # gen performance. Do an unpaired t-test (because different trained models)
         print('context-blocked, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[0,:])))
