@@ -708,7 +708,7 @@ def perf_vs_context_distance(args, device):
     numberdiffs, globalnumberdiffs, perf = theory.simulate_theoretical_policies()
 
     print('Retrieving lesion data for each model meeting criteria...')
-    fig, ax = plt.subplots(1,len(frequencylist), figsize=(3.5*len(frequencylist),3.5))
+    fig, ax = plt.subplots(1,len(frequencylist), figsize=(2.7*len(frequencylist),3.5))
     for j,train_lesion_frequency in enumerate(frequencylist):
 
         ax[j].set_ylabel(r'p(correct | $\epsilon_{train}$ =' + str(train_lesion_frequency)+')')
