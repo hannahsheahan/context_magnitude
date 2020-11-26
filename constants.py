@@ -15,6 +15,7 @@ NETANALYIS_DIRECTORY = 'network_analysis/'
 LESIONS_DIRECTORY = 'network_analysis/lesion_tests/'
 RDM_DIRECTORY = 'network_analysis/RDMs/'
 PARAMETER_DIRECTORY = 'linesmodel_parameters/'
+EEG_DIRECTORY = 'datasets/'
 
 # Total maximum numbers for one-hot coding
 TOTALMAXNUM = 16    # max numerosity
@@ -52,3 +53,6 @@ GLOBAL_MEAN = 8.5 #np.mean([list(range(FULLR_LLIM, FULLR_ULIM+1)), list(range(LO
 # Figure colours
 CONTEXT_COLOURS = [[253/256, 176/256, 4/256], 'dodgerblue', 'orangered', 'black']  # low, high, full
 MODEL_COLOURS = ['darkkhaki', 'olivedrab','darkolivegreen']  # change to show both local and global on same plot easily and keep main colours for data
+
+# Single dataset for retraining decoders under blocked, VI conditions
+RETRAINING_DATASET = 'dataset_truecontextlabel_numrangeblocked_bpl120_id9999'#'dataset_truecontextlabel_numrangeblocked_bpl120_id9999'

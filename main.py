@@ -21,17 +21,23 @@ import define_dataset as dset
 import plotter as mplt
 import analysis_helpers as anh
 import constants as const
+import matplotlib.pyplot as plt
+from torch.utils.data import Dataset, DataLoader
+import theoretical_performance as theory
+import numpy as np
+import os
+import scipy
 
 
 if __name__ == '__main__':
 
     # set up dataset and network hyperparams (optionally via command line)
     args, device, multiparams = mnet.define_hyperparams()
-    args.label_context = 'true'   # 'true' = context cued explicitly in input; 'constant' = context not cued explicity
-    args.all_fullrange = False    # False = blocked; True = interleaved
-    args.train_lesion_freq = 0.1  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
-    args.block_int_ttsplit = False # test on a different distribution (block/interleave) than training
-    # args.model_id = 646          # for visualising a particular trained model
+    args.all_fullrange = True    # False = blocked; True = interleaved
+    args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
+    args.block_int_ttsplit = True # test on a different distribution (block/interleave) than training
+    args.retrain_decoder = False
+    #args.model_id = 9999          # for visualising a particular trained model
 
     # Train a network from scratch and save it
     #mnet.train_and_save_network(args, device, multiparams)
@@ -43,8 +49,8 @@ if __name__ == '__main__':
     #anh.average_perf_across_models(args)
 
     # Visualise the resultant network activations (RDMs and MDS)
-    #MDS_dict, args = anh.average_activations_across_models(args)
-    #mplt.generate_plots(MDS_dict, args)  # (Figure 3 + extras)
+    MDS_dict, args = anh.average_activations_across_models(args)
+    mplt.generate_plots(MDS_dict, args)  # (Figure 3 + extras)
 
     # Plot the lesion test performance
     #mplt.perf_vs_context_distance(args, device)     # Assess performance after a lesion vs context distance (Figure 2 and S1)
@@ -54,4 +60,25 @@ if __name__ == '__main__':
     #anh.model_behaviour_vs_theory(args, device)
 
     # Load representations and check cross-line big/small generalisation
-    anh.cross_line_rep_generalisation(args)
+    #anh.cross_line_rep_generalisation(args)
+    #anh.cross_line_rep_generalisation_human(args)
+
+    # Load a trained network (no VI), freeze the first layer (recurrent) weights and then retrain the decoder with VI and save it
+    #retrain_args, _, _ = mnet.define_hyperparams()
+    #retrain_args.train_lesion_freq = 1.0
+    #retrain_args.epochs = 30
+    #retrain_args.lr_multi = [0.001]
+    #retrain_args.retrain_decoder = True
+    #anh.retrain_decoder(args, retrain_args, device, multiparams)
+
+    #SSE_local = [[] for i in range(2)]
+    #for ind, args.all_fullrange in enumerate([False, True]):
+    #    if args.all_fullrange:
+    #        model_list = [3713, 2922, 1347, 6213, 8594, 1600, 5219, 585, 3865, 1342]  # interleaved initial training
+    #    else:
+    #        model_list = [1033, 2498, 3791, 2289, 832, 9, 8120, 1259, 6196, 7388] # blocked initial training
+    #    SSE_local[ind] = anh.plot_postlesion(args, retrain_args, model_list)
+
+    # compare interleaved vs blocked local context use (unpaired)
+    #Tstat, pvalue = scipy.stats.ttest_ind(SSE_local[0], SSE_local[1])
+    #print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))

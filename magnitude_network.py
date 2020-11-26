@@ -116,6 +116,7 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
         layers, ave_grads, max_grads = [[] for i in range(3)]
         lesionRecord = np.zeros((sequenceLength,))
         loss = 0
+        alternate_lesion_trial = True  # for retraining decoder, lesion alternate trials
 
         for i in range(sequenceLength):
             context = contextsequence[:,i]
@@ -124,10 +125,16 @@ def recurrent_train(args, model, device, train_loader, optimizer, criterion, epo
                 context_in = torch.full_like(context, 0)
             else:
                 context_in = copy.deepcopy(context)
-                if (random.random() < args.train_lesion_freq): # occasionally lesion the number input on compare trials
-                    lesionRecord[i] = 1
-                    lesionedinput = torch.full_like(inputs[:,i],0)
+                if args.retrain_decoder:
+                    if alternate_lesion_trial: # alternately lesion the number input on compare trials
+                        lesionRecord[i] = 1
+                        lesionedinput = torch.full_like(inputs[:,i],0)
+                else:
+                    if (random.random() < args.train_lesion_freq): # occasionally lesion the number input on compare trials
+                        lesionRecord[i] = 1
+                        lesionedinput = torch.full_like(inputs[:,i],0)
 
+            alternate_lesion_trial = False if alternate_lesion_trial else True
             inputX = torch.cat((lesionedinput, context_in, trialtype[:,i]),1)
             recurrentinputs.append(inputX)
 
@@ -343,7 +350,6 @@ def recurrent_lesion_test(args, model, device, test_loader, criterion, printOutp
                             if trial==assess_idx:
                                 lesionperf = answer_correct(output, labels[trial])
                                 post_lesion_activations = h1activations
-                                print('this happens')
 
                     localmodel_perf = get_local_model_response(assess_number, context, labels[trial])   # correct or incorrect
                     globalmodel_perf = get_global_model_response(assess_number, context, labels[trial]) # correct or incorrect
@@ -734,6 +740,8 @@ def define_hyperparams():
         parser.add_argument('--retain-state', dest='retain_hidden_state', action='store_true', help='retain the hidden state between sequences (default: True)')
         parser.add_argument('--label-context', default="true", help='label the context explicitly in the input stream? (default: "true", other options: "constant (1)", "random (1-3)")')
         parser.add_argument('--block_int_ttsplit', default="false", help='test on a different blocking/interleaving structure than training? (default: "false", train/test on same e.g. train block, test block")')
+        parser.add_argument('--retrain_decoder', default="false", help='whether to retrain the final layer of a trained network, this time using VI. default: "false"')
+        parser.add_argument('--original_model_name', default="", help='do not adjust manually: to be used for specifying the name of old trained networks to be retrained under new conditions.')
 
         # network training hyperparameters
         parser.add_argument('--modeltype', default="aggregate", help='input type for selecting which network to train (default: "aggregate", concatenates pixel and location information)')
@@ -756,7 +764,7 @@ def define_hyperparams():
         parser.add_argument('--noise_std', type=float, default=0.0, metavar='N', help='standard deviation of iid noise injected into the recurrent hiden state between numerical inputs (default: 0.0).')
         parser.add_argument('--model-id', type=int, default=0, metavar='N', help='for distinguishing many iterations of training same model (default: 0).')
 
-        parser.set_defaults(create_new_dataset=True, all_fullrange=False, retain_hidden_state=True)
+        parser.set_defaults(create_new_dataset=True, all_fullrange=False, retain_hidden_state=True, retrain_decoder=False)
         args = parser.parse_args()
 
     if args.which_context>0:
@@ -803,24 +811,6 @@ class argsparser():
         self.train_lesion_freq = 0.0
 
 
-def setup_test_parameters(args, device):
-    """
-    Set up the parameters of the network we will evaluate (lesioned, or normal) test performance on.
-    """
-    datasetname, trained_modelname, analysis_name, _ = get_dataset_name(args)
-
-    # load the test set appropriate for the dataset our model was trained on
-    trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
-    testloader = DataLoader(testset, batch_size=args.test_batch_size, shuffle=False)
-
-    # load our trained model
-    trained_model = torch.load(trained_modelname)
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
-    printOutput = True
-    testParams = [args, trained_model, device, testloader, criterion, printOutput]
-    return testParams
-
-
 def get_dataset_name(args):
     """Return the (unique) name of the dataset, trained model, analysis and training record, based on args.
     """
@@ -835,6 +825,7 @@ def get_dataset_name(args):
     contextlabelledtext = '_'+args.label_context+'contextlabel'
     hiddenstate = '_retainstate' if args.retain_hidden_state else '_resetstate'
     rangetxt = '_numrangeintermingled' if args.all_fullrange else '_numrangeblocked'
+    retraindecodertxt = '_retraineddecoderVI' if args.retrain_decoder else ''
 
     if args.which_context==0:
         whichcontexttext = ''
@@ -846,12 +837,12 @@ def get_dataset_name(args):
         whichcontexttext = '_highrange_6-16_only'
 
     datasetname = 'dataset'+whichcontexttext+contextlabelledtext+rangetxt + '_bpl' + str(args.BPTT_len) + '_id'+ str(args.model_id)
-    analysis_name = const.NETANALYIS_DIRECTORY +'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args + ttsplit
-    trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args
+    analysis_name = const.NETANALYIS_DIRECTORY +'MDSanalysis_'+networkTxt+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args + ttsplit + retraindecodertxt
+    trainingrecord_name = '_trainingrecord_'+ networkTxt + whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+retraindecodertxt
     if args.network_style=='recurrent':
-        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+'.pth'
+        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+'_n'+str(args.noise_std)+str_args+retraindecodertxt+'.pth'
     else:
-        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+str_args+'.pth'
+        trained_modelname = const.MODEL_DIRECTORY + networkTxt+'_trainedmodel'+whichcontexttext+contextlabelledtext+rangetxt+hiddenstate+str_args+retraindecodertxt+'.pth'
 
     return datasetname, trained_modelname, analysis_name, trainingrecord_name
 
@@ -877,7 +868,22 @@ def train_recurrent_network(args, device, multiparams, trainset, testset):
 
         # Define a model for training
         #torch.manual_seed(1)         # if we want the same default weight initialisation every time
-        model = OneStepRNN(const.TOTALMAXNUM + const.NCONTEXTS + const.NTYPEBITS, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
+        if args.retrain_decoder:
+            model = torch.load(args.original_model_name)
+            for name, param in model.named_parameters():
+                if 'fc1tooutput' not in name:
+                    param.requires_grad = False  # (if retraining model) freeze all weights/biases except for decoder
+                    print('freeze these params: {}, {}'.format(name, param.shape))
+                else:
+                    print('re-initialise and keep training these params: {}, {}'.format(name, param.shape))
+                    # reinitialize these weights
+                    stdv = 1. / math.sqrt(model.fc1tooutput.weight.size(1))
+                    param.data.uniform_(-stdv, stdv)
+
+
+        else:
+            model = OneStepRNN(const.TOTALMAXNUM + const.NCONTEXTS + const.NTYPEBITS, 1, args.noise_std, args.recurrent_size, args.hidden_size).to(device)
+
 
         criterion = nn.BCELoss() #nn.CrossEntropyLoss()   # binary cross entropy loss
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)

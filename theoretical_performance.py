@@ -86,7 +86,7 @@ def plot_theoretical_predictions(ax, numberdiffs, globalnumberdiffs, perf, which
     policy = policies[whichpolicy]
 
     for whichrange in range(len(localxranges)):
-        context_perf, context_numberdiffs = anh.performanceMean(numberdiffs[policy][whichrange], perf[policy][whichrange])
+        context_perf, context_numberdiffs = anh.performance_mean(numberdiffs[policy][whichrange], perf[policy][whichrange])
         h, = ax.plot(context_numberdiffs, context_perf, color=const.CONTEXT_COLOURS[whichrange])
         handles.append(h)
         ax.set_ylim([0.27, 1.03])
