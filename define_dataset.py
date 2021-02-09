@@ -1,7 +1,11 @@
 """
 This is a selection of functions for creating a dataset for network training
 on the contextual magnitude mapping project with Fabrice. The dataset is structured
-to match the experimental conditions in Fabrice's EEG experiment as well as possible.
+to match the experimental conditions in Fabrice's EEG experiment as closely as possible.
+
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
 
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 13/12/2019

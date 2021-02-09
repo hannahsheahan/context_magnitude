@@ -1,6 +1,13 @@
-# Constant values for importing into magnitude/context remapping project
-# Author: Hannah Sheahan, sheahan.hannah@gmail.com
-# Date: 13/03/2020
+"""
+Constant values for importing into magnitude/context remapping project
+
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
+
+ Author: Hannah Sheahan, sheahan.hannah@gmail.com
+ Date: 13/03/2020
+"""
 
 import numpy as np
 
