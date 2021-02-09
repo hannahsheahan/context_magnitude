@@ -49,9 +49,11 @@ def rotate_axes(x,y,theta):
     y_new =  -x * math.sin(theta_rad) + y * math.cos(theta_rad)
     return x_new, y_new
 
+
 def shadeplot(ax, x_values, means, sems, colour='black'):
     """Plot mean+-sem shaded"""
     ax.fill_between(x_values, means-sems, means+sems, color=colour, alpha=0.25, linewidth=0.0)
+
 
 def get_model_names(args):
     """This function finds and return all the trained model file names that meet the criteria in args
@@ -168,7 +170,7 @@ def average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeV
 def diff_average_ref_numerosity(dimKeep, activations, labels_refValues, labels_judgeValues, labels_contexts, MDSlabels, givenContext, counter):
     """  This is a messy variant of average_ref_numerosity(), which averages over numbers which have the same difference (A-B).
     """
-    uniqueValues = [i for i in range(-const.FULLR_SPAN+1,const.FULLR_SPAN-1)] # hacked for now
+    uniqueValues = [i for i in range(-const.FULLR_SPAN+1,const.FULLR_SPAN-1)]
     #uniqueValues = [int(np.unique(labels_judgeValues)[i]) for i in range(len(np.unique(labels_judgeValues)))]
     flat_activations = np.zeros((const.NCONTEXTS,len(uniqueValues),activations.shape[1]))
     flat_values = np.zeros((const.NCONTEXTS,len(uniqueValues),1))
@@ -213,7 +215,7 @@ def diff_average_ref_numerosity(dimKeep, activations, labels_refValues, labels_j
             sl_MDSlabels.append(flat_outcomes[i])
             sl_counter.append(flat_counter[i])
 
-            # hack for now
+            # ugly but functional
             sl_refValues.append(0)
             sl_diffValues.append(flat_values[i])
             sl_judgeValues.append(0)
