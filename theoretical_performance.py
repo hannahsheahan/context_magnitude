@@ -1,11 +1,17 @@
-# Script for calculating and plotting optimal performance under two different policies post-lesion:
-# 1. a local policy that uses the local context mean when responding whether number A>B
-# 2. a global policy that uses the global number mean across all contexts when responding whether A>B
+"""
+Script for calculating and plotting optimal performance under two different policies post-lesion:
+ 1. a local policy that uses the local context mean when responding whether number A>B
+ 2. a global policy that uses the global number mean across all contexts when responding whether A>B
 
-# Author: Hannah Sheahan
-# Date: 07/04/2020
-# Notes: N/A
-# Issues: N/A
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
+
+ Author: Hannah Sheahan, sheahan.hannah@gmail.com
+ Date: 07/04/2020
+ Notes: N/A
+ Issues: N/A
+"""
 # ---------------------------------------------------------------------------- #
 import analysis_helpers as anh
 import constants as const

@@ -2,9 +2,7 @@
 
 This repo contains simulations published in the following paper:
 
-_Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2020) Neural state space alignment for relational generalisation in humans and recurrent networks. _biorXiv_
-
-\*authors contributed equally
+_Sheahan\*, Luyckx\*, Nelli, Teupe, & Summerfield_ (2021) Neural state space alignment for magnitude generalisation in humans and recurrent networks. _Neuron (in press)_
 
 ---
 

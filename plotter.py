@@ -1,6 +1,10 @@
 """
 This is a selection of functions for plotting figures in the magnitude project.
 
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
+
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 14/12/2019
 Notes: N/A

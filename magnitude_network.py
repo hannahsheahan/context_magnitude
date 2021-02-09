@@ -3,6 +3,10 @@ This is a selection of functions and classes relating to pytorch network trainin
 on the contextual magnitude mapping project with Fabrice.
 A simple RNN or MLP is trained on a relational magnitude problem: is input A > input B?
 
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
+
 Author: Hannah Sheahan, sheahan.hannah@gmail.com
 Date: 13/12/2019
 Notes: N/A
@@ -461,17 +465,16 @@ def flatten_lists_to_arrays(testset, sequence_id, seqitem_id, allvarkeys):
 
 def get_activations(args, trainset,trained_model, train_loader, whichType='compare'):
     """ This will determine the hidden unit activations for each input pair in the train/test set.
-     There are many repeats of each input pair in the train/test set. If retainHiddenState is set to True,
-     then we will evaluate the activations while considering the hidden state retained across all trials and blocks.
-     This will lead to slightly different activations for each instance of a particular input pair.
-     We therefore take our activation for that unique input pair as the average activation over all instances of the pair in the training set.
-      - messy but functional. To be tidied.
+
+     There are many repeats of each input pair in the train/test set. This will
+     lead to slightly different activations for each instance of a particular input pair.
+     We therefore take our activation for that unique input pair as the average
+     activation over all instances of the pair in the training set.
+      - messy but functional.
     """
     # reformat the input sequences for our recurrent model
     recurrentinputs = []
     sequenceLength = trainset["input"].shape[1]
-
-    # constants
     TRIAL_TYPE = const.TRIAL_COMPARE if whichType=='compare' else const.TRIAL_FILLER
 
     # determine the unique inputs for the training set (there are repeats)
@@ -566,22 +569,18 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
 
     else:
         # Do a single pass through the whole training set and look out for ALL instances of each unique input.
-        # Pass the network through the whole training set, retaining the current state until we extract the activation of the inputs of interest.
         # reset hidden recurrent weights on the very first trial
 
         h0activations = torch.zeros(1, trained_model.recurrent_size)
         latentstate = torch.zeros(1, trained_model.recurrent_size)
 
         for batch_idx, data in enumerate(train_loader):
-            #inputs, labels, context, contextinput = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0], data['context'], batch_to_torch(data['contextinput'])
             inputs, labels, contextsequence, contextinputsequence, trialtype = batch_to_torch(data['input']), data['label'].type(torch.FloatTensor)[0].unsqueeze(1).unsqueeze(1), batch_to_torch(data['context']), batch_to_torch(data['contextinput']), batch_to_torch(data['trialtypeinput']).unsqueeze(2)
-            #print('context {}'.format(np.squeeze(dset.turn_one_hot_to_integer(context))[0]))
             recurrentinputs = []
             sequenceLength = inputs.shape[1]
             temporal_trialtypes[batch_idx] = data['trialtypeinput']
 
             for i in range(sequenceLength):
-
                 temporal_context[batch_idx, i] = dset.turn_one_hot_to_integer(contextinputsequence[:,i][0])
                 contextin = contextinputsequence[:,i]
                 if trialtype[0,i]==0:  # remove context indicator on the filler trials
@@ -592,9 +591,9 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                 inputX = torch.cat((inputs[:, i], contextinput, trialtype[:,i]),1)
                 recurrentinputs.append(inputX)
 
-            h0activations = latentstate  # because we have overlapping sequential trials
-
+            h0activations = latentstate
             inputA, inputB = [None for i in range(2)]
+
             # perform N-steps of recurrence
             for item_idx in range(sequenceLength):
                 h0activations,h1activations,_ = trained_model.get_activations(recurrentinputs[item_idx], h0activations)
@@ -602,7 +601,6 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                     latentstate = h0activations.detach()
 
                 temporal_activation_drift[batch_idx, item_idx,:] = h0activations.detach()   # Note: not currently used
-
                 context = contextsequence[:,item_idx]
 
                 # for 'compare' trials only, evaluate performance at every comparison between the current input and previous 'compare' input
@@ -613,7 +611,6 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                             input_n_context = np.append(np.append(inputA, inputB), context)  # actual underlying range context
                             for i in range(N_unique):
                                 if np.all(unique_inputs_n_context[i,:]==input_n_context):
-                                    #print('{}, {}, context {}'.format(dset.turn_one_hot_to_integer(inputA)[0],  dset.turn_one_hot_to_integer(inputB)[0] , np.squeeze(dset.turn_one_hot_to_integer(context))[0]  ))
                                     index = i
                                     break
 
@@ -626,7 +623,6 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                         inputB = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]  # previous state <= current state
 
                     else:  # for filler trials only, consider just the current number and context
-
                         inputA = recurrentinputs[item_idx][0][:const.TOTALMAXNUM]
                         input_n_context = np.append(inputA, context)  # actual underlying range context
                         for i in range(N_unique):
@@ -640,13 +636,10 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
                         contexts[index] = dset.turn_one_hot_to_integer(unique_context[index])
                         time_index[index] = batch_idx
 
-
                     if item_idx > 0:
                         # Aggregate activity associated with each instance of each input
                         aggregate_activations[index] += activations[index]
                         counter[index] += 1    # captures how many instances of each unique input there are in the training set
-
-            #temporal_activation_drift[batch_idx, :] = latentstate   # Note: not currently used. This is latent state at end of a block.
 
         # Now turn the aggregate activations into mean activations by dividing by the number of each unique input/context instance
         for i in range(counter.shape[0]):
@@ -656,7 +649,7 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
 
         activations = np.divide(aggregate_activations, counter)
 
-    # finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
+    # Finally, reshape the output activations and labels so that we can easily interpret RSA on the activations
 
     # sort all variables first by context order
     context_ind = np.argsort(contexts, axis=0)
@@ -681,7 +674,6 @@ def get_activations(args, trainset,trained_model, train_loader, whichType='compa
         counter[ind] = np.take_along_axis(counter, numerosity_ind, axis=0)
 
     drift = {"temporal_activation_drift":temporal_activation_drift, "temporal_context":temporal_context}
-
     return activations, MDSlabels, labels_refValues, labels_judgeValues, contexts, time_index, counter, drift, temporal_trialtypes
 
 
@@ -720,7 +712,7 @@ def define_hyperparams():
     If you are running this from a notebook and not the command line, just adjust the params specified in the class argparser()
     """
     args = argsparser()
-    use_cuda = False #not args.no_cuda and torch.cuda.is_available()  # lets go back to CPU because this network is small
+    use_cuda = False
     device = torch.device("cuda" if use_cuda else "cpu")
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 

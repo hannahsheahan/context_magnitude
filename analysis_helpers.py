@@ -1,8 +1,16 @@
-# Miscellaneous analysis functions to go in here (some transferred from plotter.py)
-# Author: Hannah Sheahan
-# Date: 08/04/2020
-# Issues: N/A
-# Notes: N/A
+"""
+Miscellaneous analysis functions to go in here (some transferred from plotter.py)
+for the project:
+
+Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+ state space alignment for magnitude generalisation in humans and recurrent networks.
+ Neuron (in press)
+
+Author: Hannah Sheahan
+Date: 08/04/2020
+Issues: N/A
+Notes: N/A
+"""
 # ---------------------------------------------------------------------------- #
 
 import define_dataset as dset
@@ -811,7 +819,7 @@ def cross_line_rep_generalisation(args):
         plt.savefig(os.path.join(const.FIGURE_DIRECTORY,'gen_classifier_'+act_string+'.pdf'), bbox_inches='tight')
         models_trainscores = np.asarray(models_trainscores)
         models_testscores = np.asarray(models_testscores)
-        
+
         # test blocked (normalised) vs interleaved (absolute) codes yield sig. diff.
         # gen performance. Do an unpaired t-test (because different trained models)
         print('context-blocked, mean generalisation performance: {:.3f}'.format(np.mean(models_testscores[0,:])))
@@ -982,7 +990,6 @@ def retrain_decoder(args, retrain_args, device, multiparams):
     args.train_lesion_freq = retrain_args.train_lesion_freq
 
     # define the dataset to use for retraining (will be same as training, as VI is not dataset-dependent)
-    # HRS for now just keep the retraining dataset the same for all models and make it blocked (otherwise context not useful) and context labeled
     datasetname = const.RETRAINING_DATASET
     trainset, testset, _, _, _, _ = dset.load_input_data(const.DATASET_DIRECTORY, datasetname)
 
@@ -1006,10 +1013,10 @@ def retrain_decoder(args, retrain_args, device, multiparams):
 
 
 def plot_postlesion(args, retrain_args, model_list):
-    """
-    This script is supposed to assess context use in networks that had their decoder (only) retrained with VI.
-    HRS this is an absolute mess of a hack that needs tidying up. ***HRS
-    There will be a lot of overlap with other function in plotter and analysis_helpers too."""
+    """This function is supposed to assess context use in networks that had their
+     decoder (only) retrained with VI.
+    A lot of overlap with other functions in plotter.py and analysis_helpers.py
+    too, so can be integrated and tidied."""
 
     blockingtext = '_interleaved_orig' if args.all_fullrange else '_blocked_orig'
 
@@ -1183,3 +1190,18 @@ def plot_postlesion(args, retrain_args, model_list):
     print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))
 
     return SSE_local
+
+
+def analyse_retrained_nets():
+    """ Assess context use on decoder-retrained networks"""
+    SSE_local = [[] for i in range(2)]
+    for ind, args.all_fullrange in enumerate([False, True]):
+        if args.all_fullrange:
+            model_list = [3713, 2922, 1347, 6213, 8594, 1600, 5219, 585, 3865, 1342]  # interleaved initial training
+        else:
+            model_list = [1033, 2498, 3791, 2289, 832, 9, 8120, 1259, 6196, 7388] # blocked initial training
+        SSE_local[ind] = plot_postlesion(args, retrain_args, model_list)
+
+    # compare interleaved vs blocked local context use (unpaired)
+    Tstat, pvalue = scipy.stats.ttest_ind(SSE_local[0], SSE_local[1])
+    print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))

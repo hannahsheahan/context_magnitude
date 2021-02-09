@@ -1,7 +1,8 @@
 """
 Code published in the following paper:
- Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2020). Neural normalisation supports generalisation
-   of abstract knowledge in humans and recurrent networks. ArXiv
+ Sheahan, H.*, Luyckx, F.*, Nelli, S., Taupe, C., & Summerfield, C. (2021). Neural
+  state space alignment for magnitude generalisation in humans and recurrent networks.
+  Neuron (in press)
 * authors contributed equally
 
  This is a set of simulations for training a simple RNN on a relative magnitude judgement problem.
@@ -33,11 +34,11 @@ if __name__ == '__main__':
 
     # set up dataset and network hyperparams (optionally via command line)
     args, device, multiparams = mnet.define_hyperparams()
-    args.all_fullrange = True    # False = blocked; True = interleaved
-    args.train_lesion_freq = 0.0  # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
-    args.block_int_ttsplit = True # test on a different distribution (block/interleave) than training
+    args.all_fullrange = False      # False = blocked; True = interleaved
+    args.train_lesion_freq = 0.1    # 0.0 or 0.1  (also 0.2, 0.3, 0.4 for blocked & true context case)
+    args.block_int_ttsplit = False  # True: test on a different distribution (block/interleave) than training
     args.retrain_decoder = False
-    #args.model_id = 9999          # for visualising a particular trained model
+    #args.model_id = 9999          # for visualising or analysing a particular trained model
 
     # Train a network from scratch and save it
     #mnet.train_and_save_network(args, device, multiparams)
@@ -70,15 +71,4 @@ if __name__ == '__main__':
     #retrain_args.lr_multi = [0.001]
     #retrain_args.retrain_decoder = True
     #anh.retrain_decoder(args, retrain_args, device, multiparams)
-
-    #SSE_local = [[] for i in range(2)]
-    #for ind, args.all_fullrange in enumerate([False, True]):
-    #    if args.all_fullrange:
-    #        model_list = [3713, 2922, 1347, 6213, 8594, 1600, 5219, 585, 3865, 1342]  # interleaved initial training
-    #    else:
-    #        model_list = [1033, 2498, 3791, 2289, 832, 9, 8120, 1259, 6196, 7388] # blocked initial training
-    #    SSE_local[ind] = anh.plot_postlesion(args, retrain_args, model_list)
-
-    # compare interleaved vs blocked local context use (unpaired)
-    #Tstat, pvalue = scipy.stats.ttest_ind(SSE_local[0], SSE_local[1])
-    #print('Tstat: {}  p-value: {}'.format(Tstat, pvalue))
+    #anh.analyse_retrained_nets()
